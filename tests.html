@@ -47,6 +47,10 @@
 <script defer src="js/schema-chat.js"></script>
 <script defer src="js/sse.js"></script>
 <script defer src="js/api.js"></script>
+<script defer src="js/llm-store.js"></script>
+<script defer src="js/ai.js"></script>
+<script defer src="js/todo-time.js"></script>
+<script defer src="js/todo-ai.js"></script>
 </head>
 <body>
 <div class="tt-wrap">
@@ -151,7 +155,8 @@
         /* ---------------- 基础 ---------------- */
         t('基础', 'NC 命名空间与版本', function () {
             assert(window.NC, 'window.NC 不存在');
-            eq(NC.version, '2.0.0');
+            assert(/^[0-9]+\.[0-9]+\.[0-9]+$/.test(String(NC.version)), '版本号格式: ' + NC.version);
+            assert(parseInt(NC.version, 10) >= 2, '版本 >= 2');
         });
         t('基础', '公共 API 完整性', function () {
             var names = ['util', 'events', 'compat', 'storage', 'ui', 'icons', 'theme'];
@@ -807,6 +812,249 @@
             eq(withUsage.estimated, false);
             eq(withUsage.totalLength, 15);
         }, [API]);
+
+        /* ================= v3：llm-store（全局端点/AI 偏好） ================= */
+        var LLM = 'NC.store.llm';
+        t('llm-store', '迁移旧 nchat-settings → ntools.llm.v1', function () {
+            var store = NC.store.llm;
+            assert(store, 'NC.store.llm 未加载');
+            // 清理后用旧键触发首次 init 迁移（llm-store 在本页尚未初始化）
+            NC.storage.remove(store.KEY);
+            NC.storage.remove(store.LEGACY_KEY);
+            NC.storage.setRaw(store.LEGACY_KEY, JSON.stringify({
+                currentId: 'cfg-b',
+                configs: [
+                    { id: 'cfg-a', name: '端点A', apiUrl: 'https://a.example/v1', apiKey: 'sk-a',
+                      modelId: 'model-a', systemPrompt: '你是A', temperature: 1.2, top_p: 0.8 },
+                    { id: 'cfg-b', name: '端点B', apiUrl: 'https://b.example/v1/', apiKey: 'sk-b',
+                      modelId: 'model-b', systemPrompt: '你是B', temperature: 0.4, top_p: 0.6 }
+                ]
+            }));
+            var state = store.init();
+            var info = store.getLoadInfo ? store.getLoadInfo() : {};
+            eq(info.migratedFrom, 'nchat-settings', '应识别旧键迁移');
+            eq(state.profiles.length, 2, '迁移 2 个端点');
+            eq(state.currentProfileId, 'cfg-b', 'currentId 保留');
+            var a = store.getProfile('cfg-a');
+            eq(a.baseUrl, 'https://a.example/v1', 'apiUrl → baseUrl');
+            eq(a.chatSystemPrompt, '你是A', 'systemPrompt → chatSystemPrompt');
+            eq(a.temperature, 1.2);
+            eq(a.topP, 0.8);
+            assert(NC.storage.get(store.KEY, null), 'v1 键已写入');
+            eq(NC.storage.get(store.KEY, null).version, 1, 'version=1');
+        }, [LLM]);
+        t('llm-store', '默认值与 reset()', function () {
+            var store = NC.store.llm;
+            eq(store.getState().version, 1);
+            store.reset();
+            var state = store.getState();
+            eq(state.profiles.length, 1, '重置后 1 个默认端点');
+            eq(state.currentProfileId, state.profiles[0].id, 'currentProfileId 指向默认端点');
+            eq(state.workEndTime, '17:30');
+            eq(state.todoAi.temperature, 0.2);
+            eq(state.todoAi.topP, 0.9);
+            assert(String(state.todoAi.systemPrompt).indexOf('{{NOW}}') > -1, '默认 prompt 含占位符');
+            assert(String(state.todoAi.systemPrompt).indexOf('只输出 JSON') > -1, '默认 prompt 含 JSON 约束');
+            assert(store.DEFAULT_TODO_PROMPT && store.DEFAULT_TODO_PROMPT.indexOf('{{WORK_END}}') > -1, 'DEFAULT_TODO_PROMPT');
+        }, [LLM]);
+        t('llm-store', '端点 CRUD / 当前端点 / getChatConfig', function () {
+            var store = NC.store.llm;
+            store.reset();
+            var base = store.getProfiles()[0];
+            var a = store.addProfile({ name: '端点A', baseUrl: 'intranet.local/v1', apiKey: 'sk-a', modelId: 'ma' });
+            assert(a && a.id && /^p[-_]/.test(a.id), '自动生成 p- id: ' + (a && a.id));
+            eq(a.baseUrl, 'https://intranet.local/v1', 'baseUrl 补 https 且去尾斜杠');
+            eq(store.getProfiles().length, 2, '新增端点');
+            eq(store.getCurrentProfile().id, base.id, '新增不改变当前');
+            var updated = store.updateProfile(a.id, {
+                name: '改名', temperature: 9, topP: -1, chatSystemPrompt: '系统提示'
+            });
+            eq(updated.name, '改名');
+            eq(updated.temperature, 2, 'temperature clamp 0-2');
+            eq(updated.topP, 0, 'topP clamp 0-2');
+            eq(store.getProfile('no-such-id'), null);
+            var config = store.getChatConfig(a.id);
+            eq(config.apiUrl, a.baseUrl, 'config.apiUrl=baseUrl');
+            eq(config.systemPrompt, '系统提示', 'config.systemPrompt=chatSystemPrompt');
+            eq(config.enableAdvanced, true);
+            eq(config.top_p, 0, 'config.top_p=topP');
+            eq(store.selectProfile('no-such-id'), false, '非法 id 切换失败');
+            var selected = [];
+            var off = NC.events.on('llm:profile-selected', function (payload) { selected.push(payload.profileId); });
+            eq(store.selectProfile(a.id), true, '合法切换');
+            eq(store.getCurrentProfile().id, a.id);
+            off();
+            eq(selected.length, 1, '触发 llm:profile-selected 事件');
+            var promptProfile = store.setChatSystemPrompt(a.id, '快捷编辑');
+            assert(promptProfile && promptProfile.id === a.id, 'setChatSystemPrompt 返回 profile 副本');
+            eq(store.getProfile(a.id).chatSystemPrompt, '快捷编辑');
+            // 删除当前端点 → 自动切到第一个；不允许删最后一个
+            eq(store.removeProfile(a.id), true);
+            eq(store.getCurrentProfile().id, base.id, '删除当前后自动选第一个');
+            eq(store.removeProfile(base.id), false, '不允许删除最后一个端点');
+        }, [LLM]);
+        t('llm-store', 'Todo AI 偏好 / 下班时间 / 持久化', function () {
+            var store = NC.store.llm;
+            var profile = store.getCurrentProfile();
+            var changed = 0;
+            var off = NC.events.on('llm:changed', function () { changed += 1; });
+            var todoAi = store.setTodoAi({
+                profileId: profile.id,
+                systemPrompt: '自定义 {{NOW}} {{WORK_END}}',
+                temperature: 9,
+                topP: -1
+            });
+            eq(todoAi.profileId, profile.id);
+            eq(todoAi.temperature, 2);
+            eq(todoAi.topP, 0);
+            eq(store.setTodoAi({ profileId: 'no-such-profile' }).profileId, null, '非法端点回落 null');
+            eq(store.setWorkEndTime('18:45'), true);
+            eq(store.getWorkEndTime(), '18:45');
+            eq(store.setWorkEndTime('25:00'), false, '非法时间拒绝');
+            eq(store.setWorkEndTime('abc'), false);
+            eq(store.setWorkEndTime('9:5'), false, '必须 HH:mm 两位');
+            off();
+            assert(changed >= 3, 'llm:changed 事件次数: ' + changed);
+            var saved = NC.storage.get(store.KEY, null);
+            eq(saved.workEndTime, '18:45', '下班时间已持久化');
+            eq(saved.todoAi.temperature, 2, 'todoAi 已持久化');
+        }, [LLM]);
+        t('llm-store', '导出 / 导入 / 事件', function () {
+            var store = NC.store.llm;
+            store.reset();
+            var first = store.getProfiles()[0];
+            store.updateProfile(first.id, { apiKey: 'sk-secret' });
+            var noKeys = store.exportAll({ includeKeys: false });
+            eq(noKeys.keysIncluded, false);
+            eq(noKeys.profiles[0].apiKey, undefined, '默认导出不含密钥');
+            var withKeys = store.exportAll({ includeKeys: true });
+            eq(withKeys.keysIncluded, true);
+            eq(withKeys.profiles[0].apiKey, 'sk-secret', '可选包含密钥');
+            eq(store.importAll('{bad json').ok, false, '非法导入失败');
+            eq(store.importAll(null).ok, false);
+            var merged = store.importAll(withKeys, { merge: true });
+            eq(merged.ok, true);
+            assert(merged.imported >= 1, '合并导入数量');
+            assert(store.exportAll({}).app === 'nTools', '导出 app 标识');
+        }, [LLM]);
+        t('llm-store', '清理测试存储', function () {
+            var store = NC.store.llm;
+            store.reset();
+            NC.storage.remove(store.KEY);
+            NC.storage.remove(store.LEGACY_KEY);
+            return { detail: '已清理 ' + store.KEY };
+        }, [LLM]);
+
+        /* ================= v3：NC.ai.extractJson（纯函数） ================= */
+        var AI = 'NC.ai';
+        t('ai.extractJson', '```json 围栏', function () {
+            deepEq(NC.ai.extractJson('```json\n{"a":1,"b":"x"}\n```'), { a: 1, b: 'x' });
+            deepEq(NC.ai.extractJson('```\n[1,2,3]\n```'), [1, 2, 3]);
+            deepEq(NC.ai.extractJson('```JSON\n{"ok":true}\n```'), { ok: true });
+        }, [AI]);
+        t('ai.extractJson', '前后说明文字', function () {
+            deepEq(NC.ai.extractJson('这是识别结果：{"title":"买牛奶"} 请查收'), { title: '买牛奶' });
+            deepEq(NC.ai.extractJson('结果如下\n[{"a":1}]\n完毕'), [{ a: 1 }]);
+        }, [AI]);
+        t('ai.extractJson', '嵌套结构与字符串中的括号', function () {
+            var obj = NC.ai.extractJson('{"a":{"b":[1,{"c":2}]},"s":"{不是括号}","t":"} x {"}');
+            eq(obj.a.b[1].c, 2);
+            eq(obj.s, '{不是括号}');
+            eq(obj.t, '} x {');
+        }, [AI]);
+        t('ai.extractJson', '数组与混合前后缀', function () {
+            deepEq(NC.ai.extractJson('前缀 ```json [{"title":"a"},{"title":"b"}] ``` 后缀'), [{ title: 'a' }, { title: 'b' }]);
+        }, [AI]);
+        t('ai.extractJson', '畸形/空输入返回 null', function () {
+            eq(NC.ai.extractJson(''), null);
+            eq(NC.ai.extractJson(null), null);
+            eq(NC.ai.extractJson('这里没有 JSON'), null);
+            eq(NC.ai.extractJson('{"a":1'), null);
+            eq(NC.ai.extractJson('{"a":}'), null);
+            eq(NC.ai.extractJson('```json\nnot json\n```'), null);
+        }, [AI]);
+        t('ai', 'complete 配置错误映射（无网络）', function () {
+            return NC.ai.complete({ profile: { baseUrl: '', modelId: '' }, systemPrompt: '', userText: 'x' }).then(function (res) {
+                eq(res.ok, false);
+                eq(res.error && res.error.type, 'config');
+                assert(typeof res.error.message === 'string' && res.error.message.length > 0, '错误信息');
+                eq(typeof NC.ai.testProfile, 'function', 'testProfile 存在');
+            });
+        }, [AI]);
+
+        /* ================= v3：NC.todoTime.computeQuickDue ================= */
+        var TT = 'NC.todoTime';
+        function tsOf(y, m, d, hh, mm) { return new Date(y, m - 1, d, hh, mm, 0, 0).getTime(); }
+        t('todoTime', 'quickDueOptions 六项', function () {
+            var now = tsOf(2026, 5, 20, 10, 0);
+            var options = NC.todoTime.quickDueOptions(now);
+            assert(Array.isArray(options) && options.length === 6, '选项数量: ' + (options && options.length));
+            var kinds = options.map(function (item) { return item.kind; }).sort();
+            deepEq(kinds, ['clear', 'friday', 'month-end', 'next-week', 'tomorrow', 'work-end']);
+            options.forEach(function (item) {
+                assert(item.label && item.text, item.kind + ' 需要 label/text');
+            });
+        }, [TT]);
+        t('todoTime', '下班前：当天 / 已过下班 / 周末', function () {
+            var wed1025 = NC.todoTime.computeQuickDue('work-end', tsOf(2026, 5, 20, 10, 25), '17:30');
+            eq(wed1025, tsOf(2026, 5, 20, 17, 30), '工作日上午 → 当天 17:30');
+            var wed1850 = NC.todoTime.computeQuickDue('work-end', tsOf(2026, 5, 20, 18, 50), '17:30');
+            eq(wed1850, tsOf(2026, 5, 21, 17, 30), '已过下班 → 下一个工作日');
+            var fri1900 = NC.todoTime.computeQuickDue('work-end', tsOf(2026, 5, 22, 19, 0), '17:30');
+            eq(fri1900, tsOf(2026, 5, 25, 17, 30), '周五加班 → 下周一（跳过周末）');
+            var sat1200 = NC.todoTime.computeQuickDue('work-end', tsOf(2026, 5, 23, 12, 0), '17:30');
+            eq(sat1200, tsOf(2026, 5, 25, 17, 30), '周六 → 下周一');
+            var custom = NC.todoTime.computeQuickDue('work-end', tsOf(2026, 5, 20, 10, 0), '18:00');
+            eq(custom, tsOf(2026, 5, 20, 18, 0), '自定义下班时间生效');
+        }, [TT]);
+        t('todoTime', '明天前 / 周五前', function () {
+            eq(NC.todoTime.computeQuickDue('tomorrow', tsOf(2026, 5, 20, 10, 0), '17:30'), tsOf(2026, 5, 21, 17, 30));
+            eq(NC.todoTime.computeQuickDue('friday', tsOf(2026, 5, 20, 10, 0), '17:30'), tsOf(2026, 5, 22, 17, 30), '周三 → 本周五');
+            eq(NC.todoTime.computeQuickDue('friday', tsOf(2026, 5, 22, 18, 0), '17:30'), tsOf(2026, 5, 29, 17, 30), '周五已过 → 下周五');
+            eq(NC.todoTime.computeQuickDue('friday', tsOf(2026, 5, 23, 9, 0), '17:30'), tsOf(2026, 5, 29, 17, 30), '周六 → 下周五');
+        }, [TT]);
+        t('todoTime', '下周前 / 月底前 / 清除', function () {
+            eq(NC.todoTime.computeQuickDue('next-week', tsOf(2026, 5, 20, 10, 0), '17:30'), tsOf(2026, 5, 25, 9, 0), '下周一 09:00');
+            eq(NC.todoTime.computeQuickDue('month-end', tsOf(2026, 5, 20, 10, 0), '17:30'), tsOf(2026, 5, 31, 17, 30), '本月最后一天 17:30');
+            eq(NC.todoTime.computeQuickDue('clear', tsOf(2026, 5, 20, 10, 0), '17:30'), null, 'clear → null');
+        }, [TT]);
+        t('todoTime', '跨年边界', function () {
+            // 2026-12-31 是周四
+            eq(NC.todoTime.computeQuickDue('friday', tsOf(2026, 12, 31, 10, 0), '17:30'), tsOf(2027, 1, 1, 17, 30), '跨年周五');
+            eq(NC.todoTime.computeQuickDue('next-week', tsOf(2026, 12, 31, 10, 0), '17:30'), tsOf(2027, 1, 4, 9, 0), '跨年下周一');
+            eq(NC.todoTime.computeQuickDue('month-end', tsOf(2026, 12, 15, 10, 0), '17:30'), tsOf(2026, 12, 31, 17, 30), '12 月底');
+            eq(NC.todoTime.computeQuickDue('tomorrow', tsOf(2026, 12, 31, 10, 0), '17:30'), tsOf(2027, 1, 1, 17, 30), '跨年明天');
+        }, [TT]);
+
+        /* ================= v3：NC.todoAi.buildSystemPrompt ================= */
+        var TA = 'NC.todoAi';
+        t('todoAi.buildSystemPrompt', '占位符替换与时间注入', function () {
+            var store = NC.store.llm;
+            store.init();
+            store.setWorkEndTime('17:30');
+            store.setTodoAi({ systemPrompt: '{{NOW}}|{{DATE}}|{{WEEKDAY}}|{{TZ}}|{{WORK_END}}' });
+            var now = tsOf(2026, 5, 20, 10, 25);
+            var prompt = NC.todoAi.buildSystemPrompt(now);
+            assert(prompt.indexOf('2026-05-20 10:25') > -1, 'NOW 注入: ' + prompt);
+            assert(prompt.indexOf('2026-05-20') > -1, 'DATE 注入');
+            assert(!/\{\{(NOW|DATE|WEEKDAY|TZ|WORK_END)\}\}/.test(prompt), '占位符应全部替换');
+            assert(prompt.indexOf('17:30') > -1, 'WORK_END 生效');
+            assert(/[一二三四五六日天]/.test(prompt), 'WEEKDAY 中文星期');
+        }, [TA, LLM]);
+        t('todoAi.buildSystemPrompt', '自动补 JSON 约束 / 每次重新生成', function () {
+            var store = NC.store.llm;
+            store.setWorkEndTime('18:00');
+            store.setTodoAi({ systemPrompt: '请提取待办（当前 {{NOW}}，下班 {{WORK_END}}）' });
+            var p1 = NC.todoAi.buildSystemPrompt(tsOf(2026, 5, 20, 10, 0));
+            assert(p1.indexOf('18:00') > -1, '使用最新下班时间');
+            assert(p1.toUpperCase().indexOf('JSON') > -1, '缺少 JSON 约束时应追加');
+            var p2 = NC.todoAi.buildSystemPrompt(tsOf(2026, 5, 21, 9, 0));
+            assert(p1 !== p2, '不同时间生成不同 prompt（不缓存写死时间）');
+            assert(p2.indexOf('2026-05-21') > -1, '第二次 NOW 正确');
+            // 恢复默认
+            store.setWorkEndTime('17:30');
+            store.setTodoAi({ systemPrompt: store.DEFAULT_TODO_PROMPT });
+        }, [TA, LLM]);
     }
 
     /* ------------------------------------------------------------------ *

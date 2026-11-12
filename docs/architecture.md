@@ -1,130 +1,140 @@
-# nChat / nTools v2 架构说明
+# nTools v3 架构说明
 
 > 运行形态：纯静态、`file://` 双击可用、无构建链、无后端；经典 `<script>` + IIFE 命名空间（`window.NC`）。
 > 目标内核：奇安信可信浏览器 Chromium 102 / 麒麟 Linux ARM。
+> 入口：`ntools.html`（主应用，含原生 nChat）；`index.html` 仅做旧书签跳转。
 
 ## 1. 分层
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ 入口页（index.html / ntools.html / compat-check.html / tests.html）│
-└───────────────┬──────────────────────────────────────────────┘
-                │ 组合根：app.js / ntools-app.js（只装配，不写业务）
+┌────────────────────────────────────────────────────────────────────┐
+│ 入口页：ntools.html（主应用） / compat-check.html / tests.html       │
+│          index.html（→ ntools.html#nchat 跳转）                     │
+└───────────────┬────────────────────────────────────────────────────┘
+                │ 组合根：ntools-app.js + chat-embed.js（只装配，不写业务）
                 ▼
 ┌────────────────────────── 视图层 ──────────────────────────────┐
-│ message-view / composer / settings-view / todo-view            │
-│ 只读状态快照、只写 DOM、事件委托、调用 store action             │
-└───────────────┬──────────────────────────────────────────────┘
+│ todo-view / message-view / composer / settings-view(聊天提示词)  │
+│ settings-panel（全局设置 Sheet）                                  │
+│ 只读状态快照、只写 DOM、事件委托、调用 store/service              │
+└───────────────┬────────────────────────────────────────────────┘
                 │ NC.events（单向数据流）
 ┌───────────────▼──────────────┐   ┌─────────────────────────────┐
-│ 状态层                      │   │ 服务层                       │
-│ settings-store              │   │ sse（纯状态机）              │
-│ conversation-store          │   │ api（URL/payload/超时/错误）  │
-│ todo-store（含撤销栈）       │   │ reminder（页内提醒 ticker）   │
+│ 状态层                       │   │ 服务层                       │
+│ llm-store（端点/AI 偏好）     │   │ ai（一次性补全 + JSON 提取）  │
+│ settings-store（llm 适配层）  │   │ sse（流式解析状态机）         │
+│ conversation-store（按端点）  │   │ api（URL/payload/超时/错误）  │
+│ todo-store（撤销栈/迁移）     │   │ reminder（页内提醒 ticker）   │
 └───────────────┬──────────────┘   └─────────────────────────────┘
                 │
-┌───────────────▼──────────────────────────────────────────────┐
-│ 基础设施：core（命名空间/事件/DOM/日期） storage（safeGet/Set） │
-│           schema-todo / schema-chat（校验与迁移，纯函数）       │
-│           compat（能力检测） icons / ui（模态/Toast/菜单）      │
-│           theme-boot（首屏防闪烁） / theme（主题 & Lite）        │
-└──────────────────────────────────────────────────────────────┘
+┌───────────────▼────────────────────────────────────────────────┐
+│ 基础设施：core（命名空间/事件/DOM/日期） storage（安全存储/配额） │
+│           schema-chat / schema-todo（校验与迁移，纯函数）         │
+│           compat（能力检测） icons / ui（模态/Toast/菜单）        │
+│           theme-boot（首屏防闪烁） / theme（主题 & Lite）          │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-硬规则：
-- store **不碰 DOM**，view **不碰存储/网络**，service **不碰 DOM**；
-- 所有外部数据（导入/备份/历史）先经 schema 校验归一，再落盘、再渲染；
-- 用户数据只用 `textContent` / `NC.util.e()` 渲染；Markdown 必须 DOMPurify。
+硬规则：store 不碰 DOM；view 不碰存储/网络；service 不碰 DOM；外部数据先经 schema 归一；用户数据只用 `textContent` / `NC.util.e()`；Markdown 必须 DOMPurify。
 
-## 2. 模块与加载顺序
-
-### 聊天页 index.html
+## 2. 模块与加载顺序（`ntools.html`）
 
 | 顺序 | 文件 | 职责 |
 |---|---|---|
-| 1 | `css/tokens.css` → `base.css` → `components.css` → `chat.css` | 设计令牌 / 基础 / 公共组件 / 聊天样式 |
+| 1 | `css/tokens.css` → `base.css` → `components.css` → `tools.css` → `chat.css` → `settings.css` | 设计令牌 / 基础 / 公共组件 / 页面样式 |
 | 2 | `js/theme-boot.js`（阻塞） | 首屏设置 `data-theme`/`data-lite`，防 FOUC |
-| 3 | `polyfills.js` → `vendor/marked` → `vendor/purify` | 兼容垫片 + 渲染依赖 |
+| 3 | `polyfills.js` → `marked` → `purify` → `qrcode` | 兼容垫片 + 本地 vendor |
 | 4 | `core.js` → `compat.js` → `icons.js` → `storage.js` → `ui.js` → `theme.js` | 基础设施 |
-| 5 | `schema-chat.js` → `settings-store.js` → `conversation-store.js` → `sse.js` → `api.js` | 数据与网络 |
-| 6 | `message-view.js` → `composer.js` → `settings-view.js` | 视图 |
-| 7 | `chat-controller.js` | 控制器（流式状态机/消息操作/会话文件/菜单动作） |
-| 8 | `app.js` | 组合根 |
+| 5 | `schema-chat.js` → `llm-store.js` → `ai.js` → `settings-panel.js` | 端点/AI/设置 |
+| 6 | `sse.js` → `api.js` → `conversation-store.js` → `settings-store.js` → `message-view.js` → `composer.js` → `settings-view.js` → `chat-controller.js` → `chat-embed.js` | 原生聊天 |
+| 7 | `schema-todo.js` → `todo-store.js` → `todo-view.js` → `todo-time.js` → `todo-ai.js` → `todo.js` | 待办与 Todo AI |
+| 8 | `qr.js` → `markdown.js` → `image.js` | 工具叶子模块 |
+| 9 | `ntools-app.js` | 主组合根，最后加载 |
 
-### 工具页 ntools.html
-
-| 顺序 | 文件 | 职责 |
-|---|---|---|
-| 1 | CSS：tokens → base → components → tools | |
-| 2 | `theme-boot.js` → `polyfills.js` → `vendor/marked` → `vendor/purify` → `vendor/qrcode` | |
-| 3 | `core.js` → `compat.js` → `icons.js` → `storage.js` → `ui.js` → `theme.js` | |
-| 4 | `schema-todo.js` → `todo-store.js` → `todo-view.js` → `todo.js` | Todo 专项 |
-| 5 | `qr.js` → `markdown.js` → `image.js` | 工具叶子模块 |
-| 6 | `ntools-app.js` | 组合根（tab/主题/初始化） |
+`index.html` 不加载任何业务脚本，仅 `location.replace('ntools.html#nchat')` 并提供手动链接。
 
 ## 3. 存储键
 
 | 键 | 内容 | 备注 |
 |---|---|---|
-| `nchat-settings` | `{version:2, currentId, configs[]}` | 兼容旧形状（无 version 时迁移） |
-| `nchat-conversation.v2` | `{version:2, sessions:{[configId]:{messages[],updatedAt}}}` | 旧 `nchat-conversation`（数组）自动迁移 |
-| `nchat-theme` | `light` / `dark` | |
-| `nchat-lite-mode` | `'true'` / `'false'` | |
-| `ntools.todo.v2` | Todo 单文档（`schemaVersion:2`） | 详情见 dev-contract |
-| `ntools.todo.v1_backup` | v1 原始字符串 | 迁移前冻结 |
-| `ntools.todo.v2_backup` | 上一次良好文档 | 导入/迁移前自动备份 |
-| `ntools_todo` | v1 旧键 | 迁移后只读保留一个版本 |
+| `ntools.llm.v1` | `{version,profiles[],currentProfileId,todoAi,workEndTime,updatedAt}` | 端点、聊天提示词、Todo AI 配置、下班时间 |
+| `nchat-conversation.v2` | `{version:2,sessions:{[profileId]:{messages,updatedAt}}}` | 按端点隔离；旧数组自动迁移 |
+| `ntools.todo.v2` | Todo 单文档（`schemaVersion:2`） | 迁移/导入/回收站/quarantine |
+| `ntools.todo.v1_backup` / `ntools.todo.v2_backup` | 迁移前 / 最近良好备份 | 只读/回滚用 |
+| `ntools_todo` | v1 旧键 | 迁移后保留一个版本 |
 | `ntools_md` | Markdown 工具草稿 | |
+| `nchat-theme` / `nchat-lite-mode` | `light`/`dark`、`'true'`/`'false'` | |
 
-追加规则：新键统一带版本；旧键只读保留；迁移永不删除原数据；写入前估算大小（≤3.5MB）。
+旧 `nchat-settings` 在 `llm-store.init()` 时迁移为 profiles（保留旧 config id，兼容旧会话），旧键保留可回滚。
 
 ## 4. 事件
 
 | 事件 | 载荷 | 发送方 → 订阅方 |
 |---|---|---|
-| `theme:changed` / `lite:changed` | `{theme}` / `{lite}` | theme → 页面 |
-| `settings:changed` / `config:switched` | `{configs,currentId}` / `{configId}` | settings-store → 视图/会话 |
+| `llm:changed` | `{state, reason}` | llm-store → 设置面板 / 快捷时间 / 聊天 |
+| `llm:profile-selected` | `{profileId, profile}` | llm-store → chat-embed（切换会话） |
+| `settings:changed` / `config:switched` | `{configs,currentId}` / `{configId}` | settings-store(适配) → 聊天视图 |
 | `conversation:changed` / `conversation:truncated` | `{messages}` / `{fromIndex,removed}` | conversation-store → message-view |
 | `stream:start/delta/reasoning/usage/done/error/aborted` | 增量/统计/错误 | api → message-view/composer |
 | `todo:changed` | `{doc,reason}` | todo-store → todo-view/提醒/角标 |
-| `storage:error` / `storage:corrupt` / `quota:warning` | `{key,error,...}` | storage → 顶栏警告 |
-| `app:error` | `{error,message}` | ui 全局兜底 → 提示 |
+| `storage:error` / `storage:corrupt` / `quota:warning` | `{key,error,...}` | storage → 顶栏提示 |
+| `app:error` | `{error,message}` | ui 全局兜底 → Toast |
 
-约定：emit 只传不可变快照或明确字段；view 不得在订阅里再 emit 同名事件，避免递归。
+## 5. 关键数据流
 
-## 5. Todo 数据流
+### 5.1 原生聊天（chat-embed）
 
 ```
-用户操作 → todo-view 委托处理 → todo-store.dispatch(action)
-        → 更新 doc + revision+1 + updatedAt
-        → 入撤销栈（快照/补丁）
-        → debounce 300ms 持久化（pagehide flush）
-        → events.emit('todo:changed')
-        → todo-view keyed diff 更新受影响节点
-        → 提醒引擎 ticker / 标题角标 / 跨标签广播（storage 事件）
+ntools-app.switchTab('nchat')
+   → NC.chatEmbed.init()（幂等懒加载）
+        → NC.store.llm 已就绪（ntools-app 启动时已 init）
+        → conversation.switchConfig(currentProfileId)
+        → messages/composer 绑定 #page-nchat 内 DOM
+        → controller.init({ settings: llm 适配层, openSettings })
+
+发送：composer → controller.send → api.chat(config = llm.getChatConfig())
+     → sse 增量 → message-view 局部渲染 → conversation-store 持久化（按端点）
+端点切换：llm.selectProfile → conversation.switchConfig → renderConversation
+系统提示词：profile.chatSystemPrompt → payload 的 system 消息（保存后下一条生效）
 ```
 
-性能要点：
-- `keyed diff`：`Map<id, HTMLElement>` 复用节点，只有变化字段改 textContent/class；
-- ticker 对齐分钟边界，`document.hidden` 暂停，只更新时间文本与逾期计数；
-- 搜索 200ms 防抖；批量操作合并为一步撤销；
-- 滚动、焦点、选中在重渲染后保持。
+### 5.2 Todo AI 识别
+
+```
+用户粘贴邮件 → todo-ai.openDialog
+  → buildSystemPrompt(now, profile)：取 llm.todoAi + workEndTime
+       替换 {{NOW}}/{{DATE}}/{{WEEKDAY}}/{{TZ}}/{{WORK_END}}（每次调用重新生成）
+  → NC.ai.complete(profile, systemPrompt, userText, temperature, topP)
+  → NC.ai.extractJson → normalizeData
+  → NC.tools.todo.fillDraft(data)
+       → todo-view.applyDraft：填充标题/详情/截止/优先级/标签/清单
+       → 展开创建区、聚焦标题、显示草稿条
+  → 用户确认/编辑后点击「添加任务」→ todo-store.addTask 才落库
+```
+
+### 5.3 快捷时间
+
+```
+todo-time.computeQuickDue(kind, now, workEnd)
+  ← workEnd 实时读取 NC.store.llm.getWorkEndTime()（默认 17:30，设置面板可改）
+  kinds：work-end / tomorrow / friday / next-week / month-end / clear
+```
 
 ## 6. 兼容与降级
 
-| 能力 | Chrome 102 | 降级 |
+| 能力 | Chromium 102 | 降级 |
 |---|---|---|
-| localStorage | 可用（`file://` 全机共享） | 内存模式 + 常驻横幅 |
-| clipboard API | 可用（`file://` 安全上下文） | `execCommand('copy')` |
+| localStorage | 可用（`file://` 同源共享） | 内存模式 + 常驻横幅 |
+| 剪贴板 API | 可用（安全上下文） | `execCommand('copy')` |
 | Notification | `file://` 下 denied | 页内 Toast + 标题角标 |
-| IndexedDB | 可用 | 不持久化图片，仅占位 |
-| BroadcastChannel | 可用 | `storage` 事件 |
-| 流式 fetch | 可用 | `response.text()` 一次性返回 |
-| 毛玻璃/动画 | 可用 | Lite 模式 / reduce-motion 关闭 |
+| 流式 fetch | 可用 | `response.text()` 一次性兜底（api 层） |
+| 毛玻璃 / 动画 | 可用 | Lite / reduced-motion 关闭 |
+| 聊天初始化 | 懒加载 | 缺失模块时其它工具照常可用 |
 
 ## 7. 验证
 
-- `tests.html`：纯函数断言（core/storage/schema/sse/api），双击即跑；
-- `compat-check.html`：运行时能力三态自检 + 一键复制报告；
-- `tools/screenshot.sh`：headless 截图（深/浅/Lite × 桌面/移动）；
-- 现场：`chrome://version` 内核、CORS（`Origin: null`+OPTIONS）、存储持久性、中文 IME、下载/剪贴板策略。
+- `tests.html`：81 项纯函数断言（core/storage/schema/sse/api/llm-store/todo-time/ai）；
+- `tools/verify.js`：页面级验收（含原生聊天无 iframe、设置面板、v1→v2 迁移、截图）；
+- `tools/e2e.js`：回归交互（待办/聊天流式/停止/安全/500 条性能）；
+- `tools/e2e-features.js`：v3 功能（多端点 CRUD、系统提示词、端点会话隔离、Todo AI、快捷时间）；
+- 现场：`chrome://version`、CORS（Origin: null + OPTIONS）、存储持久性、中文 IME、下载/剪贴板策略。

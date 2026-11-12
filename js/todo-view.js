@@ -34,6 +34,10 @@
     var detailTimers = Object.create(null);
     var inlineEdit = null;
     var unsubscribe = null;
+    var composerTags = [];
+    var pendingPasteText = '';
+    var draftActive = false;
+    var extrasReady = false;
 
     var SORT_LABELS = { smart: '智能排序', due: '按截止时间', created: '按创建时间', manual: '手动排序' };
     var VIEW_LABELS = { all: '全部任务', today: '今天', overdue: '逾期', done: '已完成', trash: '回收站' };
@@ -76,6 +80,7 @@
         actions = options || {};
         cacheElements();
         if (!els.list || !store) return false;
+        ensureExtras();
         bindStaticEvents();
         unsubscribe = store.subscribe(render);
         render({ reason: 'init' });
@@ -223,18 +228,7 @@
         }
         if (els.composerToggle) {
             els.composerToggle.addEventListener('click', function () {
-                var expanded = hasClass(els.composer, 'is-expanded');
-                toggleClass(els.composer, 'is-expanded', !expanded);
-                toggleClass(els.composerExtra, 'is-hidden', expanded);
-                els.composerExtra.hidden = expanded;
-                attr(els.composerToggle, 'aria-expanded', expanded ? 'false' : 'true');
-                if (!expanded && els.newDue) {
-                    /* 默认给个明天 09:00，降低输入成本 */
-                    if (!els.newDue.value) {
-                        var tomorrow = util.startOfDay(Date.now()) + 86400000 + 9 * 3600000;
-                        els.newDue.value = util.toDateTimeInputValue(tomorrow);
-                    }
-                }
+                setComposerExpanded(!hasClass(els.composer, 'is-expanded'));
             });
         }
 
@@ -277,6 +271,359 @@
                 else if (act === 'clear-trash' && actions.clearTrash) actions.clearTrash();
             });
         }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * v3：AI 识别入口 / 快捷时间 chips / 草稿字段（运行时注入，不改 ntools.html）
+     * ------------------------------------------------------------------ */
+    var QUICK_FALLBACK = [
+        { kind: 'work-end', label: '下班前' },
+        { kind: 'tomorrow', label: '明天前' },
+        { kind: 'friday', label: '周五前' },
+        { kind: 'next-week', label: '下周前' },
+        { kind: 'month-end', label: '月底前' },
+        { kind: 'clear', label: '清除' }
+    ];
+
+    function ensureExtras() {
+        if (extrasReady) return;
+        extrasReady = true;
+        ensureAiButton();
+        ensureQuickDue();
+        ensureDraftFields();
+        bindComposerExtras();
+        refreshQuickDue();
+    }
+
+    function ensureAiButton() {
+        var existing = document.getElementById('todo-ai-btn');
+        if (existing) {
+            els.aiBtn = existing;
+            return;
+        }
+        var actionsWrap = els.page ? els.page.querySelector('.tools-head__actions') : null;
+        if (!actionsWrap) return;
+        var button = node('button', 'nc-btn nc-btn--sm todo-ai-btn');
+        button.type = 'button';
+        button.id = 'todo-ai-btn';
+        attr(button, 'aria-label', 'AI 识别长文本');
+        attr(button, 'title', 'AI 识别：粘贴邮件/纪要，自动填写待办（不会自动创建）');
+        button.appendChild(icon('sparkles', 15));
+        var label = node('span', 'todo-ai-btn__text', 'AI 识别');
+        button.appendChild(label);
+        button.addEventListener('click', function () {
+            if (NC.todoAi && typeof NC.todoAi.openDialog === 'function') {
+                NC.todoAi.openDialog(pendingPasteText || '');
+            } else {
+                ui.toast('AI 识别模块未加载（js/todo-ai.js），请刷新页面重试', { type: 'warn' });
+            }
+        });
+        actionsWrap.insertBefore(button, actionsWrap.firstChild);
+        els.aiBtn = button;
+    }
+
+    function ensureQuickDue() {
+        var host = els.composerExtra;
+        if (!host) return;
+        var wrap = document.getElementById('todo-quick-due');
+        if (!wrap) {
+            wrap = node('div', 'todo-quick-due todo-composer__field--wide');
+            wrap.id = 'todo-quick-due';
+            wrap.setAttribute('role', 'group');
+            wrap.setAttribute('aria-label', '快捷截止时间');
+            var head = node('div', 'todo-quick-due__head', '快捷时间');
+            wrap.appendChild(head);
+            var row = node('div', 'todo-quick-due__chips');
+            var options = (NC.todoTime && NC.todoTime.OPTIONS) ? NC.todoTime.OPTIONS : QUICK_FALLBACK;
+            options.forEach(function (option) {
+                var chip = node('button', 'nc-chip todo-quick-chip', option.label);
+                chip.type = 'button';
+                attr(chip, 'data-quick-kind', option.kind);
+                attr(chip, 'aria-pressed', 'false');
+                row.appendChild(chip);
+            });
+            wrap.appendChild(row);
+            host.appendChild(wrap);
+        }
+        els.quickDue = wrap;
+    }
+
+    function ensureDraftFields() {
+        var host = els.composerExtra;
+        if (!host) return;
+
+        if (!document.getElementById('todo-new-notes')) {
+            var notesField = node('label', 'todo-composer__field todo-composer__field--wide');
+            notesField.appendChild(node('span', 'todo-composer__fieldlabel', '任务详情'));
+            var notes = document.createElement('textarea');
+            notes.id = 'todo-new-notes';
+            notes.className = 'nc-textarea todo-composer__notes';
+            notes.rows = 2;
+            notes.maxLength = 20000;
+            notes.placeholder = '可选：详情、链接或备注';
+            attr(notes, 'aria-label', '任务详情');
+            notesField.appendChild(notes);
+            host.appendChild(notesField);
+        }
+        if (!document.getElementById('todo-new-tags')) {
+            var tagsField = node('label', 'todo-composer__field todo-composer__field--wide');
+            tagsField.appendChild(node('span', 'todo-composer__fieldlabel', '标签'));
+            var tagsInput = document.createElement('input');
+            tagsInput.type = 'text';
+            tagsInput.id = 'todo-new-tags';
+            tagsInput.className = 'nc-input';
+            tagsInput.maxLength = 400;
+            tagsInput.placeholder = '逗号分隔，如：汇报, 安全';
+            attr(tagsInput, 'aria-label', '任务标签');
+            tagsField.appendChild(tagsInput);
+            var chips = node('span', 'todo-composer__tagchips');
+            chips.id = 'todo-new-tags-chips';
+            tagsField.appendChild(chips);
+            host.appendChild(tagsField);
+        }
+        if (!document.getElementById('todo-ai-draft') && els.composer) {
+            var draft = node('div', 'todo-ai-draft');
+            draft.id = 'todo-ai-draft';
+            draft.hidden = true;
+            draft.appendChild(icon('sparkles', 14));
+            draft.appendChild(node('span', 'todo-ai-draft__text', 'AI 已识别，请确认后创建'));
+            var dismiss = node('button', 'todo-ai-draft__dismiss');
+            dismiss.type = 'button';
+            attr(dismiss, 'aria-label', '隐藏 AI 提示');
+            dismiss.appendChild(icon('x', 12));
+            dismiss.addEventListener('click', function () { setDraftActive(false); });
+            draft.appendChild(dismiss);
+            els.composer.insertBefore(draft, els.composerExtra);
+        }
+
+        els.newNotes = document.getElementById('todo-new-notes');
+        els.newTagsInput = document.getElementById('todo-new-tags');
+        els.tagChips = document.getElementById('todo-new-tags-chips');
+        els.aiDraft = document.getElementById('todo-ai-draft');
+        renderComposerTags();
+    }
+
+    function bindComposerExtras() {
+        if (els.quickDue) {
+            els.quickDue.addEventListener('click', function (event) {
+                var chip = event.target.closest ? event.target.closest('[data-quick-kind]') : null;
+                if (!chip) return;
+                applyQuickDue(chip.getAttribute('data-quick-kind'));
+            });
+        }
+        if (els.newDue) {
+            var onDueChange = function () { clearQuickActive(); };
+            els.newDue.addEventListener('input', onDueChange);
+            els.newDue.addEventListener('change', onDueChange);
+        }
+        if (els.newTagsInput) {
+            els.newTagsInput.addEventListener('keydown', function (event) {
+                if (event.isComposing || event.keyCode === 229) return;
+                if (event.key === 'Enter' || event.key === ',' || event.key === '，') {
+                    event.preventDefault();
+                    addTagsFromInput();
+                } else if (event.key === 'Backspace' && !els.newTagsInput.value && composerTags.length) {
+                    composerTags.pop();
+                    renderComposerTags();
+                }
+            });
+            els.newTagsInput.addEventListener('blur', addTagsFromInput);
+            els.newTagsInput.addEventListener('change', addTagsFromInput);
+        }
+        if (els.tagChips) {
+            els.tagChips.addEventListener('click', function (event) {
+                var remove = event.target.closest ? event.target.closest('[data-draft-tag]') : null;
+                if (!remove) return;
+                var tag = remove.getAttribute('data-draft-tag');
+                composerTags = composerTags.filter(function (item) { return item !== tag; });
+                renderComposerTags();
+            });
+        }
+        var longTextHinted = false;
+        function showLongTextHint(text) {
+            if (longTextHinted) return;
+            longTextHinted = true;
+            pendingPasteText = String(text).slice(0, 20000);
+            ui.toast('粘贴的是长文本，可用 AI 识别提取待办', {
+                type: 'info',
+                duration: 6500,
+                action: {
+                    label: 'AI 识别',
+                    onClick: function () {
+                        if (NC.todoAi && typeof NC.todoAi.openDialog === 'function') {
+                            NC.todoAi.openDialog(pendingPasteText);
+                        } else {
+                            ui.toast('AI 识别模块未加载', { type: 'warn' });
+                        }
+                    }
+                }
+            });
+        }
+        if (els.newTitle) {
+            els.newTitle.addEventListener('input', function () {
+                var value = String(els.newTitle.value || '');
+                if (value.length > 120) showLongTextHint(value);
+                else if (value.length <= 120) longTextHinted = false;
+            });
+            els.newTitle.addEventListener('paste', function (event) {
+                var text = '';
+                try {
+                    var clipboard = event.clipboardData || global.clipboardData;
+                    text = clipboard ? clipboard.getData('text') : '';
+                } catch (err) { text = ''; }
+                if (!text || text.length <= 120) return;
+                showLongTextHint(text);
+            });
+        }
+    }
+
+    function applyQuickDue(kind) {
+        if (!NC.todoTime || typeof NC.todoTime.computeQuickDue !== 'function') {
+            ui.toast('快捷时间模块未加载（js/todo-time.js）', { type: 'warn' });
+            return;
+        }
+        var ts = NC.todoTime.computeQuickDue(kind);
+        if (kind === 'clear' || ts == null) {
+            if (els.newDue) els.newDue.value = '';
+            clearQuickActive();
+            return;
+        }
+        if (els.newDue) els.newDue.value = util.toDateTimeInputValue(ts);
+        markQuickActive(kind);
+    }
+
+    function markQuickActive(kind) {
+        if (!els.quickDue) return;
+        Array.prototype.forEach.call(els.quickDue.querySelectorAll('[data-quick-kind]'), function (chip) {
+            var active = chip.getAttribute('data-quick-kind') === kind;
+            toggleClass(chip, 'is-active', active);
+            attr(chip, 'aria-pressed', active ? 'true' : 'false');
+        });
+    }
+
+    /**
+     * 当前 due 恰好等于某个快捷选项时高亮对应 chip（AI 草稿/手填共用）。
+     */
+    function syncQuickActiveFromDue() {
+        if (!els.newDue || !els.newDue.value || !NC.todoTime ||
+            typeof NC.todoTime.quickDueOptions !== 'function') {
+            clearQuickActive();
+            return;
+        }
+        var ts = util.parseDateTimeInputValue(els.newDue.value);
+        if (!util.isFiniteNum(ts)) {
+            clearQuickActive();
+            return;
+        }
+        var options = NC.todoTime.quickDueOptions();
+        var match = '';
+        options.forEach(function (option) {
+            if (option.kind !== 'clear' && option.ts === ts) match = option.kind;
+        });
+        if (match) markQuickActive(match);
+        else clearQuickActive();
+    }
+
+    function clearQuickActive() {
+        if (!els.quickDue) return;
+        Array.prototype.forEach.call(els.quickDue.querySelectorAll('[data-quick-kind]'), function (chip) {
+            toggleClass(chip, 'is-active', false);
+            attr(chip, 'aria-pressed', 'false');
+        });
+    }
+
+    function refreshQuickDue() {
+        if (!els.quickDue) return;
+        var options = (NC.todoTime && typeof NC.todoTime.quickDueOptions === 'function')
+            ? NC.todoTime.quickDueOptions()
+            : null;
+        if (!options) return;
+        options.forEach(function (option) {
+            var chip = els.quickDue.querySelector('[data-quick-kind="' + option.kind + '"]');
+            if (!chip) return;
+            attr(chip, 'title', option.text);
+            if (option.kind === 'clear') attr(chip, 'aria-label', '清除截止时间');
+            else attr(chip, 'aria-label', option.label + '：' + option.text);
+        });
+    }
+
+    function addTagsFromInput() {
+        if (!els.newTagsInput) return;
+        var raw = String(els.newTagsInput.value || '').trim();
+        if (!raw) return;
+        raw.split(/[,，;；\s]+/).forEach(function (item) {
+            var tag = item.trim().slice(0, 32);
+            if (!tag || composerTags.indexOf(tag) > -1 || composerTags.length >= 20) return;
+            composerTags.push(tag);
+        });
+        els.newTagsInput.value = '';
+        renderComposerTags();
+    }
+
+    function renderComposerTags() {
+        if (!els.tagChips) return;
+        while (els.tagChips.firstChild) els.tagChips.removeChild(els.tagChips.firstChild);
+        composerTags.forEach(function (tag) {
+            var chip = node('span', 'todo-draft-tag');
+            chip.appendChild(document.createTextNode(tag));
+            var remove = node('button', 'todo-draft-tag__remove');
+            remove.type = 'button';
+            attr(remove, 'data-draft-tag', tag);
+            attr(remove, 'aria-label', '移除标签：' + tag);
+            remove.appendChild(icon('x', 10));
+            chip.appendChild(remove);
+            els.tagChips.appendChild(chip);
+        });
+        if (els.tagChips.parentNode) toggleClass(els.tagChips.parentNode, 'has-tags', composerTags.length > 0);
+    }
+
+    function resetComposerTags() {
+        composerTags = [];
+        if (els.newTagsInput) els.newTagsInput.value = '';
+        renderComposerTags();
+    }
+
+    function setDraftActive(active) {
+        draftActive = !!active;
+        toggleClass(els.composer, 'is-ai-draft', draftActive);
+        if (els.aiDraft) els.aiDraft.hidden = !draftActive;
+    }
+
+    /**
+     * 用 AI 识别的结果填充创建区（不创建任务）。
+     * @param {{title,notes,due,dueAllDay,priority,tags,listName}} data
+     * @returns {boolean}
+     */
+    function applyDraft(data) {
+        if (!data || typeof data !== 'object') return false;
+        ensureExtras();
+        if (!els.newTitle) return false;
+        setComposerExpanded(true);
+        els.newTitle.value = data.title != null ? String(data.title).slice(0, 500) : '';
+        if (els.newNotes) els.newNotes.value = data.notes != null ? String(data.notes).slice(0, 20000) : '';
+        if (els.newDue) els.newDue.value = util.isFiniteNum(data.due) ? util.toDateTimeInputValue(data.due) : '';
+        if (els.newPriority && data.priority && ['low', 'normal', 'high', 'urgent'].indexOf(data.priority) > -1) {
+            els.newPriority.value = data.priority;
+        }
+        var tags = Array.isArray(data.tags) ? data.tags : [];
+        composerTags = tags.filter(function (tag) {
+            return typeof tag === 'string' && tag.trim();
+        }).map(function (tag) { return tag.trim().slice(0, 32); }).slice(0, 20);
+        renderComposerTags();
+        if (els.newList && data.listName) {
+            var target = String(data.listName).trim().toLowerCase();
+            Array.prototype.forEach.call(els.newList.options, function (option) {
+                if (String(option.textContent).trim().toLowerCase() === target) els.newList.value = option.value;
+            });
+        }
+        syncQuickActiveFromDue();
+        setDraftActive(true);
+        els.newTitle.focus();
+        try {
+            var length = els.newTitle.value.length;
+            els.newTitle.setSelectionRange(length, length);
+        } catch (err) { /* ignore */ }
+        return true;
     }
 
     function setActions(next) {
@@ -1606,6 +1953,8 @@
         var doc = store.getDoc();
         var uiState = store.getUi();
         var items = [
+            { label: 'AI 识别长文本', icon: 'sparkles', hint: 'AI', onSelect: function () { actions.openAi && actions.openAi(); } },
+            { type: 'divider' },
             { label: '导出 JSON', icon: 'download', onSelect: function () { actions.exportJson && actions.exportJson(); } },
             { label: '导入 JSON', icon: 'upload', onSelect: function () { actions.importJson && actions.importJson(); } },
             { label: '恢复上次备份', icon: 'refresh', disabled: !store.hasBackup(), onSelect: function () { actions.restoreBackup && actions.restoreBackup(); } },
@@ -1686,15 +2035,22 @@
      * 添加任务
      * ------------------------------------------------------------------ */
     function focusComposer() {
-        if (window.innerWidth <= 768 && hasClass(els.composer, 'is-expanded') === false) {
-            toggleClass(els.composer, 'is-expanded', true);
-            toggleClass(els.composerExtra, 'is-hidden', false);
-            els.composerExtra.hidden = false;
-        }
+        setComposerExpanded(true);
         if (els.newTitle) {
             els.newTitle.focus();
             els.newTitle.select();
         }
+    }
+
+    /**
+     * 展开/收起创建区的详细字段（桌面与移动一致）。
+     */
+    function setComposerExpanded(expanded) {
+        if (!els.composer || !els.composerExtra) return;
+        var next = !!expanded;
+        toggleClass(els.composer, 'is-expanded', next);
+        els.composerExtra.hidden = !next;
+        attr(els.composerToggle, 'aria-expanded', next ? 'true' : 'false');
     }
 
     function submitComposer() {
@@ -1710,20 +2066,23 @@
         var due = els.newDue && els.newDue.value ? util.parseDateTimeInputValue(els.newDue.value) : null;
         var listId = els.newList ? els.newList.value : null;
         var priority = els.newPriority ? els.newPriority.value : 'normal';
-        var task = store.addTask({ title: title, due: due, listId: listId, priority: priority });
+        var notes = els.newNotes ? String(els.newNotes.value || '').trim() : '';
+        var tags = composerTags.slice(0, 20);
+        var task = store.addTask({ title: title, notes: notes, due: due, listId: listId, priority: priority, tags: tags });
         if (!task) {
             ui.toast('添加失败，请检查输入', { type: 'error' });
             return;
         }
         els.newTitle.value = '';
         if (els.newDue) els.newDue.value = '';
+        if (els.newNotes) els.newNotes.value = '';
+        resetComposerTags();
+        clearQuickActive();
+        setDraftActive(false);
         els.newTitle.focus();
         if (hasClass(els.composer, 'is-expanded')) {
             /* 连续录入时保留清单/优先级，收起日期 */
-            toggleClass(els.composer, 'is-expanded', false);
-            toggleClass(els.composerExtra, 'is-hidden', true);
-            els.composerExtra.hidden = true;
-            attr(els.composerToggle, 'aria-expanded', 'false');
+            setComposerExpanded(false);
         }
     }
 
@@ -1737,6 +2096,11 @@
         refreshTimes: refreshTimes,
         setActions: setActions,
         focusComposer: focusComposer,
+        setComposerExpanded: setComposerExpanded,
+        applyDraft: applyDraft,
+        ensureExtras: ensureExtras,
+        refreshQuickDue: refreshQuickDue,
+        getComposerTags: function () { return composerTags.slice(); },
         undoWithToast: undoWithToast,
         redoWithToast: redoWithToast,
         openMoreMenu: openMoreMenu,

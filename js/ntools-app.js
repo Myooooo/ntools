@@ -22,7 +22,7 @@
     var currentTab = 'todo';
     var bannerTimer = null;
     var lastErrorToast = 0;
-    var iframeLoaded = false;
+    var chatInited = false;
 
     /* ------------------------------------------------------------------ *
      * 启动
@@ -36,6 +36,7 @@
         } catch (err) { /* 基础设施错误不阻断页面 */ }
 
         initTheme();
+        initLlmAndSettings();
         bindNav();
         bindAppMenu();
         bindBanner();
@@ -154,7 +155,7 @@
         });
 
         if (updateHash) setHash(target);
-        if (target === 'nchat') ensureIframe();
+        if (target === 'nchat') initChat();
         if (target === 'todo' && NC.view && NC.view.todo && NC.view.todo.render) {
             /* 回到待办时刷新时间标签，确保跨分钟准确 */
             NC.view.todo.refreshTimes();
@@ -190,16 +191,41 @@
     }
 
     /* ------------------------------------------------------------------ *
-     * iframe 懒加载（只加载一次）
+     * 全局端点 / 设置面板 / 原生聊天（懒加载）
      * ------------------------------------------------------------------ */
-    function ensureIframe() {
-        if (iframeLoaded) return;
-        var frame = document.getElementById('nchat-frame');
-        if (!frame) return;
-        var src = frame.getAttribute('data-src') || frame.getAttribute('src');
-        if (!src) return;
-        frame.setAttribute('src', src);
-        iframeLoaded = true;
+    function initLlmAndSettings() {
+        try {
+            if (NC.store && NC.store.llm && typeof NC.store.llm.init === 'function') {
+                NC.store.llm.init();
+            }
+        } catch (err) {
+            showBanner('端点配置加载失败，聊天与 Todo AI 可能不可用。', { persistent: true });
+        }
+        try {
+            if (NC.settingsPanel && typeof NC.settingsPanel.init === 'function') {
+                NC.settingsPanel.init();
+            }
+        } catch (err) {
+            showBanner('设置面板初始化失败，请刷新页面重试。', { persistent: true });
+        }
+    }
+
+    function initChat() {
+        if (chatInited) return;
+        try {
+            if (NC.chatEmbed && typeof NC.chatEmbed.init === 'function') {
+                var ok = NC.chatEmbed.init();
+                if (ok !== false) {
+                    chatInited = true;
+                } else {
+                    showBanner('聊天模块尚未就绪，稍后重新切换到 nChat 标签重试。', { persistent: false });
+                }
+            } else {
+                showBanner('聊天模块未加载（js/chat-embed.js），其它工具仍可使用。', { persistent: true });
+            }
+        } catch (err) {
+            showBanner('聊天初始化失败，其它工具仍可使用。', { persistent: true });
+        }
     }
 
     /* ------------------------------------------------------------------ *
@@ -228,6 +254,15 @@
                     }
                 },
                 { type: 'divider' },
+                {
+                    label: '设置',
+                    icon: 'settings',
+                    hint: '模型 · AI',
+                    onSelect: function () {
+                        if (NC.settingsPanel) NC.settingsPanel.open('profiles');
+                        else ui.toast('设置面板未加载', { type: 'warn' });
+                    }
+                },
                 {
                     label: '快捷键与帮助',
                     icon: 'command',
@@ -260,7 +295,7 @@
         var features = (NC.compat && NC.compat.features) || {};
         var counts = NC.store && NC.store.todo ? NC.store.todo.counts(true) : null;
         var rows = [
-            ['版本', 'nTools ' + (NC.version || '2.0.0')],
+            ['版本', 'nTools ' + (NC.version || '3.0.0')],
             ['运行方式', (features.fileProtocol ? '本地文件 file://' : (features.protocol || '未知协议')) + ' · 无后端'],
             ['内核', 'Chromium ' + (features.chromeVersion || '未知')],
             ['存储', features.storage ? 'localStorage 可用' : '不可用（内存模式）'],

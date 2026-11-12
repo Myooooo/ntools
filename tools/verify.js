@@ -178,11 +178,14 @@ async function runPage(browserJson, pageName) {
         await waitFor(client, "typeof window.NC !== 'undefined' && !!window.NC.version", 6000);
         await sleep(300);
 
-        report.checks.push(await checkGeneric(client, pageName));
-        if (pageName === 'ntools.html') report.checks.push(await checkNtools(client));
-        if (pageName === 'index.html') report.checks.push(await checkIndex(client));
-        if (pageName === 'compat-check.html') report.checks.push(await checkCompat(client));
-        if (pageName === 'tests.html') report.checks.push(await checkTests(client));
+        if (pageName === 'index.html') {
+            report.checks.push(await checkRedirect(client));
+        } else {
+            report.checks.push(await checkGeneric(client, pageName));
+            if (pageName === 'ntools.html') report.checks.push(await checkNtools(client));
+            if (pageName === 'compat-check.html') report.checks.push(await checkCompat(client));
+            if (pageName === 'tests.html') report.checks.push(await checkTests(client));
+        }
 
         // 主题 & 截图
         fs.mkdirSync(SHOT_DIR, { recursive: true });
@@ -257,6 +260,24 @@ async function checkGeneric(client, pageName) {
     return { block: pageName, checks: checks };
 }
 
+async function checkRedirect(client) {
+    const result = await evaluate(client, `(function(){
+        return {
+            href: location.href,
+            title: document.title,
+            hasToolsApp: !!document.getElementById('tools-app'),
+            hasChat: !!document.getElementById('page-nchat')
+        };
+    })()`);
+    return {
+        block: 'index(redirect)',
+        checks: [
+            { name: '旧入口自动跳转', pass: /ntools\.html#nchat/.test(result.href), detail: result.href.slice(-40) },
+            { name: '跳转到 nTools 聊天', pass: result.hasToolsApp && result.hasChat && result.title.indexOf('nTools') > -1, detail: result.title }
+        ]
+    };
+}
+
 async function checkNtools(client) {
     const result = await evaluate(client, `(function(){
         var tabs = document.querySelectorAll('[data-tab]');
@@ -271,6 +292,46 @@ async function checkNtools(client) {
     checks.push({ name: '工具面板存在', pass: result.panels >= 5, detail: String(result.panels) });
     checks.push({ name: '待办列表容器', pass: result.hasList, detail: result.hasList ? 'ok' : 'missing' });
     checks.push({ name: '无内联业务脚本', pass: !result.legacyInline, detail: result.legacyInline ? 'found inline script' : 'clean' });
+
+    // nchat 原生 tab：无 iframe、聊天就绪、设置面板可打开
+    try {
+        await evaluate(client, `(function(){ var tab=document.querySelector('[data-tab="nchat"]'); if(tab) tab.click(); return true; })()`);
+        const chatReady = await (async () => {
+            for (let i = 0; i < 30; i++) {
+                const ready = await evaluate(client, `!!(window.NC && NC.chatEmbed && NC.chatEmbed.isReady && NC.chatEmbed.isReady())`);
+                if (ready) return true;
+                await sleep(150);
+            }
+            return false;
+        })();
+        const chatState = await evaluate(client, `(function(){
+            return {
+                iframes: document.querySelectorAll('#page-nchat iframe').length,
+                chatApp: !!document.getElementById('chat-app'),
+                input: !!document.getElementById('user-input'),
+                send: !!document.getElementById('send-btn'),
+                profiles: document.querySelectorAll('#chat-profile-select option').length
+            };
+        })()`);
+        checks.push({ name: 'nChat 原生嵌入（无 iframe）', pass: chatState.iframes === 0 && chatState.chatApp, detail: JSON.stringify(chatState) });
+        checks.push({ name: '聊天面板就绪', pass: chatReady && chatState.input && chatState.send && chatState.profiles > 0, detail: JSON.stringify(chatState) });
+
+        // 设置面板
+        await evaluate(client, `(function(){ NC.settingsPanel.open('profiles'); return true; })()`);
+        await sleep(400);
+        const settings = await evaluate(client, `(function(){
+            var sheet = document.getElementById('settings-sheet');
+            return { open: !!sheet && !sheet.hidden && sheet.classList.contains('is-open'), sections: document.querySelectorAll('#settings-sheet .sp-nav').length };
+        })()`);
+        checks.push({ name: '全局设置面板', pass: settings.open && settings.sections >= 5, detail: JSON.stringify(settings) });
+        await evaluate(client, `(function(){ NC.settingsPanel.close(); return true; })()`);
+        await sleep(250);
+        // 回到待办，保持后续截图默认状态
+        await evaluate(client, `(function(){ var tab=document.querySelector('[data-tab="todo"]'); if(tab) tab.click(); return true; })()`);
+        await sleep(200);
+    } catch (err) {
+        checks.push({ name: 'nChat 原生 / 设置面板检查', pass: false, detail: err.message });
+    }
 
     // v1 迁移端到端
     try {

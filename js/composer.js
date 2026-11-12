@@ -210,8 +210,11 @@
 
     function updatePlaceholder() {
         if (!el.textarea) return;
-        var mobile = !!(global.matchMedia && global.matchMedia('(max-width: 768px)').matches);
-        el.textarea.placeholder = mobile
+        var width = el.inputArea && el.inputArea.clientWidth ? el.inputArea.clientWidth : 0;
+        var compact = width
+            ? width < 560
+            : !!(global.matchMedia && global.matchMedia('(max-width: 768px)').matches);
+        el.textarea.placeholder = compact
             ? '输入消息…'
             : '输入消息，Enter 发送，Shift + Enter 换行';
     }
@@ -244,10 +247,14 @@
         renderPreviews();
         autoGrow();
         updatePlaceholder();
-        if (global.matchMedia) {
-            var mq = global.matchMedia('(max-width: 768px)');
-            if (mq.addEventListener) mq.addEventListener('change', updatePlaceholder);
-            else if (mq.addListener) mq.addListener(updatePlaceholder);
+        if (el.inputArea && global.ResizeObserver) {
+            try {
+                var observer = new global.ResizeObserver(updatePlaceholder);
+                observer.observe(el.inputArea);
+            } catch (err) { /* ignore */ }
+        }
+        if (global.addEventListener) {
+            global.addEventListener('resize', updatePlaceholder);
         }
     }
 

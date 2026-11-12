@@ -734,30 +734,15 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
 /* --------------------------------------------------------------------------
  * 6. nChat 内嵌
  * -------------------------------------------------------------------------- */
+/* 原生聊天嵌入：面板必须完全让位给 chat.css 的 .chat-app--embed */
 .tools-page--nchat {
-    padding-bottom: 14px;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
 }
 
 .tools-head--compact {
     align-items: center;
-}
-
-.nchat-frame-wrap {
-    flex: 1;
-    min-height: 320px;
-    border: 1px solid var(--nc-border);
-    border-radius: var(--nc-radius-lg);
-    overflow: hidden;
-    background: var(--nc-surface);
-    box-shadow: var(--nc-shadow-1);
-}
-
-.nchat-frame {
-    display: block;
-    width: 100%;
-    height: 100%;
-    border: 0;
-    background: #fff;
 }
 
 /* --------------------------------------------------------------------------
@@ -2302,9 +2287,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
         width: min(240px, 100%);
     }
 
-    .nchat-frame-wrap {
-        min-height: 360px;
-    }
+
 }
 
 @media (max-width: 420px) {
@@ -2538,4 +2521,302 @@ html[data-lite="true"] .todo-scrim {
     .help-shortcuts__key {
         min-width: 84px;
     }
+}
+
+/* --------------------------------------------------------------------------
+ * 13. v3：Todo AI 识别 / 快捷时间 / 草稿填充
+ * -------------------------------------------------------------------------- */
+
+/* ---- 13.1 顶部「AI 识别」按钮 ---- */
+.todo-ai-btn {
+    color: var(--nc-accent);
+    border-color: var(--nc-accent-ring);
+    background: var(--nc-accent-faint);
+}
+
+.todo-ai-btn:hover {
+    color: var(--nc-text);
+    border-color: var(--nc-accent);
+    background: var(--nc-accent-soft);
+}
+
+.todo-ai-btn .nc-icon {
+    color: currentColor;
+}
+
+/* ---- 13.2 创建区：快捷时间 chips ---- */
+.todo-composer__extra .todo-composer__field--wide {
+    grid-column: 1 / -1;
+}
+
+.todo-quick-due {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    grid-column: 1 / -1;
+    padding-top: 2px;
+}
+
+.todo-quick-due__head {
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.todo-quick-due__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.todo-quick-chip {
+    height: 26px;
+    padding: 0 10px;
+    font-size: var(--nc-fs-xs);
+    color: var(--nc-text-2);
+    background: var(--nc-surface-2);
+    border-color: transparent;
+    transition:
+        background-color var(--nc-dur-fast) var(--nc-ease),
+        border-color var(--nc-dur-fast) var(--nc-ease),
+        color var(--nc-dur-fast) var(--nc-ease),
+        transform var(--nc-dur-fast) var(--nc-ease);
+}
+
+.todo-quick-chip:hover {
+    color: var(--nc-text);
+    background: var(--nc-surface-3);
+}
+
+.todo-quick-chip:active {
+    transform: scale(0.97);
+}
+
+.todo-quick-chip.is-active {
+    color: var(--nc-accent);
+    background: var(--nc-accent-soft);
+    border-color: var(--nc-accent-ring);
+}
+
+.todo-quick-chip[data-quick-kind="clear"] {
+    color: var(--nc-text-3);
+    background: transparent;
+    border-color: var(--nc-border);
+}
+
+.todo-quick-chip[data-quick-kind="clear"]:hover {
+    color: var(--nc-danger);
+    border-color: var(--nc-danger);
+    background: var(--nc-danger-soft);
+}
+
+/* ---- 13.3 创建区：详情 / 标签 ---- */
+.todo-composer__notes {
+    min-height: 46px;
+    max-height: 160px;
+    padding: 8px 10px;
+    font-size: var(--nc-fs-sm);
+    line-height: 1.55;
+    resize: vertical;
+}
+
+.todo-composer__tagchips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.todo-composer__tagchips:empty {
+    display: none;
+}
+
+.todo-draft-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 22px;
+    padding: 0 4px 0 8px;
+    border-radius: var(--nc-radius-pill);
+    border: 1px solid var(--nc-border);
+    background: var(--nc-surface-2);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-2xs);
+    animation: nc-fade-in var(--nc-dur-fast) var(--nc-ease) both;
+}
+
+.todo-draft-tag__remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    color: var(--nc-text-3);
+}
+
+.todo-draft-tag__remove:hover {
+    color: var(--nc-danger);
+    background: var(--nc-danger-soft);
+}
+
+/* ---- 13.4 创建区：AI 草稿提示 ---- */
+.todo-ai-draft {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 8px 4px 0;
+    padding: 6px 10px;
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-accent-faint);
+    border: 1px solid var(--nc-accent-ring);
+    color: var(--nc-accent);
+    font-size: var(--nc-fs-xs);
+    animation: nc-fade-in var(--nc-dur) var(--nc-ease) both;
+}
+
+.todo-ai-draft[hidden] {
+    display: none;
+}
+
+.todo-ai-draft__text {
+    flex: 1;
+    min-width: 0;
+    color: var(--nc-text-2);
+}
+
+.todo-ai-draft__dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--nc-radius-xs);
+    color: var(--nc-text-3);
+    flex: 0 0 auto;
+}
+
+.todo-ai-draft__dismiss:hover {
+    color: var(--nc-text);
+    background: var(--nc-surface-2);
+}
+
+.todo-composer.is-ai-draft {
+    border-color: var(--nc-accent-ring);
+    box-shadow: 0 0 0 1px var(--nc-accent-faint);
+}
+
+/* ---- 13.5 AI 识别弹窗 ---- */
+.todo-ai-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+}
+
+.todo-ai-dialog__lead {
+    margin: 0;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-sm);
+    line-height: 1.6;
+}
+
+.todo-ai-textarea {
+    min-height: 190px;
+    max-height: 46vh;
+    padding: 12px 14px;
+    font-size: var(--nc-fs-md);
+    line-height: 1.65;
+    resize: vertical;
+}
+
+.todo-ai-dialog__meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.todo-ai-dialog__hint {
+    flex: 1;
+    min-width: 160px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    line-height: 1.5;
+}
+
+.todo-ai-error {
+    padding: 10px 12px;
+    border: 1px solid var(--nc-danger);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-danger-soft);
+    color: var(--nc-danger);
+    font-size: var(--nc-fs-sm);
+    line-height: 1.55;
+    animation: nc-fade-in var(--nc-dur-fast) var(--nc-ease) both;
+}
+
+.todo-ai-error[hidden] {
+    display: none;
+}
+
+.nc-modal-overlay.is-busy .nc-modal__foot .nc-btn {
+    cursor: progress;
+}
+
+/* ---- 13.6 响应式 ---- */
+@media (max-width: 900px) {
+    .todo-ai-btn__text {
+        display: none;
+    }
+
+    .todo-ai-btn {
+        width: 34px;
+        padding: 0;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .todo-quick-due__chips {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .todo-quick-due__chips::-webkit-scrollbar {
+        display: none;
+    }
+
+    .todo-quick-chip {
+        flex: 0 0 auto;
+    }
+
+    .todo-ai-textarea {
+        min-height: 150px;
+        max-height: 40vh;
+    }
+
+    .todo-ai-dialog__hint {
+        width: 100%;
+        flex-basis: 100%;
+    }
+}
+
+/* 识别按钮 loading：spinner 与文字水平排列，避免与文字重叠 */
+.nc-btn.is-todo-loading {
+    pointer-events: none;
+    opacity: 0.9;
+}
+
+.nc-btn.is-todo-loading > .nc-spinner {
+    width: 13px;
+    height: 13px;
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0.45);
+    border-top-color: #fff;
+    animation: nc-spin 0.7s linear infinite;
 }

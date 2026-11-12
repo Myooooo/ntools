@@ -49,6 +49,19 @@
 - 加 `js/polyfills.js` 后门槛 = **84**（flex gap）；若现场=83 再补 gap 兜底即可覆盖奇安信公开内核全区间。
 - 新代码按 ES2017/2018 书写；所有较新能力集中在 `js/compat.js` 特性检测 + 降级；**禁止**在业务代码散落 `?.` 以外的实验性 API。
 
+### 2.1 v3 新增能力（原生聊天 / 全局端点 / Todo AI / 快捷时间）
+
+| 能力 | 实现与依赖 | 兼容性结论 |
+|---|---|---|
+| 全局模型端点 `NC.store.llm` | 存储键 `ntools.llm.v1`；首次启动迁移旧 `nchat-settings`（`{currentId,configs[]}`） | 仍走 localStorage；迁移幂等、失败不落盘；升级不丢旧配置 |
+| 一次性模型调用 `NC.ai.complete` | 非流式 `POST {baseUrl}/chat/completions`（`stream:false`），`response.text()` 解析 | 不依赖 `ReadableStream`（比聊天流式门槛更低）；错误映射中文；`file://` 下仍受 CORS/Origin null 约束 |
+| 设置面板 `NC.settingsPanel` | 右侧 Sheet `#settings-sheet`：模型端点 / Todo AI / 通用 / 数据 / 关于 | 纯 DOM + CSS 变量，无新 API；Esc/遮罩关闭、焦点陷阱 |
+| 原生聊天嵌入 | `#page-nchat` 内 `#chat-app`（`js/chat-embed.js` 懒初始化），**不再用 iframe** | 消除 file:// iframe 跨源限制；流式仍用 fetch + ReadableStream |
+| Todo AI 识别 | `NC.todoAi` → `NC.ai`；结果只填创建表单，**不自动创建** | 需至少 1 个可用端点；识别失败不写数据 |
+| 快捷时间 `NC.todoTime` | 纯本地时间计算，读 `NC.store.llm.getWorkEndTime()` | 无网络/无新 API；下班时间默认 17:30，可改（影响下班前/明天前/周五前/月底前） |
+
+> 自动化验收：`tools/e2e-features.js`（设置面板 / 原生聊天 / Todo AI / 快捷时间，mock fetch 不联网）+ `tools/shots-v3.sh`（v3 功能截图）。
+
 ## 3. 奇安信可信浏览器内核
 
 官方"先锋版"公开时间线（来源见 §10）：
@@ -79,7 +92,7 @@
 | 页面改由 nginx **https** 托管 | 页面为安全上下文；但 API 若是 `http://` 会被混合内容拦截；`http://内网IP` 托管则页面非安全上下文 | 统一 https 或同源反代；`http` 内网 IP 部署会失去 clipboard/crypto.subtle |
 | 剪贴板 | `file://` 是安全上下文，用户手势下 `writeText` 可用；`http://内网IP` 不可用；BDLP 策略可禁复制；iframe 内需 Permissions-Policy 委派 | `clipboard.writeText → execCommand 兜底 → 弹窗手动复制`；自检页"测试复制"实测 |
 | 通知 | `file://` 下 `requestPermission()` 实测 `denied`；无 Service Worker/后台 | 只做页内提醒（toast + 标题 + 角标），明示"关闭页面后不提醒" |
-| iframe 嵌入 `index.html` | 可显示；`file:// → file://` 属跨源：父页读不到子页 `contentDocument`（实测 null / SecurityError），localStorage 仍共享 | 不需要父页控制即无影响；被策略阻断时提供"单独打开"入口 |
+| iframe / 原生嵌入 | **v3 起 nChat 原生嵌入 `ntools.html#page-nchat`（无 iframe）**，消除 file:// iframe 跨源限制；`index.html` 改为跳转页；`compat-check.html` 内部仍有 iframe 自检探测 | 工具页不再依赖 iframe；旧版本仍按 v2 结论（可显示、父页不可控） |
 | Blob 下载 | 可用（实测 `blob:null` + `a[download]` 落盘）；同步 `revokeObjectURL` 可能取消下载；企业下载策略可能弹窗/拦截 | `NC.util.downloadBlob`：append → click → 延迟吊销；导出失败提供文本框手动复制 |
 | 资源缓存 | `file://` 无 HTTP 缓存，覆盖文件即生效；nginx 托管需 `Cache-Control: no-cache` | 发布包带版本号；js/css 用 `?v=`；禁止强缓存 `index.html`；不引入 SW |
 | 国密 SSL（SM2） | 若内网 API 走国密证书，普通 Chrome/Edge 测试机可能连不通，仅奇安信可通过 | 验收必须用奇安信实机；开发机与目标机分工验证 |
@@ -87,7 +100,7 @@
 
 ## 5. 部署形态
 
-1. **首选（必须保证）**：U 盘/共享盘拷贝文件夹 → 双击 `index.html` / `ntools.html`。`file://` 下 localStorage 全机共享，**换目录/升级覆盖不丢数据**（实测）。
+1. **首选（必须保证）**：U 盘/共享盘拷贝文件夹 → 双击 `ntools.html`（v3 统一入口；`index.html` 仅做跳转页兼容旧链接）。`file://` 下 localStorage 全机共享，**换目录/升级覆盖不丢数据**（实测），v3 升级会自动迁移旧的 `nchat-settings`。
 2. **备选（需现场验证）**：内网 nginx 纯静态托管（无后端逻辑）。好处：消除 Origin/CORS、iframe、缓存的大部分限制；注意安全上下文与混合内容（见 §4）。若启用 CSP，`script-src 'self'` 即可（本项目无内联脚本/内联事件；`compat-check.html` 含内联脚本，如需纳管可单独排除或加 hash）。
 3. **不建议**：Electron/Tauri 桌面壳（引入构建链与运维成本，超出"纯 HTML 小程序"定位）。
 
@@ -120,14 +133,14 @@
 | # | 项目 | 方法 | 通过标准 |
 |---|---|---|---|
 | V1 | 内核版本 | `chrome://version` + 自检页 | 记录内核号；<92 时确认自检页 Markdown 正常（polyfill 生效） |
-| V2 | 双击运行 | 文件管理器双击 `index.html`/`ntools.html` | 正常打开、无白屏、控制台无红色报错 |
+| V2 | 双击运行 | 文件管理器双击 `ntools.html`（或 `index.html` 跳转） | 正常打开、无白屏、控制台无红色报错 |
 | V3 | 存储持久 | 保存配置/对话 → 刷新 → 重启浏览器再读 | 数据仍在；自检页 marker 显示"上次运行" |
 | V4 | 存储被禁降级 | 观察自检页存储项；只看不写 | 显示"内存模式"时不白屏，导出可用 |
 | V5 | API CORS | 自检页填 `/health` 测试；发一条消息 | HTTP 有响应（401/403 也算 CORS 通过）；流式逐字出现 |
 | V6 | 剪贴板 | 自检页"测试复制" + 消息复制按钮 | 粘贴内容正确；失败有手动兜底 |
 | V7 | 下载 | 自检页"测试下载" + 导出配置/对话 | 文件落在下载目录、文件名正确、可再次导入 |
 | V8 | 通知 | 自检页显示 `Notification.permission` | 不依赖系统通知；页内提醒正常 |
-| V9 | iframe | ntools → nChat tab | 内嵌页可显示可聊天；被阻断时有"单独打开"入口 |
+| V9 | 原生聊天 | ntools → nChat tab | 无 iframe；面板可聊天；无端点/缺 Key 时有"打开设置"引导 |
 | V10 | Markdown/XSS | 在 Markdown 工具输入 `<img src=x onerror=alert(1)>` | 不执行脚本；预览正常 |
 | V11 | 中文输入法 | 拼音选词时按 Enter | 只上屏、不发送；Shift+Enter 换行 |
 | V12 | 主题/Lite | 切换深浅色/Lite，刷新/重启 | 记忆正确；Lite 下毛玻璃与动画关闭 |
@@ -137,6 +150,11 @@
 | V16 | 升级 | 换新版本目录覆盖后打开 | `NC.version` 更新；旧配置/数据仍在；无旧文件残留问题 |
 | V17 | 管控策略 | 对照 QAX 策略：复制/下载/开发者工具/退出清数据 | 逐项记录；被禁项有降级路径 |
 | V18 | 国密/证书 | 用 QAX 与普通 Chrome 对照请求内网 API | 记录是否国密 SSL/自签 CA；仅 QAX 通时以 QAX 为验收机 |
+| V19 | 全局端点 | 设置 → 模型端点：新增/编辑/删除/设为当前；刷新页面 | 端点持久化；聊天端点下拉同步；旧 `nchat-settings` 迁移到 `ntools.llm.v1` |
+| V20 | 原生聊天行为 | 发送消息、停止生成、切换端点后各发一条 | 流式逐字；停止保留内容；会话/系统提示词按端点隔离；payload 含当前端点 system 消息 |
+| V21 | Todo AI | 配置可用端点后，待办页「AI 识别」粘贴邮件 → 识别 | 填充标题/详情/截止/优先级/标签；**不自动创建**；编辑后手动创建成功 |
+| V22 | 快捷时间 | 创建面板点 6 个 chips；设置改下班时间后重测「下班前/明天前/周五前/月底前」 | 填入时间符合规则；改下班时间后重新计算生效 |
+| V23 | v3 自动化 | `node tools/e2e-features.js`；`tools/shots-v3.sh` | E2E 全绿且无 console.error；截图输出 `/tmp/nc-shots-v3/` |
 
 > 未验证项不得对外宣称"已支持"；验收结果回填本表与 `compat-check.html` 报告。
 

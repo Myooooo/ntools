@@ -30,6 +30,20 @@
     };
 
     function settings() { return deps.settings; }
+
+    /** 打开全局设置面板（v3）；旧页面若注入 settingsView 则回退到它。 */
+    function openSettings(sectionId) {
+        if (typeof deps.openSettings === 'function') {
+            try { deps.openSettings(sectionId || 'profiles'); } catch (err) { /* ignore */ }
+            return;
+        }
+        if (deps.settingsView && typeof deps.settingsView.open === 'function') {
+            deps.settingsView.open();
+        } else if (NC.settingsPanel && typeof NC.settingsPanel.open === 'function') {
+            NC.settingsPanel.open(sectionId || 'profiles');
+        }
+    }
+
     function conversation() { return deps.conversation; }
     function messages() { return deps.messages; }
     function composer() { return deps.composer; }
@@ -53,8 +67,8 @@
         var config = settings().getConfig();
         if (!config) return;
         if (!config.apiKey || !config.apiUrl || !config.modelId) {
-            ui.toast('请先完成并保存 API 配置（Base URL / API Key / Model ID）', { type: 'warn', duration: 4500 });
-            deps.settingsView.open();
+            ui.toast('请先在「设置 → 模型端点」中配置 Base URL / API Key / Model ID', { type: 'warn', duration: 4500 });
+            openSettings();
             return;
         }
         var parts = [];

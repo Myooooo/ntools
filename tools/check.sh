@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 fail=0
 
-echo "== 1/4 语法检查 =="
+echo "== 1/5 语法检查 =="
 for f in js/*.js; do
     if ! node --check "$f"; then
         echo "  FAIL  $f"
@@ -17,15 +17,19 @@ done
 [ "$fail" -eq 0 ] && echo "  全部通过"
 
 echo
-echo "== 2/4 页面级验收（verify.js） =="
+echo "== 2/5 页面级验收（verify.js） =="
 node tools/verify.js || fail=1
 
 echo
-echo "== 3/4 交互 E2E（e2e.js） =="
+echo "== 3/5 交互 E2E（e2e.js） =="
 node tools/e2e.js || fail=1
 
 echo
-echo "== 4/4 纯函数回归（tests.html 无头运行） =="
+echo "== 4/5 新功能 E2E（e2e-features.js） =="
+node tools/e2e-features.js || fail=1
+
+echo
+echo "== 5/5 纯函数回归（tests.html 无头运行） =="
 node tools/run-tests.js || fail=1
 
 echo

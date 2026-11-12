@@ -1,216 +1,209 @@
-# nChat · nTools v2
+# nTools · v3
 
-> 本地优先的 AI 聊天前端 + 效率工具集。纯静态 HTML，双击即用，无需服务器、无需安装、数据只留在本机浏览器。
+> 本地优先的 AI 效率工作台：nChat 原生聊天 + 待办（Todo AI 识别）+ 二维码 / Markdown / 图片工具。
+> 纯静态 HTML，双击即用，无需服务器、无需安装、无需构建链；数据只留在本机浏览器。
 > 目标环境：国企内网 / 信创 ARM / 麒麟 Linux / 奇安信可信浏览器（Chromium 102 基线）。
 >
 > **仓库**：[github.com/Myooooo/ntools](https://github.com/Myooooo/ntools)
 
-![nChat](img/main.png)
+![nChat 原生聊天](img/main.png)
 
-![nTools 待办](img/tools.png)
+![nTools 待办 + AI 识别](img/tools.png)
 
-## ✨ 这是什么
+![全局设置（多模型端点）](img/settings.png)
 
-两个可独立打开的入口，共用一套设计系统与本地数据：
+## ✨ 核心特性
 
-| 入口 | 用途 |
-|---|---|
-| `index.html` | **nChat**：OpenAI 兼容 AI 聊天（多配置、SSE 流式、思考过程、图片多模态、Token 统计、会话备份） |
-| `ntools.html` | **nTools**：待办事项（重点）、二维码生成、Markdown 渲染、图片 Base64 转换、内嵌 nChat |
+### 一个入口，原生聊天
 
-v2 相比 v1 的核心变化：全面重写为分层架构（经典脚本 + IIFE，无构建链）、消除已知 XSS/存储风险、Todo 升级为可日常使用（编辑/筛选/搜索/撤销/多清单/标签/提醒）、统一设计令牌与动效、补齐无障碍与响应式、加入自检与自动化验收。
+- 打开 `ntools.html` 即可使用全部功能；旧 `index.html` 自动跳转到 `#nchat`（书签兼容）。
+- **nChat 已原生嵌入**为 nTools 的一个标签页（无 iframe），与工具集共享同一套设计语言与本地数据。
+- 聊天支持：流式输出、思考过程折叠、停止生成保留内容、图片多模态（最多 5 张）、Token 统计、复制/重新生成/编辑/删除、导出 Markdown、备份/恢复、按端点独立会话。
+
+### 多模型端点（全局设置）
+
+- 设置面板（侧栏齿轮 / 更多菜单 →「设置」）统一管理**多个 OpenAI 兼容端点**：
+  - 名称、Base URL、API Key、Model ID、Temperature / Top P；
+  - 每个端点可单独配置**聊天系统提示词**（聊天页顶部「系统提示词」可快捷编辑）；
+  - 测试连接、设为当前、导入/导出（默认不含密钥，含密钥需二次确认）。
+- 聊天与 Todo AI 共用端点；Todo AI 可单独指定端点或跟随当前端点。
+
+### Todo AI：粘贴邮件，自动识别
+
+- 待办顶部「AI 识别」：粘贴整篇工作邮件 / 会议纪要 / 聊天记录 → 自动提取**标题、详情、截止时间、优先级、标签**。
+- 识别结果**只填充创建表单，不会自动创建**：确认、修改后手动点击「添加任务」才落库。
+- 系统提示词会自动注入**当前日期时间、星期、时区、下班时间**，因此“明天下班前 / 周五前 / 月底前”等相对时间能被正确换算。
+- 设置面板可配置 Todo AI 的系统提示词、Temperature、Top P 与所用端点，并实时预览注入后的提示词。
+
+### 快捷时间
+
+创建任务时可一键填充：`下班前` `明天前` `周五前` `下周前` `月底前` `清除`。
+
+- 下班时间默认 **17:30**，在「设置 → 通用」中修改；快捷时间会实时重算。
+- 规则：下班前跳过周末；周五已过自动取下周五；下周前=下周一 09:00；月底前=本月最后一天下班时间。
+
+### 待办（持续增强）
+
+- 新增 / 行内编辑 / 完成 / 软删除 + 5 秒撤销 / 回收站。
+- 筛选：全部 / 今天 / 逾期 / 已完成；搜索标题、备注、标签；排序：智能 / 截止 / 创建 / 手动。
+- 优先级、多清单、标签、拖拽排序、统计概览。
+- 页内提醒：对齐分钟检查，页内 Toast + 标题角标 + 逾期计数；关闭页面后不提醒（纯前端限制）。
+- v1 → v2 数据幂等迁移、导入导出（预览/合并/替换/自动备份）、跨标签同步。
+
+### 其它工具
+
+- **二维码**：文本/网址生成、尺寸选择、PNG 下载。
+- **Markdown**：实时预览（DOMPurify 净化）、导入/导出 `.md`、草稿自动保存、字数统计。
+- **图片 Base64**：拖拽/选择、缩放、双向转换、复制结果。
+
+### 设计与性能
+
+- 参考 Apple Design：克制的低饱和配色、细边框材质、清晰层级、圆角与柔和阴影；动效只做 transform/opacity，120–260ms。
+- 深色 / 浅色 / **Lite** 三态；Lite 与系统「减少动效」下关闭毛玻璃与动画。
+- 性能：聊天 tab 懒加载（首次切到 nChat 才初始化）；待办 keyed diff + 分钟对齐 ticker；500 条任务导入/渲染/搜索在 40ms 级。
+- 无障碍：语义按钮、aria 标签、模态焦点陷阱 + Esc、`:focus-visible` 焦点环、键盘全流程。
 
 ## 🚀 快速开始
 
-1. 下载整个文件夹（保持目录结构，建议 zip 解压后使用）。
-2. **首次部署先打开 `compat-check.html`**：确认内核、存储、剪贴板、通知、网络等能力状态（约 30 秒）。
-3. 双击 `index.html` 使用聊天，双击 `ntools.html` 使用工具集。
+1. 下载整个文件夹（保持目录结构），建议解压后使用。
+2. **首次部署先打开 `compat-check.html`**，确认内核 / 存储 / 剪贴板 / 网络能力。
+3. 双击 `ntools.html`：
+   - 打开「设置 → 模型端点」，新增或编辑端点（Base URL / API Key / Model ID）并保存；
+   - 可选：在「设置 → Todo AI」调整识别提示词与参数；
+   - 切到「nChat」开始聊天，或回到「待办」粘贴邮件用 AI 识别。
 
-> 首次聊天需要配置一次：点击右上角 ⚙️ → 填写 Base URL / API Key / Model ID → 保存配置。
-> 默认值已预置：`https://api.openai.com/v1`、`gpt-4o`；内网模型请替换为内网网关地址。
-
-### 浏览器要求
-
-- 奇安信可信浏览器（Chromium 102 基线），或 Chrome / Edge 等 Chromium 内核浏览器。
-- **不支持 IE / 双核兼容模式 / ActiveX**；信创 ARM Linux 端只有 Chromium/Blink 内核。
-- 不需要 Node.js、npm、构建工具或外网。
-
-## 🧰 功能一览
-
-### nChat（AI 聊天）
-
-- 多配置管理：新建 / 切换 / 删除 / 导入导出，标题下拉快速切换；导出配置默认**不含 API Key**。
-- 任意 OpenAI 兼容接口：`{Base URL}/chat/completions`，Bearer 鉴权，支持 `stream:true`。
-- 流式输出：逐字渲染、思考过程（`reasoning_content` / `<think>`）折叠展示、停止生成保留已生成内容。
-- 多模态：最多 5 张图片，自动压缩（最长边 1024 / JPEG 0.8），可预览、灯箱查看。
-- 消息操作：复制 / 重新生成 / 编辑 / 删除；会截断后续消息的操作有确认与撤销。
-- 会话：按配置独立保存、自动持久化、刷新恢复；JSON 备份 / 恢复；导出 Markdown。
-- 性能统计：Prompt / Output / Total tokens、速率、耗时；缺失 usage 时估算并标注。
-- 体验：深浅主题、Lite 模式、中文输入法 Enter 守卫、智能滚动（阅读时不强制回底）、Esc/焦点环/aria。
-
-### nTools（效率工具）
-
-- **待办事项**（三栏：视图 / 列表 / 详情抽屉）
-  - 新增、行内编辑（双击标题或 `E`）、完成、软删除 + 5 秒撤销、回收站。
-  - 筛选：全部 / 今天 / 逾期 / 已完成；搜索标题 / 备注 / 标签（200ms 防抖）；排序：智能 / 截止 / 创建 / 手动。
-  - 优先级（低/普通/高/紧急）、多清单、标签、手动拖拽排序、统计概览。
-  - 页内提醒：对齐分钟检查，页内 Toast + 标题角标 + 逾期计数；`document.hidden` 时暂停。
-  - 导入导出：v1 数据幂等迁移、自动备份、预览后合并/替换、坏数据隔离；跨标签同步。
-  - 深/浅主题、Lite 模式、键盘全流程（`N` 新建、`/` 搜索、`Space` 完成、`E` 编辑、`Del` 删除、`Ctrl+Z` 撤销、`?` 帮助）。
-- **二维码**：文本/网址生成、尺寸选择、下载 PNG（超容量与失败有提示）。
-- **Markdown**：实时预览（DOMPurify 净化）、导入/导出 `.md`、草稿自动保存、字数统计。
-- **图片 Base64**：拖拽/选择图片、缩放、转 Base64、Base64 还原、复制结果。
-- **内嵌 nChat**：工具页内直接聊天；若企业策略阻断 iframe，会提示单独打开。
+> 浏览器要求：奇安信可信浏览器（Chromium 102 基线）或 Chrome/Edge；不支持 IE / 双核兼容模式。
+> 不需要 Node.js、npm、构建工具或外网。
 
 ## ⌨️ 快捷键
 
 | 场景 | 按键 | 行为 |
 |---|---|---|
-| 聊天 | `Enter` | 发送（中文输入法选词时不误发） |
-| 聊天 | `Shift + Enter` | 换行 |
-| 聊天 | `Esc` | 关闭菜单 / 设置 / 弹窗 / 灯箱 / 统计浮层 |
-| 待办 | `N` | 聚焦新建任务 |
-| 待办 | `/` | 聚焦搜索 |
-| 待办 | `↑` / `↓` | 列表内移动焦点 |
-| 待办 | `Space` | 完成 / 取消完成当前任务 |
-| 待办 | `Enter` | 打开当前任务详情 |
-| 待办 | `E` | 编辑当前任务标题 |
-| 待办 | `Delete` | 删除当前任务（进回收站，可撤销） |
-| 待办 | `Ctrl + Z` / `Ctrl + Shift + Z` | 撤销 / 重做 |
-| 待办 | `Alt + ↑` / `Alt + ↓` | 手动排序（sort = 手动） |
+| 聊天 | `Enter` / `Shift+Enter` | 发送 / 换行（中文输入法选词不误发） |
+| 聊天 | `Esc` | 关闭菜单 / 系统提示词面板 / 弹窗 / 灯箱 |
+| 待办 | `N` / `/` | 聚焦新建 / 搜索 |
+| 待办 | `↑` `↓` / `Space` / `Enter` | 移动 / 完成 / 打开详情 |
+| 待办 | `E` / `Delete` | 编辑 / 删除（进回收站） |
+| 待办 | `Ctrl+Z` / `Ctrl+Shift+Z` | 撤销 / 重做 |
+| 待办 | `Alt+↑` / `Alt+↓` | 手动排序（sort=手动） |
 | 待办 | `?` | 快捷键帮助 |
+| AI 识别弹窗 | `Ctrl/Cmd + Enter` | 立即识别 |
 
 ## 📁 项目结构
 
 ```
-nchat/
-├─ index.html                 # nChat 入口（仅结构 + 按序脚本）
-├─ ntools.html                # nTools 入口（5 个工具 tab）
+ntools/
+├─ ntools.html                # 唯一主应用（5 个工具 tab，含原生 nChat）
+├─ index.html                 # 旧入口 → 自动跳转 ntools.html#nchat
 ├─ compat-check.html          # 兼容性自检（首次部署先跑）
 ├─ tests.html                 # 纯函数回归断言（双击即跑）
 ├─ css/
 │  ├─ tokens.css              # 设计令牌（颜色/字体/间距/动效/主题/Lite）
 │  ├─ base.css                # reset、排版、滚动条、焦点可见性
 │  ├─ components.css          # 按钮/输入/模态/Toast/菜单等公共组件（nc-*）
-│  ├─ chat.css                # nChat 样式
-│  └─ tools.css               # nTools 样式
+│  ├─ chat.css                # 聊天（含原生嵌入样式）
+│  ├─ tools.css               # 工具页与待办
+│  └─ settings.css            # 全局设置 Sheet
 ├─ js/
-│  ├─ marked.min.js           # marked v15.0.12（Markdown 解析）
-│  ├─ purify.min.js           # DOMPurify 3.4.9（XSS 净化）
-│  ├─ qrcode.min.js           # 二维码生成
-│  ├─ theme-boot.js           # 首屏主题引导（防闪烁，阻塞加载）
-│  ├─ polyfills.js            # 最小兼容垫片
-│  ├─ core.js                 # NC 命名空间 / 事件总线 / DOM / 日期工具
-│  ├─ compat.js               # 运行时能力检测
-│  ├─ storage.js              # 安全存储适配（异常/配额降级）
-│  ├─ icons.js                # 内联 SVG 图标集
-│  ├─ ui.js                   # 模态 / Toast / 菜单 / 焦点陷阱
-│  ├─ theme.js                # 主题与 Lite 管理
-│  ├─ schema-chat.js          # 聊天数据校验/归一化（纯函数）
-│  ├─ schema-todo.js          # Todo 数据校验/迁移（纯函数）
-│  ├─ settings-store.js       # 聊天配置状态
-│  ├─ conversation-store.js   # 会话状态（按配置隔离）
-│  ├─ sse.js                  # SSE 增量解析（纯状态机）
-│  ├─ api.js                  # 请求构造 / 超时 / 错误映射
-│  ├─ message-view.js         # 消息渲染
-│  ├─ composer.js             # 输入区 / 图片压缩 / 停止
-│  ├─ settings-view.js        # 设置面板 / 导入导出
-│  ├─ chat-controller.js      # 聊天控制器（流式状态机）
-│  ├─ app.js                  # nChat 组合根
-│  ├─ todo-store.js           # Todo 状态 / 撤销栈 / 持久化
-│  ├─ todo-view.js            # Todo 视图（keyed diff / 委托）
-│  ├─ todo.js                 # Todo 功能入口（提醒/导入导出/快捷键）
-│  ├─ ntools-app.js           # nTools 组合根（tab/主题/初始化）
-│  ├─ qr.js / markdown.js / image.js  # 工具叶子模块
-│  └─ theme.js
-├─ img/
-│  ├─ main.png                # nChat 界面截图
-│  └─ tools.png               # nTools 待办界面截图
+│  ├─ vendor：marked / purify / qrcode（本地）
+│  ├─ 基础设施：theme-boot / polyfills / core / compat / icons / storage / ui / theme
+│  ├─ 数据与 AI：schema-chat / schema-todo / llm-store / ai / settings-panel
+│  ├─ 聊天：settings-store（适配层）/ conversation-store / sse / api /
+│  │        message-view / composer / settings-view（系统提示词 sheet）/
+│  │        chat-controller / chat-embed（组合根）
+│  ├─ 待办：todo-store / todo-view / todo-ai / todo-time / todo
+│  ├─ 工具：qr / markdown / image
+│  └─ 组合根：ntools-app
 ├─ docs/
 │  ├─ architecture.md         # 架构、分层、存储键、事件
-│  ├─ dev-contract.md         # 开发契约（接口/所有权/验收）
+│  ├─ v3-implementation-report.md  # v3 交付与验收报告
+│  ├─ v2-implementation-report.md  # v2 重构报告（历史）
 │  ├─ compatibility.md        # 兼容性结论与现场验证步骤
+│  ├─ dev-contract*.md        # 开发契约
 │  └─ refactor-and-optimization-plan.md  # v1 评估与改造方案（历史）
-└─ tools/
-   ├─ verify.js               # CDP 无头验收（页面错误 + DOM/迁移断言 + 截图）
-   ├─ e2e.js                  # 关键交互 + mock SSE + 500 条性能
-   ├─ screenshot.sh           # 批量截图
-   ├─ run-tests.js            # 无头运行 tests.html
-   └─ check.sh                # 一键验收（语法 + 页面 + E2E + 纯函数）
+├─ tools/
+│  ├─ verify.js               # CDP 页面验收（报错/DOM/迁移/原生聊天/设置面板 + 截图）
+│  ├─ e2e.js                  # 回归交互（待办/聊天流式/安全/性能）
+│  ├─ e2e-features.js         # v3 新功能 E2E（端点/系统提示词/Todo AI/快捷时间）
+│  ├─ run-tests.js            # 无头运行 tests.html
+│  ├─ screenshot.sh / shots-v3.sh  # 批量截图
+│  └─ check.sh                # 一键全量验收
+└─ img/                       # README 截图
 ```
 
 ## 🔐 数据与隐私
 
-- 所有数据保存在浏览器 `localStorage`，不上传任何服务器（只有你配置的 API 请求会发往你指定的地址）。
-- 存储键：`nchat-settings`、`nchat-conversation.v2`、`nchat-theme`、`nchat-lite-mode`、`ntools.todo.v2`、`ntools_md`。
-- 聊天导出配置默认**不含 API Key**；勾选包含时有二次确认。
-- 升级/迁移前会自动备份原数据（`*.v1_backup` / `*.v2_backup`），不会静默删除。
-- 共享电脑建议：用完后在设置中清除密钥/清除本地数据；`file://` 下本地页面共享同一存储域，这是 Chromium 的行为。
-- 卡片式摘要：Todo 提醒仅在页面打开时有效；关闭浏览器后不会提醒（纯前端无后台，`file://` 下通知权限被拒）。
+- 全部数据保存在本机浏览器 `localStorage`；除你配置的模型端点外，不向任何服务器发送数据。
+- 主要存储键：
+  - `ntools.llm.v1`：模型端点、聊天系统提示词、Todo AI 配置、下班时间；
+  - `nchat-conversation.v2`：按端点隔离的聊天会话；
+  - `ntools.todo.v2`：待办文档（含回收站、导入隔离区）；
+  - `nchat-theme` / `nchat-lite-mode`：主题与 Lite。
+- 旧版 `nchat-settings` / `nchat-conversation` 会在首次启动时自动迁移，原键保留用于回滚。
+- 导出端点配置默认**不含 API Key**；勾选含密钥需二次确认。
+- 升级/迁移前自动备份；`file://` 下本地页面共享同一存储域（Chromium 行为），共用电脑建议用后清理。
 
 ## 🔧 兼容性与部署
 
-- **基线**：Chromium 102（奇安信可信浏览器公开内核时间线 83→132，实际版本以目标机为准）。
-- **以 `file://` 双击运行为主**：不支持 ES Module、不能 fetch 本地资源，因此采用经典脚本 + IIFE；升级时直接覆盖文件夹即可（存储按源共享）。
-- **内网 API 网关要求**（`file://` 请求会带 `Origin: null`，且 JSON + Authorization 触发 OPTIONS 预检）：
-  - 允许 `Access-Control-Allow-Origin: *`（本应用跨源不带 Cookie，用 `*` 即可）；
-  - 允许 `Access-Control-Allow-Headers: authorization, content-type`；
-  - 允许 `Access-Control-Allow-Methods: POST, OPTIONS`；
-  - 若网关不支持，可改用内网 nginx 同源静态托管/反向代理。
-- **通知**：`file://` 下 Notification 权限被拒 → Todo 只用页内提醒；剪贴板在 `file://` 下可用（`isSecureContext`），仍保留 `execCommand` 兜底。
-- **字体**：已内置 CJK 字体栈（Noto Sans CJK SC / 思源黑体 / 文泉驿 / 微软雅黑），无需外网字体。
-- **Lite 模式**：低配/软渲染机器建议开启（禁用毛玻璃与动画）；系统开启"减少动效"时会自动适配。
+- **基线**：Chromium 102（奇安信可信浏览器公开内核时间线 83→132，实际以目标机为准）。
+- **以 `file://` 双击运行为主**：不使用 ES Module / 本地 fetch / Service Worker；升级直接覆盖文件夹，数据按源共享。
+- **内网 API 网关要求**（`file://` 请求带 `Origin: null`，JSON + Authorization 触发 OPTIONS 预检）：
+  - `Access-Control-Allow-Origin: *`（本应用跨源不带 Cookie）；
+  - `Access-Control-Allow-Headers: authorization, content-type`；
+  - `Access-Control-Allow-Methods: POST, OPTIONS`；
+  - 若网关不支持，可改用内网 nginx 同源静态托管/反代。
+- 通知：`file://` 下 Notification 权限被拒 → 待办只用页内提醒；剪贴板可用并保留 `execCommand` 兜底。
+- 字体：内置 CJK 字体栈；无需外网字体。
+- Lite 模式：低配/软渲染机器建议开启；系统「减少动效」会自动适配。
 
 ## 🧪 开发与验收
 
-- 无需构建：修改后直接刷新浏览器即可。
-- 约定：经典 `<script>` + `window.NC` 命名空间，不引入框架/打包器/ES Module；用户数据一律 `textContent` 或 `DOMPurify`。
-- 验收命令（需要本机有 Chrome for Testing，可用 `CHROME` 环境变量指定路径）：
+无构建链：修改后直接刷新浏览器；新增模块按 `ntools.html` 中经典 `<script defer>` 顺序加载。
 
 ```bash
-# 1. 语法检查
-for f in js/*.js; do node --check "$f"; done
-
-# 2. 页面级验收（捕获 console/异常 + DOM/迁移断言 + 深/浅/移动截图）
-node tools/verify.js
-
-# 3. 交互 E2E（含 mock SSE 流式/停止、500 条待办性能）
-node tools/e2e.js
-
-# 4. 纯函数回归（双击即可）
-open tests.html
-
-# 5. 一键全量
+# 一键全量验收（语法 + 页面 + 回归 E2E + 新功能 E2E + 纯函数）
 bash tools/check.sh
+
+# 分项
+node tools/verify.js          # 页面级（捕获报错 + DOM/迁移/原生聊天/设置面板 + 截图）
+node tools/e2e.js             # 回归交互（待办/聊天流式/安全/性能）
+node tools/e2e-features.js    # v3 功能（多端点/系统提示词/Todo AI/快捷时间）
+node tools/run-tests.js       # tests.html 断言（无头）
+open tests.html               # 或双击运行
 ```
 
-页面自检与截图输出：
-
-- `tests.html`：60 项断言，全绿显示「全部通过」。
-- `compat-check.html`：内核/存储/剪贴板/通知/CSS 能力三态自检，可一键复制报告回传。
-- 截图：`/tmp/nc-shots/`（`index-*`、`ntools-*`、`compat-check-*`、`tests-*`）。
+- 最近验收结果：页面验收 26 项、回归 E2E 39 项、新功能 E2E 53 项、纯函数 81 项，全部通过。
+- 截图输出：`/tmp/nc-shots/`（基础三页）与 `/tmp/nc-shots/v3/`（聊天/设置/Todo AI/快捷时间）。
 
 ## ❓ 常见问题
 
 | 现象 | 排查 |
 |---|---|
-| 页面空白/按钮无反应 | 打开 `compat-check.html` 看内核与存储；确认 js/css 目录完整；`chrome://version` 记录内核版本 |
-| 聊天报 "Failed to fetch" | 多半是 CORS：确认网关放行 `Origin: null` + OPTIONS，见上文 |
-| 401 / 模型不存在 | 检查 Base URL 是否以 `/v1` 结尾、API Key、Model ID；错误消息会显示服务端返回内容 |
-| 提示"存储不可用/仅内存" | 浏览器策略禁用了 localStorage；导出数据后联系管理员，或改用内网静态托管 |
+| 页面空白 / 按钮无反应 | 打开 `compat-check.html`；确认 js/css 目录完整；`chrome://version` 记录内核 |
+| 聊天或 Todo AI 报网络失败 | 多半是 CORS：网关放行 `Origin: null` + OPTIONS，见上文 |
+| 401 / 模型不存在 | 检查 Base URL、API Key、Model ID；设置面板「测试连接」可直接验证 |
+| AI 识别结果不准 / 时间为空 | 调整「设置 → Todo AI」提示词；确认端点模型支持中文 JSON 输出 |
+| 快捷时间与预期不符 | 检查「设置 → 通用 → 下班时间」；规则见上文 |
 | 待办提醒不弹系统通知 | `file://` 下通知被拒，设计上只用页内提醒 |
-| 文字发虚/界面过小 | 麒麟显示缩放 125%/150% 下已适配；仍异常可反馈 `compat-check` 截图 |
-| 升级后仍是旧界面 | 覆盖时确认文件已替换；`file://` 无强缓存，可关闭标签页重开或强制刷新 |
+| 升级后仍是旧界面 | 落实覆盖文件；关闭标签页重开或强制刷新 |
+| 旧聊天记录看不到 | 「设置 → 模型端点」选择迁移后的旧端点；旧会话按端点保留 |
 
-## 🗒️ v2 变更摘要
+## 🗒️ 版本变更
 
-- 架构：单文件内联脚本 → 分层模块（core/storage/schema/store/service/view/组合根），经典脚本加载。
-- 安全：修复 Todo/Markdown 存储型 XSS；导入/恢复全量校验；API Key 导出脱敏；DOMPurify 升级至 3.4.9。
-- 稳定：存储异常/配额降级、SSE 解析健壮化、流式不再卡死输入区、导入前自动备份。
-- Todo：编辑/筛选/搜索/排序/撤销/回收站/多清单/标签/提醒/统计/键盘/跨标签同步。
-- 设计：统一设计令牌与组件、深浅主题、Lite、消息/列表动效、响应式、无障碍与焦点管理。
-- 工程：`tests.html`、`compat-check.html`、`tools/verify.js`、`tools/e2e.js` 验收体系。
+### v3（当前）
+
+- nChat 原生嵌入 nTools（移除 iframe），旧入口自动跳转；聊天 tab 懒加载。
+- 多模型端点提升为全局设置（增删改/测试/导入导出/密钥脱敏），聊天按端点独立系统提示词与会话。
+- Todo AI：粘贴邮件自动提取标题/详情/截止/优先级/标签，填充后可编辑、手动创建；提示词自动注入当前日期时间。
+- 快捷时间：下班前/明天前/周五前/下周前/月底前，下班时间可配置。
+- 设置面板：模型端点 / Todo AI / 通用 / 数据 / 关于五个分区。
+- 设计升级与性能优化；新增 53 项新功能 E2E + 81 项纯函数断言。
+
+### v2
+
+- 分层重构（经典脚本 + IIFE）、安全修复（XSS/导入校验/密钥脱敏）、SSE 健壮化、Todo 全面增强、统一设计令牌、验收工具链。
+- 详见 [docs/v2-implementation-report.md](docs/v2-implementation-report.md)。
 
 ## 📄 许可
 
-本项目采用 [MIT License](LICENSE) 开源。第三方依赖及其许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本项目采用 [MIT License](LICENSE) 开源。第三方依赖及许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

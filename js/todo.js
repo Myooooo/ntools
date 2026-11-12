@@ -1,5 +1,5 @@
 /**
- * todo.js — Todo 功能入口：提醒 ticker / 导入导出管道 / 快捷键 / 示例数据 / 标题角标
+ * todo.js — Todo 功能入口：提醒 ticker / 导入导出管道 / 快捷键 / 示例数据 / 标题角标 / AI 识别填充
  * 经典脚本，依赖 core / storage / ui / schema-todo / todo-store / todo-view。挂载：NC.tools.todo
  *
  * 说明：
@@ -50,7 +50,8 @@
             clearTrash: clearTrash,
             clearAll: clearAll,
             demo: loadDemo,
-            help: openHelp
+            help: openHelp,
+            openAi: openAiDialog
         });
         view.setActions({
             exportJson: exportJson,
@@ -59,11 +60,13 @@
             clearTrash: clearTrash,
             clearAll: clearAll,
             demo: loadDemo,
-            help: openHelp
+            help: openHelp,
+            openAi: openAiDialog
         });
 
         wireFileInput();
         wireEvents();
+        initAiIntegration();
         updateChrome();
         fireOverdueSummary();
         if (demoMode) selectDemoTask();
@@ -110,6 +113,69 @@
             scheduleTick();
         });
         document.addEventListener('keydown', onGlobalKeydown);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * v3：AI 识别 + 快捷时间（入口与草稿填充）
+     * ------------------------------------------------------------------ */
+    function initAiIntegration() {
+        refreshQuickDue();
+        NC.events.on('llm:changed', function (payload) {
+            if (payload && (payload.reason === 'work-end-time' || payload.reason === 'todo-ai')) {
+                refreshQuickDue();
+            }
+        });
+        NC.events.on('llm:profile-selected', function () {
+            refreshQuickDue();
+        });
+    }
+
+    function refreshQuickDue() {
+        try {
+            if (view && typeof view.refreshQuickDue === 'function') view.refreshQuickDue();
+        } catch (err) { /* 快捷时间刷新失败不影响主流程 */ }
+    }
+
+    /**
+     * 打开发 AI 识别弹窗。
+     * @param {string} [prefill]
+     * @returns {Object|null} ui.openModal 实例
+     */
+    function openAiDialog(prefill) {
+        if (NC.todoAi && typeof NC.todoAi.openDialog === 'function') {
+            return NC.todoAi.openDialog(prefill || '');
+        }
+        ui.toast('AI 识别模块未加载（js/todo-ai.js），请刷新页面重试', { type: 'warn' });
+        return null;
+    }
+
+    /**
+     * 用识别结果填充创建区（绝不自动创建）。
+     * @param {{title,notes,due,dueAllDay,priority,tags,listName}} data
+     * @returns {boolean}
+     */
+    function fillDraft(data) {
+        if (!data || typeof data !== 'object') return false;
+        var filled = false;
+        try {
+            filled = !!(view && typeof view.applyDraft === 'function' && view.applyDraft(data));
+        } catch (err) {
+            filled = false;
+        }
+        if (!filled) {
+            ui.toast('识别完成但无法填充表单，请重试或手动创建', { type: 'error' });
+            return false;
+        }
+        ui.toast('已识别，请确认后创建', { type: 'success', duration: 4200 });
+        NC.events.emit('todo:ai-filled', { data: data });
+        return true;
+    }
+
+    function quickDueOptions(now) {
+        if (NC.todoTime && typeof NC.todoTime.quickDueOptions === 'function') {
+            return NC.todoTime.quickDueOptions(now);
+        }
+        return [];
     }
 
     /* ------------------------------------------------------------------ *
@@ -767,6 +833,9 @@
         exportToFile: exportJson,
         importFromFile: importJson,
         openHelp: openHelp,
+        openAiDialog: openAiDialog,
+        fillDraft: fillDraft,
+        quickDueOptions: quickDueOptions,
         demoDoc: buildDemoDoc,
         isDemo: function () { return demoMode; },
         tick: tick

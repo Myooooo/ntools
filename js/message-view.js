@@ -424,7 +424,7 @@
         inner.appendChild(util.e('p', { class: 'chat-welcome__title' }));
         inner.appendChild(util.e('p', {
             class: 'chat-welcome__hint',
-            text: '本地运行 · 支持多配置、图片对话与思考过程'
+            text: '本地运行 · 按端点独立会话与系统提示词'
         }));
         var chips = util.e('div', { class: 'chat-welcome__chips' });
         WELCOME_SUGGESTIONS.forEach(function (prompt) {
@@ -703,12 +703,21 @@
 
         lightboxEl = document.getElementById('image-lightbox');
         lightboxImg = document.getElementById('lightbox-img');
-        var lightboxClose = document.getElementById('lightbox-close');
-        if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
         if (lightboxEl) {
+            lightboxEl.classList.add('chat-lightbox');
+            lightboxEl.hidden = true;
+            lightboxEl.classList.remove('is-open');
+            if (!lightboxEl.getAttribute('role')) lightboxEl.setAttribute('role', 'dialog');
+            if (!lightboxEl.getAttribute('aria-label')) lightboxEl.setAttribute('aria-label', '图片预览');
             lightboxEl.addEventListener('click', function (event) {
                 if (event.target === lightboxEl) closeLightbox();
             });
+        }
+        if (lightboxImg && !lightboxImg.getAttribute('alt')) lightboxImg.setAttribute('alt', '图片预览');
+        var lightboxClose = document.getElementById('lightbox-close');
+        if (lightboxClose) {
+            lightboxClose.classList.add('chat-lightbox__close');
+            lightboxClose.addEventListener('click', closeLightbox);
         }
 
         document.addEventListener('keydown', function (event) {

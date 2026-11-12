@@ -11,6 +11,8 @@
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/tools.css">
+    <link rel="stylesheet" href="css/chat.css">
+    <link rel="stylesheet" href="css/settings.css">
 
     <!-- 主题引导：CSS 之后、其他脚本之前，阻塞加载，防止主题闪烁 -->
     <script src="js/theme-boot.js"></script>
@@ -26,10 +28,27 @@
     <script defer src="js/storage.js"></script>
     <script defer src="js/ui.js"></script>
     <script defer src="js/theme.js"></script>
+    <!-- 全局模型端点 / AI / 设置 -->
+    <script defer src="js/schema-chat.js"></script>
+    <script defer src="js/llm-store.js"></script>
+    <script defer src="js/ai.js"></script>
+    <script defer src="js/settings-panel.js"></script>
+    <!-- 页面模块：原生聊天（去掉 iframe） -->
+    <script defer src="js/sse.js"></script>
+    <script defer src="js/api.js"></script>
+    <script defer src="js/conversation-store.js"></script>
+    <script defer src="js/settings-store.js"></script>
+    <script defer src="js/message-view.js"></script>
+    <script defer src="js/composer.js"></script>
+    <script defer src="js/settings-view.js"></script>
+    <script defer src="js/chat-controller.js"></script>
+    <script defer src="js/chat-embed.js"></script>
     <!-- 页面模块：Todo 专项 -->
     <script defer src="js/schema-todo.js"></script>
     <script defer src="js/todo-store.js"></script>
     <script defer src="js/todo-view.js"></script>
+    <script defer src="js/todo-time.js"></script>
+    <script defer src="js/todo-ai.js"></script>
     <script defer src="js/todo.js"></script>
     <!-- 页面模块：工具叶子（由 platform-compat 提供，未就位时 ntools-app.js 做降级） -->
     <script defer src="js/qr.js"></script>
@@ -74,13 +93,16 @@
         </nav>
 
         <div class="tools-rail__foot">
+            <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="settings-btn" aria-label="设置" title="设置">
+                <span data-icon="settings"></span>
+            </button>
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="theme-toggle-btn" aria-label="切换深浅主题" title="切换深浅主题">
                 <span data-icon="sun"></span>
             </button>
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" title="版本">v2.0</span>
+            <span class="tools-rail__version" title="版本">v3.0</span>
         </div>
     </aside>
 
@@ -380,22 +402,91 @@
                 <div class="tool-module-note" id="image-module-note" hidden></div>
             </section>
 
-            <!-- ---------------- Tab 5：nChat ---------------- -->
+            <!-- ---------------- Tab 5：nChat（原生嵌入） ---------------- -->
             <section class="tools-page tools-page--nchat" id="page-nchat" data-panel="nchat" data-page="nchat" aria-label="nChat 聊天" hidden>
-                <header class="tools-head tools-head--compact">
-                    <div class="tools-head__text">
-                        <h1 class="tools-title">nChat</h1>
-                        <p class="tools-subtitle">内嵌聊天页面，与独立入口共用同一份本地配置。</p>
+                <div class="chat-app chat-app--embed" id="chat-app">
+                    <header class="chat-toolbar chat-toolbar--embed">
+                        <div class="chat-toolbar__left">
+                            <span class="chat-profile-dot" id="chat-profile-dot" aria-hidden="true"></span>
+                            <select id="chat-profile-select" class="nc-select chat-profile-select" aria-label="模型端点"></select>
+                            <span class="chat-profile-meta" id="chat-profile-meta"></span>
+                        </div>
+                        <div class="chat-toolbar__actions">
+                            <button id="chat-system-prompt-btn" class="nc-btn nc-btn--sm" type="button" title="设置当前端点的聊天系统提示词">
+                                <span data-icon="edit" data-icon-size="15"></span>
+                                <span>系统提示词</span>
+                            </button>
+                            <button id="chat-menu-btn" class="nc-btn nc-btn--icon nc-btn--sm" type="button" aria-label="聊天菜单" aria-haspopup="menu" aria-expanded="false">
+                                <span data-icon="more" data-icon-size="16"></span>
+                            </button>
+                        </div>
+                        <div id="chat-menu" class="chat-menu" role="menu" hidden>
+                            <button type="button" class="chat-menu__item" role="menuitem" id="export-conversation-btn">
+                                <span data-icon="download" data-icon-size="16"></span><span>导出对话</span>
+                            </button>
+                            <button type="button" class="chat-menu__item" role="menuitem" id="backup-conversation-btn">
+                                <span data-icon="copy" data-icon-size="16"></span><span>备份对话</span>
+                            </button>
+                            <button type="button" class="chat-menu__item" role="menuitem" id="restore-conversation-btn">
+                                <span data-icon="upload" data-icon-size="16"></span><span>恢复对话</span>
+                            </button>
+                            <div class="chat-menu__divider"></div>
+                            <button type="button" class="chat-menu__item is-danger" role="menuitem" id="clear-chat-btn">
+                                <span data-icon="trash" data-icon-size="16"></span><span>清除对话</span>
+                            </button>
+                        </div>
+                    </header>
+
+                    <main id="chat-container" class="chat-main" role="log" aria-label="对话" aria-live="off" tabindex="0"></main>
+                    <button id="jump-bottom-btn" class="chat-jump" type="button" title="回到底部" aria-label="回到底部" hidden>
+                        <span data-icon="arrow-down" data-icon-size="18"></span>
+                    </button>
+
+                    <footer id="input-area-container" class="chat-composer">
+                        <div id="image-preview-container" class="chat-previews" aria-label="待发送图片" hidden></div>
+                        <div class="chat-composer__row">
+                            <input type="file" id="image-input" accept="image/*" multiple hidden>
+                            <button id="upload-btn" class="chat-icon-btn chat-icon-btn--soft" type="button" title="上传图片" aria-label="上传图片">
+                                <span data-icon="image" data-icon-size="20"></span>
+                            </button>
+                            <textarea id="user-input" class="chat-input" rows="1" spellcheck="false" placeholder="输入消息，Enter 发送，Shift + Enter 换行" aria-label="输入消息"></textarea>
+                            <button id="send-btn" class="chat-send" type="button" title="发送" aria-label="发送">
+                                <span class="chat-send__icon chat-send__icon--send">
+                                    <span data-icon="send" data-icon-size="20"></span>
+                                </span>
+                                <span class="chat-send__icon chat-send__icon--stop">
+                                    <span data-icon="stop" data-icon-size="20"></span>
+                                </span>
+                            </button>
+                        </div>
+                    </footer>
+                </div>
+
+                <div id="image-lightbox" class="chat-lightbox" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
+                    <button id="lightbox-close" class="chat-lightbox__close" type="button" title="关闭预览" aria-label="关闭预览">
+                        <span data-icon="x" data-icon-size="22"></span>
+                    </button>
+                    <img id="lightbox-img" class="chat-lightbox__img" alt="图片预览">
+                </div>
+                <input type="file" id="restore-conversation-input" accept=".json,application/json" hidden>
+
+                <div id="chat-system-prompt-sheet" class="chat-prompt-sheet" hidden>
+                    <div class="chat-prompt-sheet__panel" role="dialog" aria-modal="true" aria-labelledby="chat-prompt-title">
+                        <header class="chat-prompt-sheet__head">
+                            <div>
+                                <h2 class="chat-prompt-sheet__title" id="chat-prompt-title">聊天系统提示词</h2>
+                                <p class="chat-prompt-sheet__sub">当前端点：<span id="chat-system-prompt-profile">—</span>。保存后对后续消息生效。</p>
+                            </div>
+                            <button id="chat-system-prompt-cancel" class="nc-btn nc-btn--icon nc-btn--sm" type="button" aria-label="关闭">
+                                <span data-icon="x" data-icon-size="16"></span>
+                            </button>
+                        </header>
+                        <textarea id="chat-system-prompt-input" class="nc-textarea chat-prompt-sheet__input" rows="8" placeholder="例如：你是一个简洁、专业的中文助手，回答控制在三句话以内。"></textarea>
+                        <footer class="chat-prompt-sheet__foot">
+                            <button id="chat-system-prompt-reset" class="nc-btn nc-btn--sm" type="button">清空</button>
+                            <button id="chat-system-prompt-save" class="nc-btn nc-btn--primary nc-btn--sm" type="button">保存</button>
+                        </footer>
                     </div>
-                    <div class="tools-head__actions">
-                        <a class="nc-btn nc-btn--sm" href="index.html" target="_blank" rel="noopener">
-                            <span data-icon="external" data-icon-size="15"></span>
-                            <span>在新窗口打开</span>
-                        </a>
-                    </div>
-                </header>
-                <div class="nchat-frame-wrap">
-                    <iframe class="nchat-frame" id="nchat-frame" data-src="index.html" title="nChat 聊天窗口"></iframe>
                 </div>
             </section>
 

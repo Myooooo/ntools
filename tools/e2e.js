@@ -20,7 +20,15 @@ const CHROME = process.env.CHROME || '/Applications/Google Chrome for Testing.ap
 const ROOT = path.resolve(__dirname, '..');
 const PORT = 9500 + (process.pid % 200);
 const URL_TODO = 'file://' + path.join(ROOT, 'ntools.html').split(path.sep).join('/');
-const URL_CHAT = 'file://' + path.join(ROOT, 'index.html').split(path.sep).join('/');
+const URL_CHAT = 'file://' + path.join(ROOT, 'ntools.html').split(path.sep).join('/') + '#nchat';
+const LLM_FIXTURE = {
+    version: 1,
+    profiles: [{ id: 'p-e2e-1', name: 'E2E 端点', baseUrl: 'https://mock.local/v1', apiKey: 'sk-mock',
+        modelId: 'mock-model', chatSystemPrompt: '', temperature: 1, topP: 0.95 }],
+    currentProfileId: 'p-e2e-1',
+    todoAi: { profileId: null, systemPrompt: '测试提示 {{NOW}}', temperature: 0.2, topP: 0.9 },
+    workEndTime: '17:30'
+};
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class Client {
@@ -93,6 +101,23 @@ async function navigate(client, url) {
     await loaded;
     await waitFor(client, "typeof window.NC !== 'undefined'", 8000);
     await sleep(500);
+}
+
+async function reloadPage(client) {
+    const loaded = new Promise((resolve) => {
+        const handler = (message) => {
+            if (message.method === 'Page.loadEventFired') {
+                client.handlers = client.handlers.filter((h) => h !== handler);
+                resolve();
+            }
+        };
+        client.handlers.push(handler);
+        setTimeout(resolve, 15000);
+    });
+    await client.send('Page.reload', { ignoreCache: true });
+    await loaded;
+    await waitFor(client, "typeof window.NC !== 'undefined'", 8000);
+    await sleep(300);
 }
 
 async function waitFor(client, expression, timeoutMs) {
@@ -244,49 +269,21 @@ async function runTodo(client, report) {
 
 async function runChat(client, report) {
     await navigate(client, URL_CHAT);
-    await evaluate(client, 'localStorage.clear(); true;');
-    await navigate(client, URL_CHAT);
-    await sleep(800);
-
+    await evaluate(client, `(function(){ localStorage.clear(); localStorage.setItem('ntools.llm.v1', JSON.stringify(${JSON.stringify(LLM_FIXTURE)})); return true; })()`);
+    await reloadPage(client);
+    const ready = await waitFor(client, "!!(window.NC && NC.chatEmbed && NC.chatEmbed.isReady && NC.chatEmbed.isReady() && document.querySelectorAll('#chat-profile-select option').length > 0)", 12000);
+    report.assert('原生聊天已加载（无 iframe）', ready && await evaluate(client, "!document.getElementById('nchat-frame')"));
     report.assert('欢迎语', await evaluate(client, "document.querySelectorAll('.message').length >= 1"));
-    report.assert('默认配置已创建', await evaluate(client, "!!NC.store.settings.getConfig() && NC.store.settings.getConfig().modelId === 'gpt-4o'"));
+    report.assert('端点下拉就绪', await evaluate(client, "document.querySelectorAll('#chat-profile-select option').length >= 1"));
 
-    // 保存配置
-    await evaluate(client, `(function(){ document.getElementById('toggle-settings-btn').click(); return true; })()`);
+    // 主题切换（全局按钮）
+    const before = await evaluate(client, "document.documentElement.getAttribute('data-theme')");
+    await click(client, '#theme-toggle-btn');
     await sleep(300);
-    await setValue(client, '#config-name', '测试配置');
-    await setValue(client, '#api-url', 'https://example.com/v1');
-    await setValue(client, '#api-key', 'sk-test');
-    await setValue(client, '#model-id', 'test-model');
-    await click(client, '#save-settings-btn');
-    await sleep(400);
-    const saved = await evaluate(client, `(function(){
-        var raw = localStorage.getItem('nchat-settings');
-        var doc = raw ? JSON.parse(raw) : null;
-        var cfg = doc && doc.configs ? doc.configs[0] : null;
-        return { has: !!cfg, name: cfg && cfg.name, url: cfg && cfg.apiUrl, model: cfg && cfg.modelId,
-                 version: doc && doc.version, title: document.getElementById('app-title').textContent };
-    })()`);
-    report.assert('配置保存到存储', saved.has && saved.name === '测试配置' && saved.model === 'test-model', JSON.stringify(saved));
-    report.assert('标题同步配置名', saved.title.indexOf('测试配置') > -1, saved.title);
+    const after = await evaluate(client, "document.documentElement.getAttribute('data-theme')");
+    report.assert('主题切换', before !== after, before + ' → ' + after);
 
-    // 主题切换
-    await evaluate(client, `(function(){ document.getElementById('menu-btn').click(); return true; })()`);
-    await sleep(200);
-    await evaluate(client, `(function(){ document.getElementById('theme-toggle-btn').click(); return true; })()`);
-    await sleep(300);
-    const theme = await evaluate(client, `({ theme: document.documentElement.getAttribute('data-theme'), stored: localStorage.getItem('nchat-theme') })`);
-    report.assert('主题切换并持久化', theme.theme === 'light' && theme.stored === 'light', JSON.stringify(theme));
-
-    // Lite 切换
-    await evaluate(client, `(function(){ document.getElementById('menu-btn').click(); return true; })()`);
-    await sleep(200);
-    await evaluate(client, `(function(){ document.getElementById('lite-mode-btn').click(); return true; })()`);
-    await sleep(300);
-    const lite = await evaluate(client, `({ lite: document.documentElement.getAttribute('data-lite'), stored: localStorage.getItem('nchat-lite-mode') })`);
-    report.assert('Lite 切换并持久化', lite.lite === 'true' && lite.stored === 'true', JSON.stringify(lite));
-
-    // 图片暂存（构造 File 走 input change）
+    // 图片暂存（原生 composer）
     await evaluate(client, `(function(){
         var canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
         var ctx = canvas.getContext('2d'); ctx.fillStyle = '#5b8cff'; ctx.fillRect(0,0,64,64);
@@ -304,19 +301,14 @@ async function runChat(client, report) {
     await waitFor(client, "document.querySelectorAll('#image-preview-container img').length > 0", 5000);
     report.assert('图片暂存预览', await evaluate(client, "document.querySelectorAll('#image-preview-container img').length > 0"));
 
-    // 无 Key 发送提示（清空 key 后发送）
-    await evaluate(client, `(function(){
-        var raw = localStorage.getItem('nchat-settings'); var doc = JSON.parse(raw);
-        doc.configs[0].apiKey = ''; localStorage.setItem('nchat-settings', JSON.stringify(doc));
-        location.reload(); return true;
-    })()`);
-    await sleep(1800);
-    await setValue(client, '#user-input', '测试消息');
+    // 缺 Key 发送提示
+    await evaluate(client, `(function(){ NC.store.llm.updateProfile('p-e2e-1', { apiKey: '' }); return true; })()`);
+    await setValue(client, '#user-input', '缺 Key 测试');
     await evaluate(client, `(function(){ document.getElementById('send-btn').click(); return true; })()`);
     await sleep(600);
     const noKey = await evaluate(client, `(function(){
         var text = document.body.textContent || '';
-        return { hint: text.indexOf('请先完成') > -1 || text.indexOf('API') > -1, msgs: document.querySelectorAll('.message').length };
+        return { hint: text.indexOf('请先完成') > -1 || text.indexOf('API') > -1 };
     })()`);
     report.assert('缺配置发送有提示', noKey.hint, JSON.stringify(noKey));
 }
@@ -325,16 +317,12 @@ async function runChatStreaming(client, report) {
     await navigate(client, URL_CHAT);
     await evaluate(client, `(function(){
         localStorage.clear();
-        localStorage.setItem('nchat-settings', JSON.stringify({
-            version: 2, currentId: 'cfg-mock-1',
-            configs: [{ id: 'cfg-mock-1', name: 'Mock 配置', apiUrl: 'https://mock.local/v1',
-                apiKey: 'sk-mock', modelId: 'mock-model', systemPrompt: '',
-                enableAdvanced: false, temperature: 1, top_p: 0.95 }]
-        }));
+        localStorage.setItem('ntools.llm.v1', JSON.stringify(${JSON.stringify(LLM_FIXTURE)}));
         return true;
     })()`);
-    await navigate(client, URL_CHAT);
-    await sleep(500);
+    await reloadPage(client);
+    await waitFor(client, "!!(window.NC && NC.chatEmbed && NC.chatEmbed.isReady && NC.chatEmbed.isReady())", 12000);
+    await sleep(300);
 
     // mock 流式 SSE
     const mockOk = await evaluate(client, `(function(){
@@ -483,21 +471,24 @@ async function runSecurity(client, report) {
     await navigate(client, URL_CHAT);
     await evaluate(client, `(function(){
         localStorage.clear();
-        localStorage.setItem('nchat-settings', JSON.stringify({
-            version: 2, currentId: 'cfg-sec-1',
-            configs: [{ id: 'cfg-sec-1', name: '安全测试', apiUrl: 'https://mock.local/v1',
-                apiKey: 'sk-secret', modelId: 'mock', systemPrompt: '',
-                enableAdvanced: false, temperature: 1, top_p: 0.95 }]
-        }));
+        localStorage.setItem('ntools.llm.v1', JSON.stringify(${JSON.stringify({
+            version: 1,
+            profiles: [{ id: 'p-e2e-1', name: '安全测试', baseUrl: 'https://mock.local/v1', apiKey: 'sk-secret',
+                modelId: 'mock', chatSystemPrompt: '', temperature: 1, topP: 0.95 }],
+            currentProfileId: 'p-e2e-1',
+            todoAi: { profileId: null, systemPrompt: '测试提示 {{NOW}}', temperature: 0.2, topP: 0.9 },
+            workEndTime: '17:30'
+        })}));
         return true;
     })()`);
-    await navigate(client, URL_CHAT);
-    await sleep(600);
+    await reloadPage(client);
+    await waitFor(client, "!!(window.NC && NC.chatEmbed && NC.chatEmbed.isReady && NC.chatEmbed.isReady())", 12000);
+    await sleep(300);
     const masked = await evaluate(client, `(function(){
-        var plain = NC.store.settings.exportConfigs({ includeKey: false });
-        var withKey = NC.store.settings.exportConfigs({ includeKey: true });
-        var plainCfg = plain.configs[0] || {};
-        var withKeyCfg = withKey.configs[0] || {};
+        var plain = NC.store.llm.exportAll({ includeKeys: false });
+        var withKey = NC.store.llm.exportAll({ includeKeys: true });
+        var plainCfg = plain.profiles[0] || {};
+        var withKeyCfg = withKey.profiles[0] || {};
         return {
             masked: !('apiKey' in plainCfg) || plainCfg.apiKey === '',
             included: withKeyCfg.apiKey === 'sk-secret',
