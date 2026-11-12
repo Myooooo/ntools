@@ -2,6 +2,8 @@
 
 > 本地优先的 AI 聊天前端 + 效率工具集。纯静态 HTML，双击即用，无需服务器、无需安装、数据只留在本机浏览器。
 > 目标环境：国企内网 / 信创 ARM / 麒麟 Linux / 奇安信可信浏览器（Chromium 102 基线）。
+>
+> **仓库**：[github.com/Myooooo/ntools](https://github.com/Myooooo/ntools)
 
 ![nChat](img/main.png)
 
