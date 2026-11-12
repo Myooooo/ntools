@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>兼容性自检 · nTools / nChat</title>
+<!-- 复用统一设计令牌与组件；本页样式只做布局补充（cc-*），不新增控件风格 -->
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/components.css">
+<style>
+    /* 自检页允许纵向滚动（base.css 默认锁滚动） */
+    html, body { height: auto; min-height: 100%; }
+    body { overflow-y: auto; overflow-x: hidden; padding: 0; }
+    .cc-wrap { max-width: 1120px; margin: 0 auto; padding: var(--nc-space-6) var(--nc-space-5) var(--nc-space-12); }
+    .cc-header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--nc-space-3); margin-bottom: var(--nc-space-5); }
+    .cc-header__title { font-size: var(--nc-fs-xl); font-weight: 650; letter-spacing: -0.02em; }
+    .cc-header__sub { margin-top: 2px; font-size: var(--nc-fs-sm); color: var(--nc-text-3); }
+    .cc-header__actions { display: flex; flex-wrap: wrap; gap: var(--nc-space-2); }
+    .cc-banner { display: none; margin-bottom: var(--nc-space-4); }
+    .cc-banner.is-visible { display: block; }
+    .cc-summary { margin-bottom: var(--nc-space-4); }
+    .cc-summary__head { display: flex; align-items: center; gap: var(--nc-space-3); flex-wrap: wrap; }
+    .cc-summary__title { font-size: var(--nc-fs-lg); font-weight: 650; }
+    .cc-summary__counts { display: flex; gap: var(--nc-space-2); flex-wrap: wrap; }
+    .cc-summary__body { margin-top: var(--nc-space-3); display: grid; gap: var(--nc-space-2); }
+    .cc-summary__line { font-size: var(--nc-fs-sm); color: var(--nc-text-2); }
+    .cc-summary__line strong { color: var(--nc-text); font-weight: 600; }
+    .cc-env { margin-bottom: var(--nc-space-4); }
+    .cc-env__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--nc-space-2) var(--nc-space-4); }
+    .cc-env__item { min-width: 0; padding: var(--nc-space-1) 0; }
+    .cc-env__label { font-size: var(--nc-fs-2xs); color: var(--nc-text-3); letter-spacing: 0.04em; }
+    .cc-env__value { font-size: var(--nc-fs-sm); color: var(--nc-text); overflow-wrap: anywhere; }
+    .cc-env__value.is-mono { font-family: var(--nc-font-mono); font-size: var(--nc-fs-xs); }
+    .cc-group { margin-bottom: var(--nc-space-4); }
+    .cc-group__title { font-size: var(--nc-fs-md); font-weight: 650; }
+    .cc-group__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--nc-space-3); margin-bottom: var(--nc-space-2); }
+    .cc-group__hint { font-size: var(--nc-fs-xs); color: var(--nc-text-3); }
+    .cc-rows { display: flex; flex-direction: column; }
+    .cc-row { display: flex; align-items: flex-start; gap: var(--nc-space-3); padding: var(--nc-space-2) 0; border-top: 1px solid var(--nc-border-faint); }
+    .cc-row:first-child { border-top: 0; }
+    .cc-row__main { flex: 1; min-width: 0; }
+    .cc-row__name { font-size: var(--nc-fs-sm); color: var(--nc-text); }
+    .cc-row__detail { margin-top: 2px; font-size: var(--nc-fs-xs); color: var(--nc-text-3); overflow-wrap: anywhere; }
+    .cc-row__detail.is-mono { font-family: var(--nc-font-mono); }
+    .cc-row__hint { margin-top: 2px; font-size: var(--nc-fs-xs); color: var(--nc-warning); display: none; }
+    .cc-row__hint.is-visible { display: block; }
+    .cc-row__side { flex: 0 0 auto; display: flex; align-items: center; gap: var(--nc-space-2); }
+    .cc-row__action { flex: 0 0 auto; }
+    .cc-badge { flex: 0 0 auto; min-width: 68px; justify-content: center; }
+    .cc-badge--pending { color: var(--nc-text-3); border-color: var(--nc-border); }
+    .cc-manual__form { display: flex; flex-wrap: wrap; gap: var(--nc-space-2); margin: var(--nc-space-2) 0 var(--nc-space-1); }
+    .cc-manual__input { flex: 1 1 320px; }
+    .cc-notes { margin-top: var(--nc-space-6); }
+    .cc-notes ul { display: grid; gap: var(--nc-space-2); }
+    .cc-notes li { font-size: var(--nc-fs-sm); color: var(--nc-text-2); padding-left: var(--nc-space-4); position: relative; }
+    .cc-notes li::before { content: "•"; position: absolute; left: 6px; color: var(--nc-accent); }
+    .cc-foot { margin-top: var(--nc-space-6); font-size: var(--nc-fs-xs); color: var(--nc-text-3); }
+    .cc-report { width: 100%; min-height: 240px; font-family: var(--nc-font-mono); font-size: var(--nc-fs-xs); }
+    [data-embed="1"] body { overflow: hidden; }
+    @media (max-width: 720px) {
+        .cc-wrap { padding: var(--nc-space-4) var(--nc-space-3) var(--nc-space-10); }
+        .cc-row { gap: var(--nc-space-2); }
+        .cc-badge { min-width: 58px; }
+    }
+</style>
+<script src="js/theme-boot.js"></script>
+<script defer src="js/polyfills.js"></script>
+<script defer src="js/core.js"></script>
+<script defer src="js/compat.js"></script>
+<script defer src="js/icons.js"></script>
+<script defer src="js/storage.js"></script>
+<script defer src="js/ui.js"></script>
+<script defer src="js/theme.js"></script>
+</head>
+<body>
+<div class="cc-wrap" id="cc-root">
+
+    <div class="nc-card cc-banner" id="cc-banner" role="alert"></div>
+
+    <header class="cc-header">
+        <div>
+            <h1 class="cc-header__title">兼容性自检</h1>
+            <p class="cc-header__sub">
+                nTools / nChat · 目标：奇安信可信浏览器（Chromium 102）/ 麒麟 Linux / <code>file://</code>
+                <span id="cc-version"></span>
+            </p>
+        </div>
+        <div class="cc-header__actions">
+            <button type="button" class="nc-btn nc-btn--ghost nc-btn--sm" id="cc-theme-btn">切换主题</button>
+            <button type="button" class="nc-btn nc-btn--ghost nc-btn--sm" id="cc-lite-btn">Lite 模式</button>
+            <button type="button" class="nc-btn nc-btn--outline nc-btn--sm" id="cc-rerun-btn">重新检测</button>
+            <button type="button" class="nc-btn nc-btn--primary nc-btn--sm" id="cc-copy-btn">复制报告</button>
+        </div>
+    </header>
+
+    <section class="nc-card cc-summary" id="cc-summary" aria-live="polite">
+        <div class="cc-summary__head">
+            <span class="cc-summary__title" id="cc-summary-title">检测中…</span>
+            <div class="cc-summary__counts" id="cc-summary-counts"></div>
+        </div>
+        <div class="cc-summary__body" id="cc-summary-body"></div>
+    </section>
+
+    <section class="nc-card cc-env" id="cc-env">
+        <div class="cc-group__head">
+            <h2 class="cc-group__title">运行环境</h2>
+            <span class="cc-group__hint">内核版本以地址栏 <code>chrome://version</code> 为准</span>
+        </div>
+        <div class="cc-env__grid" id="cc-env-grid"></div>
+    </section>
+
+    <div id="cc-groups"></div>
+
+    <section class="nc-card cc-notes" id="cc-notes">
+        <div class="cc-group__head"><h2 class="cc-group__title">现场需人工确认</h2></div>
+        <ul>
+            <li>本页只能探测浏览器 API 与自动行为；<strong>剪贴板 / 下载 / 通知可能被奇安信 BDLP 管控策略单独禁用</strong>，请用下方“交互自测”逐项点击并在目标机确认。</li>
+            <li>存储持久性：本页写入 marker；<strong>重启浏览器后再打开本页</strong>，若显示“上次运行”时间则持久化正常，若回到首次写入则说明策略在退出时清理站点数据。</li>
+            <li>CORS 实测：填内网 API 的 <code>/health</code> 或任意 GET 地址点“测试”；服务端需放行 <code>Origin: null</code>（或 <code>*</code>）与预检头。页面内无法查看服务端日志，需配合网关排查。</li>
+            <li>若现场内核与 <code>chrome://version</code> 不一致，以 <code>chrome://version</code> 与 UA 的较小值为保守基线，并把本页报告截图回传。</li>
+        </ul>
+    </section>
+
+    <p class="cc-foot" id="cc-foot">报告生成后可直接“复制报告”粘贴到验收记录；本页不发起任何外部网络请求（CORS 测试除外，且需手动点击）。</p>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var ROOT = document.documentElement;
+    var NC = null; // 延迟到 DOMContentLoaded 后再取（deferred 脚本此时才执行完）
+    var EMBED = /(?:\?|&)embed=1(?:&|$)/.test(window.location.search);
+    var STATUS = {
+        pass: { label: '通过', cls: 'nc-badge--success' },
+        warn: { label: '降级', cls: 'nc-badge--warning' },
+        fail: { label: '不可用', cls: 'nc-badge--danger' },
+        info: { label: '信息', cls: 'nc-badge--accent' },
+        pending: { label: '检测中', cls: 'cc-badge--pending' },
+        manual: { label: '待测试', cls: 'cc-badge--pending' }
+    };
+
+    function $(id) { return document.getElementById(id); }
+
+    function el(tag, cls, text) {
+        var node = document.createElement(tag);
+        if (cls) node.className = cls;
+        if (text != null) node.textContent = String(text);
+        return node;
+    }
+
+    function toast(message, type) {
+        if (NC && NC.ui && NC.ui.toast) { NC.ui.toast(message, { type: type || 'info' }); return; }
+        try { window.alert(message); } catch (err) { /* ignore */ }
+    }
+
+    function copyText(text) {
+        if (NC && NC.util && NC.util.copyText) return NC.util.copyText(text);
+        return new Promise(function (resolve) {
+            var ok = false;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(function () { resolve(true); }, function () { resolve(fallbackCopy(text)); });
+                    return;
+                }
+            } catch (err) { /* ignore */ }
+            resolve(fallbackCopy(text));
+        });
+        function fallbackCopy(value) {
+            try {
+                var area = document.createElement('textarea');
+                area.value = value;
+                area.setAttribute('readonly', 'readonly');
+                area.style.position = 'fixed';
+                area.style.left = '-9999px';
+                document.body.appendChild(area);
+                area.select();
+                var ok2 = document.execCommand('copy');
+                document.body.removeChild(area);
+                return ok2;
+            } catch (err) { return false; }
+        }
+    }
+
+    function pad2(n) { return n < 10 ? '0' + n : String(n); }
+
+    function formatTime(ts) {
+        var d = new Date(ts);
+        return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + ' ' +
+            pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+    }
+
+    function ago(ms) {
+        var abs = Math.abs(ms);
+        if (abs < 60000) return Math.round(abs / 1000) + ' 秒';
+        if (abs < 3600000) return Math.round(abs / 60000) + ' 分钟';
+        if (abs < 86400000) return Math.round(abs / 3600000) + ' 小时';
+        return Math.round(abs / 86400000) + ' 天';
+    }
+
+    function safeStorageGet(key) {
+        try { return window.localStorage.getItem(key); } catch (err) { return null; }
+    }
+
+    function safeStorageSet(key, value) {
+        try { window.localStorage.setItem(key, value); return true; } catch (err) { return false; }
+    }
+
+    function parsedChromeVersion() {
+        var ua = (navigator && navigator.userAgent) || '';
+        var m = ua.match(/Chrome\/(\d+)/) || ua.match(/Chromium\/(\d+)/) || ua.match(/Edg\/(\d+)/);
+        return m ? parseInt(m[1], 10) : 0;
+    }
+
+    function cssSupports(prop, value) {
+        try {
+            if (!window.CSS || !window.CSS.supports) return false;
+            return window.CSS.supports(prop, value) === true;
+        } catch (err) { return false; }
+    }
+
+    function selectorSupports(selector) {
+        try {
+            if (!window.CSS || !window.CSS.supports) return false;
+            return window.CSS.supports('selector(' + selector + ')') === true;
+        } catch (err) { return false; }
+    }
+
+    function syntaxWorks(code) {
+        try {
+            /* eslint-disable no-new-func */
+            var fn = new Function('return (' + code + ');');
+            return fn() === 1;
+        } catch (err) { return false; }
+    }
+
+    function detectFlexGap() {
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'position:absolute;left:-9999px;top:0;display:flex;gap:10px;width:120px;visibility:hidden;';
+        var a = document.createElement('div');
+        a.style.cssText = 'flex:0 0 10px;width:10px;height:10px;';
+        var b = document.createElement('div');
+        b.style.cssText = 'flex:0 0 10px;width:10px;height:10px;';
+        wrap.appendChild(a); wrap.appendChild(b);
+        document.body.appendChild(wrap);
+        var gap = -1;
+        try {
+            var ra = a.getBoundingClientRect();
+            var rb = b.getBoundingClientRect();
+            gap = Math.round(rb.left - ra.right);
+        } catch (err) { gap = -1; }
+        document.body.removeChild(wrap);
+        return gap;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * embed 模式：被主页面用 iframe 探测时只渲染一行，避免递归
+     * ------------------------------------------------------------------ */
+    if (EMBED) {
+        ROOT.setAttribute('data-embed', '1');
+        document.title = 'compat-check-embed';
+        var rootEl = document.getElementById('cc-root');
+        while (rootEl.firstChild) rootEl.removeChild(rootEl.firstChild);
+        rootEl.appendChild(el('p', 'nc-field-hint', 'compat-check iframe probe OK — ' + window.location.protocol));
+        return;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 工具函数：内核判定
+     * ------------------------------------------------------------------ */
+    function kernelMeta(version) {
+        if (!version) {
+            return { status: 'warn', text: '未知', hint: '无法从 UA 解析内核版本，请在地址栏打开 chrome://version 对照 Chromium 一行。' };
+        }
+        if (version < 80) {
+            return { status: 'fail', text: String(version), hint: '内核过低：不支持可选链/空值合并，项目代码无法运行。' };
+        }
+        if (version < 84) {
+            return { status: 'warn', text: String(version), hint: '低于 84：flex gap 可能失效（布局间距异常），请确认页面排版。' };
+        }
+        if (version < 92) {
+            return { status: 'warn', text: String(version), hint: '低于 92：marked 需要的 Array.at 由 polyfills.js 兜底；请确认 Markdown 渲染正常。' };
+        }
+        if (version < 102) {
+            return { status: 'pass', text: String(version), hint: '≥92 可用；项目按 Chromium 102 基线开发，建议升级到 102+。' };
+        }
+        return { status: 'pass', text: String(version), hint: '满足 Chromium 102 基线。' };
+    }
+
+    function summarizeFeatures() {
+        var f = (NC && NC.compat && NC.compat.features) ? NC.compat.features : {};
+        var version = f.chromeVersion || parsedChromeVersion();
+        var meta = kernelMeta(version);
+        return { features: f, version: version, meta: meta };
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 结果模型与行渲染
+     * ------------------------------------------------------------------ */
+    var state = {
+        rows: [],          // {item, resultEls, status}
+        auto: { pass: 0, warn: 0, fail: 0, info: 0, total: 0, done: 0 },
+        manual: { pass: 0, warn: 0, fail: 0, total: 0 },
+        timer: null,
+        finalized: false,
+        startedAt: Date.now()
+    };
+
+    function statusBadge(status) {
+        var meta = STATUS[status] || STATUS.info;
+        var badge = el('span', 'nc-badge cc-badge ' + meta.cls, meta.label);
+        return badge;
+    }
+
+    function makeRow(item) {
+        var row = el('div', 'cc-row');
+        var side = el('div', 'cc-row__side');
+        var badge = statusBadge('pending');
+        side.appendChild(badge);
+        var main = el('div', 'cc-row__main');
+        main.appendChild(el('div', 'cc-row__name', item.name));
+        var detail = el('div', 'cc-row__detail' + (item.mono ? ' is-mono' : ''), item.detail || '');
+        main.appendChild(detail);
+        var hint = el('div', 'cc-row__hint', '');
+        main.appendChild(hint);
+        row.appendChild(side);
+        row.appendChild(main);
+        var refs = { row: row, badge: badge, detail: detail, hint: hint, side: side };
+        var record = { item: item, refs: refs, status: 'pending' };
+        state.rows.push(record);
+        refs.record = record;
+        return refs;
+    }
+
+    function applyResult(item, refs, result) {
+        var status = result && result.status ? result.status : 'info';
+        if (refs.record) refs.record.status = status;
+        var meta = STATUS[status] || STATUS.info;
+        refs.badge.textContent = (result && result.expected) ? meta.label + '（预期）' : meta.label;
+        refs.badge.className = 'nc-badge cc-badge ' + meta.cls;
+        if (result && result.detail != null) refs.detail.textContent = String(result.detail);
+        if (result && result.hint) {
+            refs.hint.textContent = String(result.hint);
+            refs.hint.classList.add('is-visible');
+        }
+        if (item.auto !== false) {
+            state.auto.done++;
+            if (status in state.auto) state.auto[status]++;
+        }
+        if (item.auto !== false && state.auto.done >= state.auto.total) finishChecks();
+    }
+
+    function resolveItem(item, refs) {
+        var task;
+        try {
+            task = item.run ? item.run() : { status: 'info', detail: '无检测逻辑' };
+        } catch (err) {
+            task = { status: 'fail', detail: '检测异常：' + (err && err.message ? err.message : String(err)), hint: '请把本报告反馈给开发。' };
+        }
+        Promise.resolve(task).then(function (result) {
+            applyResult(item, refs, result || { status: 'info', detail: '' });
+        }, function (err) {
+            applyResult(item, refs, {
+                status: 'fail',
+                detail: '检测异常：' + (err && err.message ? err.message : String(err))
+            });
+        });
+    }
+
+    function buildGroup(group) {
+        var section = el('section', 'nc-card cc-group');
+        var head = el('div', 'cc-group__head');
+        head.appendChild(el('h2', 'cc-group__title', group.title));
+        if (group.hint) head.appendChild(el('span', 'cc-group__hint', group.hint));
+        section.appendChild(head);
+        var rows = el('div', 'cc-rows');
+        section.appendChild(rows);
+
+        if (group.manual) {
+            group.items.forEach(function (item) {
+                item.auto = false;
+                var refs = makeRow(item);
+                refs.badge.textContent = STATUS.manual.label;
+                refs.badge.className = 'nc-badge cc-badge ' + STATUS.manual.cls;
+                refs.detail.textContent = item.detail || '';
+                if (item.controls) {
+                    var controls = item.controls(refs);
+                    if (controls) refs.row.appendChild(controls);
+                }
+                rows.appendChild(refs.row);
+            });
+            return section;
+        }
+
+        group.items.forEach(function (item) {
+            if (item.auto !== false) state.auto.total++;
+            var refs = makeRow(item);
+            rows.appendChild(refs.row);
+            resolveItem(item, refs);
+        });
+        return section;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 检测项定义
+     * ------------------------------------------------------------------ */
+    function buildGroups() {
+        var info = summarizeFeatures();
+        var f = info.features;
+        var version = info.version;
+        var secure = !!(window.isSecureContext);
+        var fileProto = window.location.protocol === 'file:';
+
+        var groups = [];
+
+        /* ---------- 运行时与语法 ---------- */
+        groups.push({
+            title: '运行时与语法',
+            items: [
+                {
+                    name: '公共脚本加载（NC）',
+                    run: function () {
+                        if (!NC) return { status: 'fail', detail: 'window.NC 未定义', hint: '确认 js/core.js 等同目录脚本完整、未被策略拦截。' };
+                        return { status: 'pass', detail: 'NC.version = ' + NC.version };
+                    }
+                },
+                {
+                    name: '经典脚本 / IIFE（无 ES Module）',
+                    run: function () {
+                        return { status: 'pass', detail: '当前页面通过 <script src> 经典脚本加载；file:// 下 ES Module 不可用属预期。' };
+                    }
+                },
+                {
+                    name: '可选链 ?. / 空值合并 ??',
+                    run: function () {
+                        var ok = syntaxWorks('{a:1}?.a') && syntaxWorks('undefined ?? 1') && syntaxWorks('null ?? 1');
+                        return ok
+                            ? { status: 'pass', detail: '语法解析正常（需 Chromium 80+）' }
+                            : { status: 'fail', detail: '语法不被支持', hint: '内核 <80：项目脚本无法运行，必须升级浏览器。' };
+                    }
+                },
+                {
+                    name: 'Array.prototype.at / String.prototype.at',
+                    run: function () {
+                        var arr = typeof Array.prototype.at === 'function';
+                        var str = typeof String.prototype.at === 'function';
+                        if (arr && str) {
+                            return { status: 'pass', detail: '可用（若内核 <92，由 js/polyfills.js 补齐）' };
+                        }
+                        return { status: 'fail', detail: 'Array.at=' + arr + ' / String.at=' + str, hint: '缺少 polyfills.js 或加载顺序错误：marked v15 会抛 TypeError。' };
+                    }
+                },
+                {
+                    name: '原生 ES Module（设计上不使用）',
+                    run: function () {
+                        // 不做任何 import / 网络请求：file:// 下本地模块必然被 CORS 阻止，
+                        // 自动 import 只会在控制台留下报错噪声，干扰自动化验收。
+                        var moduleSupport = false;
+                        try {
+                            moduleSupport = !!(window.HTMLScriptElement && HTMLScriptElement.supports &&
+                                HTMLScriptElement.supports('module'));
+                        } catch (err) { moduleSupport = false; }
+                        var detail = '本项目统一使用经典脚本（<script src> + IIFE）；模块脚本支持：' +
+                            (moduleSupport ? '是' : '未检测到');
+                        if (fileProto) {
+                            detail += '；file:// 下本地 ES Module 会被 CORS 阻止（已查证），因此首屏不做 import 探测，避免控制台噪声';
+                        }
+                        return {
+                            status: 'info',
+                            detail: detail,
+                            hint: '如需人工验证：在目标机 F12 控制台执行 import("./js/core.js")，应看到 CORS 报错；详见 docs/compatibility.md。'
+                        };
+                    }
+                },
+                {
+                    name: 'Object.hasOwn / structuredClone（参考）',
+                    auto: false,
+                    run: function () {
+                        return {
+                            status: 'info',
+                            detail: 'Object.hasOwn=' + (typeof Object.hasOwn === 'function') +
+                                ' / structuredClone=' + (typeof window.structuredClone === 'function') +
+                                '（项目不依赖）'
+                        };
+                    }
+                }
+            ]
+        });
+
+        /* ---------- 存储 ---------- */
+        groups.push({
+            title: '本地存储',
+            items: [
+                {
+                    name: 'localStorage 读写',
+                    run: function () {
+                        var key = '__nc_compat_probe__';
+                        try {
+                            window.localStorage.setItem(key, '1');
+                            var ok = window.localStorage.getItem(key) === '1';
+                            window.localStorage.removeItem(key);
+                            return ok
+                                ? { status: 'pass', detail: '读写正常（file:// 下所有本地 HTML 共享同一存储）' }
+                                : { status: 'fail', detail: '写入后读不回', hint: '存储被策略禁用：配置/对话无法保存，需申请放行。' };
+                        } catch (err) {
+                            return { status: 'fail', detail: '异常：' + (err && err.name || ''), hint: '存储被策略禁用：需在管控平台放行站点数据。' };
+                        }
+                    }
+                },
+                {
+                    name: 'NC.storage 适配层',
+                    run: function () {
+                        if (!NC || !NC.storage) return { status: 'fail', detail: '未加载 js/storage.js' };
+                        var mode = NC.storage.memoryMode ? NC.storage.memoryMode() : false;
+                        return mode
+                            ? { status: 'warn', detail: '内存模式（本次修改不会持久化）', hint: '存储不可用；关闭页面前请导出数据。' }
+                            : { status: 'pass', detail: '可用；预算约 ' + Math.round(NC.storage.maxBytes / 1024 / 1024 * 10) / 10 + ' MB' };
+                    }
+                },
+                {
+                    name: '持久化 marker（重启后是否保留）',
+                    run: function () {
+                        var key = 'nc-compat-marker';
+                        var now = Date.now();
+                        var prevRaw = safeStorageGet(key);
+                        var prev = null;
+                        if (prevRaw) { try { prev = JSON.parse(prevRaw); } catch (err) { prev = null; } }
+                        var wrote = safeStorageSet(key, JSON.stringify({ t: now }));
+                        if (!wrote) {
+                            return { status: 'fail', detail: 'marker 写入失败', hint: '存储不可用，数据无法持久化。' };
+                        }
+                        if (prev && prev.t && isFinite(prev.t)) {
+                            var age = now - prev.t;
+                            return {
+                                status: 'pass',
+                                detail: '检测到上次运行（' + ago(age) + '前，' + formatTime(prev.t) + '）→ 存储可持久',
+                                hint: '如需验证“退出是否清理”，关闭浏览器后重新打开本页再看。'
+                            };
+                        }
+                        return {
+                            status: 'info',
+                            detail: '首次写入 marker（' + formatTime(now) + '）',
+                            hint: '关闭浏览器后重新打开本页：仍显示“上次运行”即持久化正常；回到首次写入则被策略清理。'
+                        };
+                    }
+                },
+                {
+                    name: '已存数据量（参考）',
+                    auto: false,
+                    run: function () {
+                        var count = 0;
+                        try { count = window.localStorage.length; } catch (err) { count = -1; }
+                        var bytes = 0;
+                        if (NC && NC.storage && NC.storage.keys) {
+                            try {
+                                NC.storage.keys().forEach(function (key) {
+                                    var raw = NC.storage.getRaw(key);
+                                    if (raw != null) bytes += raw.length * 2;
+                                });
+                            } catch (err) { bytes = -1; }
+                        }
+                        return { status: count >= 0 ? 'info' : 'warn', detail: 'localStorage 键数=' + count + (bytes > 0 ? '，估算 ' + Math.round(bytes / 1024) + ' KB' : '') };
+                    }
+                }
+            ]
+        });
+
+        /* ---------- 安全上下文与剪贴板 ---------- */
+        groups.push({
+            title: '安全上下文与剪贴板',
+            items: [
+                {
+                    name: '安全上下文 isSecureContext',
+                    run: function () {
+                        if (secure) {
+                            return { status: 'pass', detail: (fileProto ? 'file:// 属安全上下文' : '当前页面为安全上下文') };
+                        }
+                        return {
+                            status: 'warn',
+                            detail: '非安全上下文（http://内网IP）',
+                            hint: 'navigator.clipboard / crypto.subtle / Notification 将不可用；复制走 execCommand 兜底。'
+                        };
+                    }
+                },
+                {
+                    name: 'navigator.clipboard',
+                    run: function () {
+                        var has = !!(navigator.clipboard && navigator.clipboard.writeText);
+                        if (has && secure) return { status: 'pass', detail: 'API 存在（需用户手势触发写入）' };
+                        if (has) return { status: 'warn', detail: 'API 存在但非安全上下文', hint: '实际写入会失败，使用 execCommand 兜底。' };
+                        return { status: 'warn', detail: 'API 不存在', hint: '将回退 execCommand；若企业策略禁复制，需申请放行。' };
+                    }
+                },
+                {
+                    name: 'document.execCommand("copy") 兜底',
+                    run: function () {
+                        var ok = typeof document.execCommand === 'function';
+                        return ok
+                            ? { status: 'pass', detail: '存在（已废弃但仍可用）' }
+                            : { status: 'warn', detail: '不存在', hint: '复制只能依赖 Clipboard API。' };
+                    }
+                }
+            ]
+        });
+
+        /* ---------- 通知 ---------- */
+        groups.push({
+            title: '通知与后台能力',
+            items: [
+                {
+                    name: 'Notification.permission',
+                    run: function () {
+                        if (!('Notification' in window)) {
+                            return { status: 'info', detail: '不支持 Notification（项目不依赖）' };
+                        }
+                        var permission = 'unknown';
+                        try { permission = window.Notification.permission; } catch (err) { permission = 'unknown'; }
+                        return {
+                            status: 'info',
+                            detail: 'permission = ' + permission + (fileProto ? '（file:// 下通常为 denied）' : ''),
+                            hint: '项目不使用系统通知，提醒一律页内实现（关闭页面后不提醒）。'
+                        };
+                    }
+                },
+                {
+                    name: 'Service Worker / 后台',
+                    run: function () {
+                        var hasSW = 'serviceWorker' in navigator;
+                        return {
+                            status: 'info',
+                            detail: 'serviceWorker=' + hasSW + (fileProto ? '（file:// 不可用）' : ''),
+                            hint: '项目不引入 Service Worker，无影响。'
+                        };
+                    }
+                }
+            ]
+        });
+
+        /* ---------- 网络能力 ---------- */
+        groups.push({
+            title: '网络能力（API 连通性需手动测试）',
+            items: [
+                {
+                    name: 'fetch',
+                    run: function () {
+                        return (typeof window.fetch === 'function')
+                            ? { status: 'pass', detail: '存在（Chromium 42+）' }
+                            : { status: 'fail', detail: '不存在', hint: '内核过旧，无法调用内网 API。' };
+                    }
+                },
+                {
+                    name: 'Response.body / ReadableStream（流式）',
+                    run: function () {
+                        return (typeof window.ReadableStream === 'function' && typeof window.TextDecoder === 'function')
+                            ? { status: 'pass', detail: 'ReadableStream + TextDecoder 可用（Chromium 43+）' }
+                            : { status: 'warn', detail: '缺失，流式渲染将退化为一次性输出', hint: '确认内核版本；项目有非流式兜底。' };
+                    }
+                },
+                {
+                    name: 'AbortController（停止生成）',
+                    run: function () {
+                        return (typeof window.AbortController === 'function')
+                            ? { status: 'pass', detail: '可用（Chromium 66+）' }
+                            : { status: 'warn', detail: '缺失：无法中止请求', hint: '内核 <66 时停止按钮不可用。' };
+                    }
+                }
+            ]
+        });
+
+        /* ---------- iframe / 下载 ---------- */
+        groups.push({
+            title: 'iframe 与下载',
+            items: [
+                {
+                    name: 'iframe 嵌入本地页面',
+                    run: function () {
+                        return new Promise(function (resolve) {
+                            var frame = document.createElement('iframe');
+                            frame.title = 'compat-check iframe probe';
+                            frame.style.cssText = 'position:absolute;left:-9999px;top:0;width:4px;height:4px;border:0;visibility:hidden;';
+                            var done = false;
+                            var timer = setTimeout(function () {
+                                if (done) return;
+                                done = true;
+                                cleanup();
+                                resolve({
+                                    status: 'warn',
+                                    detail: '1.8 秒内未触发 load（超时属常见路径，不一定是故障）',
+                                    hint: '集成后请人工打开工具页 nChat tab 确认；若确被策略阻断，需提供“单独打开”入口。'
+                                });
+                            }, 1800);
+                            frame.onload = function () {
+                                if (done) return;
+                                done = true;
+                                clearTimeout(timer);
+                                var sameOrigin = false;
+                                try { sameOrigin = !!frame.contentDocument; } catch (err) { sameOrigin = false; }
+                                cleanup();
+                                if (fileProto) {
+                                    resolve({
+                                        status: 'pass',
+                                        detail: '可显示；file→file 为跨源（父页不可读子页，属正常）',
+                                        hint: '工具页内嵌 nChat 只需显示即可，无影响。'
+                                    });
+                                } else if (sameOrigin) {
+                                    resolve({ status: 'pass', detail: '可显示且同源（http 托管）' });
+                                } else {
+                                    resolve({ status: 'pass', detail: '可显示，但跨源（父页不可读）' });
+                                }
+                            };
+                            frame.src = 'compat-check.html?embed=1';
+                            document.body.appendChild(frame);
+                            function cleanup() {
+                                clearTimeout(timer);
+                                if (frame.parentNode) frame.parentNode.removeChild(frame);
+                            }
+                        });
+                    }
+                },
+                {
+                    name: 'a[download] / Blob / URL.createObjectURL',
+                    run: function () {
+                        var anchorOk = 'download' in document.createElement('a');
+                        var blobOk = typeof window.Blob === 'function' && typeof URL.createObjectURL === 'function';
+                        if (anchorOk && blobOk) return { status: 'pass', detail: '下载 API 就绪（Chromium 19+）' };
+                        return { status: 'warn', detail: 'anchor.download=' + anchorOk + ' / Blob=' + blobOk, hint: '导出功能需降级为“文本框 + 手动复制”。' };
+                    }
+                },
+                {
+                    name: 'FileReader / File（导入）',
+                    run: function () {
+                        return (typeof window.FileReader === 'function' && typeof window.File === 'function')
+                            ? { status: 'pass', detail: '可用（导入备份/配置/图片依赖）' }
+                            : { status: 'fail', detail: '缺失', hint: '导入功能不可用。' };
+                    }
+                }
+            ]
+        });
+
+        /* ---------- CSS ---------- */
+        var gapPx = detectFlexGap();
+        groups.push({
+            title: 'CSS 能力',
+            items: [
+                {
+                    name: 'CSS 变量（--nc-* 令牌）',
+                    run: function () {
+                        var ok = cssSupports('color', 'var(--nc-text)');
+                        return ok ? { status: 'pass', detail: '可用（Chromium 49+）' } : { status: 'fail', detail: '不支持 CSS 变量', hint: '整套主题令牌失效，页面会明显异常。' };
+                    }
+                },
+                {
+                    name: 'CSS Grid',
+                    run: function () {
+                        var ok = cssSupports('display', 'grid');
+                        return ok ? { status: 'pass', detail: '可用（Chromium 57+）' } : { status: 'warn', detail: '不支持', hint: '工具页部分布局会退化。' };
+                    }
+                },
+                {
+                    name: 'flex 容器 gap（实测布局）',
+                    run: function () {
+                        if (gapPx >= 9) return { status: 'pass', detail: '实际间距 ' + gapPx + 'px（Chromium 84+）' };
+                        return { status: 'warn', detail: '实际间距 ' + (gapPx < 0 ? '未知' : gapPx + 'px'), hint: '内核 83 等缺 flex gap：布局间距异常，需要 margin 兜底。' };
+                    }
+                },
+                {
+                    name: 'backdrop-filter（毛玻璃）',
+                    run: function () {
+                        var ok = cssSupports('backdrop-filter', 'blur(1px)') || cssSupports('-webkit-backdrop-filter', 'blur(1px)');
+                        return ok
+                            ? { status: 'pass', detail: '可用（Chromium 76+）', hint: 'ARM/软件渲染下开销大：建议默认 Lite 关闭。' }
+                            : { status: 'warn', detail: '不支持', hint: 'Lite 模式本就是纯色背景，无影响。' };
+                    }
+                },
+                {
+                    name: ':focus-visible 焦点环',
+                    run: function () {
+                        var ok = selectorSupports(':focus-visible');
+                        return ok ? { status: 'pass', detail: '可用（Chromium 86+）' } : { status: 'info', detail: '不支持，回退 :focus', hint: '可访问性略降，不影响功能。' };
+                    }
+                },
+                {
+                    name: 'prefers-reduced-motion / hover 媒体查询',
+                    run: function () {
+                        var rm = false, hover = false;
+                        try {
+                            rm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+                            hover = !!(window.matchMedia && window.matchMedia('(hover: hover)').matches);
+                        } catch (err) { /* ignore */ }
+                        return { status: 'info', detail: 'reduced-motion=' + rm + ' / hover=' + hover };
+                    }
+                },
+                {
+                    name: '现代特性（项目禁用，仅记录）',
+                    run: function () {
+                        var parts = [];
+                        parts.push(':is=' + selectorSupports(':is(a)'));
+                        parts.push(':has=' + selectorSupports(':has(a)'));
+                        parts.push('容器查询=' + cssSupports('container-type', 'inline-size'));
+                        parts.push('dvh=' + cssSupports('height', '100dvh'));
+                        parts.push('color-mix=' + cssSupports('color', 'color-mix(in srgb, red, blue)'));
+                        return { status: 'info', detail: parts.join(' / '), hint: '项目不使用这些特性，避免内核差异；请勿在业务样式中引入。' };
+                    }
+                }
+            ]
+        });
+
+        /* ---------- 性能 ---------- */
+        groups.push({
+            title: '性能（ARM/软渲染参考）',
+            items: [
+                {
+                    name: 'requestAnimationFrame 帧间隔',
+                    run: function () {
+                        return new Promise(function (resolve) {
+                            if (typeof window.requestAnimationFrame !== 'function') {
+                                resolve({ status: 'info', detail: '不支持 rAF' });
+                                return;
+                            }
+                            if (document.hidden) {
+                                resolve({ status: 'info', detail: '页面不可见，跳过帧率采样', hint: '请在前台打开本页重测。' });
+                                return;
+                            }
+                            var times = [], last = 0, count = 0, finished = false;
+                            function step(ts) {
+                                if (finished) return;
+                                if (last) times.push(ts - last);
+                                last = ts;
+                                count++;
+                                if (count <= 30) { window.requestAnimationFrame(step); return; }
+                                finished = true;
+                                var sum = 0;
+                                for (var i = 0; i < times.length; i++) sum += times[i];
+                                var avg = times.length ? sum / times.length : 0;
+                                var sorted = times.slice().sort(function (a, b) { return a - b; });
+                                var p95 = sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] : 0;
+                                var status = avg <= 20 ? 'pass' : 'warn';
+                                resolve({
+                                    status: status,
+                                    detail: '平均 ' + avg.toFixed(1) + 'ms/帧，P95 ' + p95.toFixed(1) + 'ms（' + times.length + ' 帧）',
+                                    hint: status === 'warn' ? '帧间隔偏大：强制使用 Lite 模式（关闭毛玻璃/动画），并检查硬件加速。' : ''
+                                });
+                            }
+                            window.requestAnimationFrame(step);
+                            setTimeout(function () {
+                                if (finished) return;
+                                finished = true;
+                                if (times.length < 5) {
+                                    resolve({ status: 'info', detail: '帧采样不足（页面不可见/渲染被节流），请前台重测' });
+                                    return;
+                                }
+                                var sum0 = 0;
+                                for (var k = 0; k < times.length; k++) sum0 += times[k];
+                                var avg0 = sum0 / times.length;
+                                resolve({
+                                    status: avg0 <= 20 ? 'pass' : 'warn',
+                                    detail: '采样提前结束：' + times.length + ' 帧，平均 ' + avg0.toFixed(1) + 'ms/帧',
+                                    hint: avg0 > 20 ? '帧间隔偏大：建议 Lite 模式。' : ''
+                                });
+                            }, 1500);
+                        });
+                    }
+                },
+                {
+                    name: '设备信息（参考）',
+                    run: function () {
+                        var cores = navigator.hardwareConcurrency || 0;
+                        var memory = navigator.deviceMemory;
+                        var dpr = window.devicePixelRatio || 1;
+                        return {
+                            status: 'info',
+                            detail: 'CPU 线程=' + cores + ' / deviceMemory=' + (memory == null ? '不可见' : memory + 'GB') +
+                                ' / DPR=' + dpr + ' / 分辨率=' + screen.width + '×' + screen.height,
+                            hint: (cores && cores <= 4) ? '低配设备（≤4 线程）：建议默认 Lite。' : ''
+                        };
+                    }
+                }
+            ]
+        });
+
+        /* ---------- 交互自测（手动） ---------- */
+        groups.push({
+            title: '交互自测（需人工点击）',
+            hint: '这些动作会产生真实行为，请在目标机确认',
+            manual: true,
+            items: [
+                {
+                    name: '剪贴板写入（真实手势）',
+                    detail: '点击按钮写入测试文本；成功说明 Clipboard API + 权限可用。',
+                    controls: function (refs) {
+                        var btn = el('button', 'nc-btn nc-btn--outline nc-btn--sm cc-row__action', '测试复制');
+                        btn.type = 'button';
+                        btn.addEventListener('click', function () {
+                            var text = 'nTools compat-check clipboard test ' + new Date().toISOString();
+                            copyText(text).then(function (ok) {
+                                refs.detail.textContent = ok ? '已写入剪贴板：请粘贴到别处确认' : '写入失败（可能被策略禁用）';
+                                refs.badge.textContent = ok ? '通过' : '降级';
+                                refs.badge.className = 'nc-badge cc-badge ' + (ok ? 'nc-badge--success' : 'nc-badge--warning');
+                                refs.hint.textContent = ok ? '' : '企业 BDLP 可能禁用复制；需申请放行或接受手动复制。';
+                                refs.hint.classList.toggle('is-visible', !ok);
+                            });
+                        });
+                        return btn;
+                    }
+                },
+                {
+                    name: '下载（触发真实下载）',
+                    detail: '点击后生成一个测试 txt；请到下载目录确认文件存在且未被安全策略拦截。',
+                    controls: function (refs) {
+                        var btn = el('button', 'nc-btn nc-btn--outline nc-btn--sm cc-row__action', '测试下载');
+                        btn.type = 'button';
+                        btn.addEventListener('click', function () {
+                            var content = 'nTools compat-check download test\n' + new Date().toISOString() + '\n';
+                            var ok = false;
+                            if (NC && NC.util && NC.util.downloadBlob) {
+                                ok = NC.util.downloadBlob('nc-compat-download-test.txt', content, 'text/plain;charset=utf-8');
+                            }
+                            refs.detail.textContent = ok ? '已触发下载：请检查下载目录（含企业杀毒扫描延迟）' : '触发失败';
+                            refs.badge.textContent = ok ? '通过' : '降级';
+                            refs.badge.className = 'nc-badge cc-badge ' + (ok ? 'nc-badge--success' : 'nc-badge--warning');
+                            refs.hint.textContent = ok ? '若下载目录没有文件：检查下载策略/路径/磁盘权限。' : '导出功能需降级方案。';
+                            refs.hint.classList.add('is-visible');
+                        });
+                        return btn;
+                    }
+                },
+                {
+                    name: '内网 API CORS 实测',
+                    detail: '填写内网 API 的 GET 地址（如 /health）；会以 file:// 页面的 Origin: null 发起请求。',
+                    controls: function (refs) {
+                        var wrap = el('div', 'cc-manual__form');
+                        var input = el('input', 'nc-input cc-manual__input');
+                        input.type = 'url';
+                        input.placeholder = 'http://内网IP:端口/health';
+                        input.setAttribute('aria-label', '内网 API 地址');
+                        var saved = null;
+                        if (NC && NC.storage && NC.storage.getRaw) saved = NC.storage.getRaw('nc-compat-health-url');
+                        if (saved) input.value = saved;
+                        var btn = el('button', 'nc-btn nc-btn--outline nc-btn--sm', '测试');
+                        btn.type = 'button';
+                        btn.addEventListener('click', function () {
+                            var url = String(input.value || '').trim();
+                            if (!url) { refs.detail.textContent = '请先填写 URL'; return; }
+                            if (NC && NC.storage && NC.storage.setRaw) NC.storage.setRaw('nc-compat-health-url', url);
+                            refs.detail.textContent = '请求中…（' + url + '）';
+                            refs.badge.textContent = '检测中';
+                            refs.badge.className = 'nc-badge cc-badge cc-badge--pending';
+                            refs.hint.classList.remove('is-visible');
+                            var started = Date.now();
+                            var controller = (typeof AbortController === 'function') ? new AbortController() : null;
+                            var timer = setTimeout(function () { if (controller) controller.abort(); }, 10000);
+                            fetch(url, {
+                                method: 'GET',
+                                headers: { 'Accept': 'application/json, text/plain, */*' },
+                                signal: controller ? controller.signal : undefined
+                            }).then(function (res) {
+                                clearTimeout(timer);
+                                refs.badge.textContent = '通过';
+                                refs.badge.className = 'nc-badge cc-badge nc-badge--success';
+                                refs.detail.textContent = 'HTTP ' + res.status + ' · ' + (Date.now() - started) + 'ms · ' + url;
+                                refs.hint.textContent = '能收到响应即 CORS 通过（含 OPTIONS 预检）。若服务端要求鉴权，401/403 也说明 CORS 已放行。';
+                                refs.hint.classList.add('is-visible');
+                            }, function (err) {
+                                clearTimeout(timer);
+                                var msg = String((err && (err.message || err.name)) || err);
+                                var aborted = !!(err && err.name === 'AbortError');
+                                refs.badge.textContent = '降级';
+                                refs.badge.className = 'nc-badge cc-badge nc-badge--warning';
+                                refs.detail.textContent = (aborted ? '超时（10s）' : '失败：' + msg) + ' · ' + url;
+                                refs.hint.textContent = '常见原因：网关未放行 Origin: null / 未允许预检头 authorization,content-type / 证书不受信 / 代理拦截 / 地址不可达。';
+                                refs.hint.classList.add('is-visible');
+                            });
+                        });
+                        wrap.appendChild(input);
+                        wrap.appendChild(btn);
+                        return wrap;
+                    }
+                }
+            ]
+        });
+
+        return groups;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 环境信息
+     * ------------------------------------------------------------------ */
+    function appendEnv(label, value, mono) {
+        var grid = $('cc-env-grid');
+        var item = el('div', 'cc-env__item');
+        item.appendChild(el('div', 'cc-env__label', label));
+        var v = el('div', 'cc-env__value' + (mono ? ' is-mono' : ''), value == null ? '—' : String(value));
+        item.appendChild(v);
+        grid.appendChild(item);
+    }
+
+    function renderEnv() {
+        var grid = $('cc-env-grid');
+        if (grid) { while (grid.firstChild) grid.removeChild(grid.firstChild); }
+        var info = summarizeFeatures();
+        var f = info.features;
+        var version = info.version;
+        var ua = (navigator && navigator.userAgent) || '';
+        var protocol = window.location.protocol;
+        var origin = window.location.origin || '(null)';
+        appendEnv('UA', ua, true);
+        appendEnv('内核（UA 解析）', version ? 'Chromium ' + version : '未解析到', false);
+        appendEnv('NC.version', (NC && NC.version) || '未加载', false);
+        appendEnv('协议 / Origin', protocol + ' · ' + origin, true);
+        appendEnv('安全上下文', window.isSecureContext ? '是（secure context）' : '否', false);
+        appendEnv('窗口 / 屏幕', window.innerWidth + '×' + window.innerHeight + ' · ' +
+            screen.width + '×' + screen.height + ' · DPR ' + (window.devicePixelRatio || 1), false);
+        appendEnv('CPU / 内存提示', (navigator.hardwareConcurrency || '?') + ' 线程 · deviceMemory=' +
+            (navigator.deviceMemory == null ? '不可见' : navigator.deviceMemory + 'GB'), false);
+        appendEnv('语言 / 时区', (navigator.language || '') + ' · UTC' +
+            (new Date().getTimezoneOffset() <= 0 ? '+' : '-') + Math.abs(new Date().getTimezoneOffset() / 60), false);
+        appendEnv('主题 / 模式', (ROOT.getAttribute('data-theme') || 'unknown') + ' / lite=' +
+            (ROOT.getAttribute('data-lite') || 'false'), false);
+        appendEnv('存储', (NC && NC.storage ? (NC.storage.memoryMode && NC.storage.memoryMode() ? '内存模式（不可持久）' : 'localStorage 可用') : 'NC.storage 未加载'), false);
+        appendEnv('特性开关（NC.compat）', f && f.cssBackdrop != null ? ('cssGap=' + f.cssGap + ' · cssBackdrop=' + f.cssBackdrop + ' · storage=' + f.storage) : '未加载', false);
+        appendEnv('检测时间', formatTime(state.startedAt), false);
+        var verEl = $('cc-version');
+        if (verEl) verEl.textContent = NC && NC.version ? '· v' + NC.version : '';
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 汇总
+     * ------------------------------------------------------------------ */
+    function recommendedMode() {
+        var cores = navigator.hardwareConcurrency || 0;
+        var lite = false;
+        var reasons = [];
+        if (cores && cores <= 4) { lite = true; reasons.push('CPU 线程 ≤4'); }
+        var hasBackdrop = cssSupports('backdrop-filter', 'blur(1px)') || cssSupports('-webkit-backdrop-filter', 'blur(1px)');
+        if (!hasBackdrop) { lite = true; reasons.push('不支持毛玻璃滤镜'); }
+        try {
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                lite = true;
+                reasons.push('系统减少动效');
+            }
+        } catch (err) { /* ignore */ }
+        return { lite: lite, reasons: reasons };
+    }
+
+    function renderSummary() {
+        var title = $('cc-summary-title');
+        var counts = $('cc-summary-counts');
+        var body = $('cc-summary-body');
+        if (!title || !counts || !body) return;
+        while (counts.firstChild) counts.removeChild(counts.firstChild);
+        while (body.firstChild) body.removeChild(body.firstChild);
+
+        var a = state.auto;
+        var fail = a.fail, warn = a.warn;
+        var verdict = fail > 0 ? '存在阻塞项，请处理后再部署' : (warn > 0 ? '可用，但存在降级项' : '环境可用');
+        title.textContent = '检测完成 · 通过 ' + a.pass + ' / 降级 ' + a.warn + ' / 不可用 ' + a.fail;
+        title.style.color = fail > 0 ? 'var(--nc-danger)' : (warn > 0 ? 'var(--nc-warning)' : 'var(--nc-success)');
+        counts.appendChild(el('span', 'nc-badge nc-badge--success', '通过 ' + a.pass));
+        counts.appendChild(el('span', 'nc-badge nc-badge--warning', '降级 ' + a.warn));
+        counts.appendChild(el('span', 'nc-badge nc-badge--danger', '不可用 ' + a.fail));
+        counts.appendChild(el('span', 'nc-badge nc-badge--accent', '信息 ' + a.info));
+
+        var version = state.version;
+        var mode = recommendedMode();
+        var lines = [];
+        var kernelNote = kernelMeta(version);
+        lines.push(splitLine('结论', verdict));
+        lines.push(splitLine('计数口径', '自动检测 ' + a.total + ' 项（上方徽标）；下方「交互自测」3 项需人工点击，不计入自动完成数。'));
+        if (window.location.protocol === 'file:') {
+            lines.push(splitLine('ESM 说明', '项目统一经典脚本；file:// 下本地 ES Module 会被 CORS 阻止，本页首屏不做 import 探测（避免控制台噪声）。详见 docs/compatibility.md。'));
+        }
+        lines.push(splitLine('内核基线', 'Chromium ' + (version || '未知') + '（' + (NC && NC.compat && NC.compat.features ? '实际以 chrome://version 为准' : 'NC.compat 未加载') + '）'));
+        lines.push(splitLine('推荐模式', mode.lite ? ('Lite 模式（' + (mode.reasons.join('、') || '手动') + '）') : '完整模式'));
+        var blockers = state.rows.filter(function (row) {
+            return row.item.auto !== false && row.status === 'fail';
+        }).map(function (row) { return row.item.name; });
+        lines.push(splitLine('阻塞项', blockers.length ? blockers.join('；') : '无'));
+        if (warn > 0) {
+            var warns = state.rows.filter(function (row) {
+                return row.item.auto !== false && row.status === 'warn';
+            }).map(function (row) { return row.item.name; });
+            lines.push(splitLine('降级项', warns.join('；')));
+        }
+        lines.push(splitLine('提示', kernelNote.hint));
+        lines.forEach(function (line) { body.appendChild(line); });
+        updateHeaderButtons();
+    }
+
+    function updateHeaderButtons() {
+        var themeBtn = $('cc-theme-btn');
+        if (themeBtn) themeBtn.textContent = (ROOT.getAttribute('data-theme') === 'light') ? '切换深色' : '切换浅色';
+        var liteBtn = $('cc-lite-btn');
+        if (liteBtn) liteBtn.textContent = (ROOT.getAttribute('data-lite') === 'true') ? '退出 Lite' : 'Lite 模式';
+    }
+
+    function splitLine(label, value) {
+        var line = el('div', 'cc-summary__line');
+        var strong = el('strong', null, label + '：');
+        line.appendChild(strong);
+        line.appendChild(document.createTextNode(value == null ? '—' : String(value)));
+        return line;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 报告
+     * ------------------------------------------------------------------ */
+    function buildReport() {
+        var info = summarizeFeatures();
+        var lines = [];
+        lines.push('=== nTools / nChat 兼容性自检报告 ===');
+        lines.push('时间: ' + formatTime(state.startedAt));
+        lines.push('UA: ' + ((navigator && navigator.userAgent) || ''));
+        lines.push('内核(UA): Chromium ' + (info.version || '未知') + '  [以 chrome://version 为准]');
+        lines.push('NC.version: ' + ((NC && NC.version) || '未加载'));
+        lines.push('协议/Origin: ' + window.location.protocol + ' · ' + (window.location.origin || '(null)'));
+        lines.push('安全上下文: ' + (window.isSecureContext ? 'yes' : 'no'));
+        lines.push('窗口: ' + window.innerWidth + '×' + window.innerHeight + ' · 屏幕: ' + screen.width + '×' + screen.height +
+            ' · DPR: ' + (window.devicePixelRatio || 1));
+        lines.push('CPU: ' + (navigator.hardwareConcurrency || '?') + ' 线程');
+        lines.push('主题/Lite: ' + (ROOT.getAttribute('data-theme') || '?') + ' / ' + (ROOT.getAttribute('data-lite') || 'false'));
+        lines.push('');
+        state.rows.forEach(function (row) {
+            if (row.status === 'pending') return;
+            var meta = STATUS[row.status] || STATUS.info;
+            var detail = row.refs.detail ? row.refs.detail.textContent : '';
+            lines.push('[' + meta.label + '] ' + row.item.name + (detail ? ' — ' + detail : ''));
+        });
+        lines.push('');
+        var a = state.auto;
+        lines.push('汇总: 通过 ' + a.pass + ' / 降级 ' + a.warn + ' / 不可用 ' + a.fail + ' / 信息 ' + a.info);
+        lines.push('阻塞项: ' + (state.rows.filter(function (row) {
+            return row.item.auto !== false && row.status === 'fail';
+        }).map(function (row) { return row.item.name; }).join('；') || '无'));
+        var mode = recommendedMode();
+        lines.push('推荐模式: ' + (mode.lite ? ('Lite（' + (mode.reasons.join('、') || '手动') + '）') : '完整'));
+        lines.push('=== 报告结束 ===');
+        return lines.join('\n');
+    }
+
+    function copyReport() {
+        var text = buildReport();
+        copyText(text).then(function (ok) {
+            if (ok) {
+                toast('报告已复制到剪贴板', 'success');
+                return;
+            }
+            showReportModal(text);
+        });
+    }
+
+    function showReportModal(text) {
+        var wrap = document.createElement('div');
+        var area = document.createElement('textarea');
+        area.className = 'nc-textarea cc-report';
+        area.value = text;
+        area.setAttribute('readonly', 'readonly');
+        area.setAttribute('aria-label', '自检报告文本');
+        wrap.appendChild(area);
+        if (NC && NC.ui && NC.ui.openModal) {
+            NC.ui.openModal({
+                title: '复制失败：请手动复制报告',
+                content: wrap,
+                size: 'lg',
+                actions: [
+                    { label: '关闭', kind: 'ghost' },
+                    {
+                        label: '全选',
+                        kind: 'outline',
+                        close: false,
+                        onClick: function () { area.focus(); area.select(); }
+                    }
+                ],
+                onClose: function () { /* noop */ }
+            });
+            setTimeout(function () { area.focus(); area.select(); }, 120);
+            return;
+        }
+        try {
+            window.prompt('复制失败，请手动复制报告：', text);
+        } catch (err) { /* ignore */ }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 主题 / 按钮 / 启动
+     * ------------------------------------------------------------------ */
+    function bindHeader() {
+        var themeBtn = $('cc-theme-btn');
+        if (themeBtn) {
+            themeBtn.addEventListener('click', function () {
+                if (NC && NC.theme) NC.theme.toggle();
+                else RAWRootToggle('data-theme', 'light', 'dark');
+                renderSummary();
+            });
+        }
+        var liteBtn = $('cc-lite-btn');
+        if (liteBtn) {
+            liteBtn.addEventListener('click', function () {
+                if (NC && NC.theme) NC.theme.toggleLite();
+                else RAWRootToggle('data-lite', 'true', 'false');
+                renderSummary();
+            });
+        }
+        var rerun = $('cc-rerun-btn');
+        if (rerun) rerun.addEventListener('click', function () { runAll(); });
+        var copyBtn = $('cc-copy-btn');
+        if (copyBtn) copyBtn.addEventListener('click', copyReport);
+    }
+
+    function RAWRootToggle(attr, valueA, valueB) {
+        var current = ROOT.getAttribute(attr);
+        ROOT.setAttribute(attr, current === valueA ? valueB : valueA);
+        if (attr === 'data-theme') ROOT.style.colorScheme = current === 'light' ? 'dark' : 'light';
+    }
+
+    function showBanner(message, type) {
+        var banner = $('cc-banner');
+        if (!banner) return;
+        banner.textContent = message;
+        banner.className = 'nc-card cc-banner is-visible';
+        banner.style.borderColor = type === 'error' ? 'var(--nc-danger)' : 'var(--nc-warning)';
+        banner.style.color = type === 'error' ? 'var(--nc-danger)' : 'var(--nc-warning)';
+    }
+
+    function runAll() {
+        NC = window.NC;
+        state.startedAt = Date.now();
+        state.rows = [];
+        state.auto = { pass: 0, warn: 0, fail: 0, info: 0, total: 0, done: 0 };
+        state.manual = { pass: 0, warn: 0, fail: 0, total: 0 };
+        state.finalized = false;
+        if (state.timer) { clearInterval(state.timer); state.timer = null; }
+        var groupsRoot = $('cc-groups');
+        while (groupsRoot.firstChild) groupsRoot.removeChild(groupsRoot.firstChild);
+        var info = summarizeFeatures();
+        state.version = info.version;
+        renderEnv();
+
+        if (!NC) {
+            showBanner('公共脚本未加载：请确认 js/core.js、compat.js、storage.js、ui.js、theme.js 与本页在同目录结构下。页面将只显示环境信息与部分浏览器能力。', 'error');
+        } else {
+            var banner = $('cc-banner');
+            if (banner) banner.className = 'nc-card cc-banner';
+        }
+
+        buildGroups().forEach(function (group) {
+            groupsRoot.appendChild(buildGroup(group));
+        });
+
+        if (state.timer) { clearInterval(state.timer); state.timer = null; }
+        var summaryTitle = $('cc-summary-title');
+        if (summaryTitle) summaryTitle.textContent = '检测中…（已完成 0/' + state.auto.total + '）';
+        state.timer = setInterval(function () {
+            if (state.auto.done >= state.auto.total) {
+                finishChecks();
+                return;
+            }
+            if (summaryTitle) summaryTitle.textContent = '检测中…（已完成 ' + state.auto.done + '/' + state.auto.total + '）';
+        }, 120);
+        if (state.auto.total === 0) finishChecks();
+    }
+
+    function finishChecks() {
+        if (state.timer) { clearInterval(state.timer); state.timer = null; }
+        if (state.finalized) return;
+        state.finalized = true;
+        renderSummary();
+    }
+
+    /* 主题事件：外部切换时刷新按钮文案 */
+    function bindThemeEvents() {
+        if (!NC || !NC.events) return;
+        NC.events.on('theme:changed', function () { updateHeaderButtons(); });
+        NC.events.on('lite:changed', function () { updateHeaderButtons(); });
+    }
+
+    function boot() {
+        NC = window.NC;
+        updateHeaderButtons();
+        bindHeader();
+        bindThemeEvents();
+        runAll();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot, { once: true });
+    } else {
+        boot();
+    }
+})();
+</script>
+</body>
+</html>

@@ -132,6 +132,7 @@
 | `js/message-view.js` | `NC.view.messages.init(container)`、`renderAll(messages)`、`add(msg)`、`update(id,patch)`、`remove(id)`、`setStreaming(bool)`、`scrollToBottom(force)`、`renderMarkdown(text)`；统计 tooltip、复制/重新生成/编辑/删除按钮（通过事件回调） |
 | `js/composer.js` | `NC.view.composer.init({onSend,onStop,onError})`、`setBusy(bool)`、`clear()`、`getValue()`、`stagedImages` 管理；IME Enter 守卫、图片压缩（最长边 1024/JPEG 0.8/最多 5 张）、粘贴/拖拽可选 |
 | `js/settings-view.js` | `NC.view.settings.init()`：绑定设置面板、配置下拉、导入导出、`NC.ui` 模态；密钥导出默认脱敏 |
+| `js/chat-controller.js` | `NC.chat.controller.init()`：发送→流式状态机→stats→finalize/abort/错误兜底；重新生成/编辑/删除的确认与撤销；导出/备份/恢复/清空；菜单与存储提示接线。只做控制器，不直接建 DOM（通过 view API） |
 | `css/chat.css` | 聊天页样式：基于 tokens 重写，保留原视觉语言但统一令牌；消息入场动画、思考折叠、流式光标、输入区、设置面板、下拉、灯箱、响应式 |
 
 **B 必须保留的 DOM id 契约**（供测试/调试）：`app-title`、`title-wrapper`、`toggle-settings-btn`、`menu-btn`、`main-menu`、`config-dropdown-menu`、`settings-panel`、`config-select`、`add-config-btn`、`delete-config-btn`、`config-name`、`system-prompt`、`api-url`、`api-key`、`model-id`、`advanced-toggle-btn`、`advanced-settings-container`、`temp-slider`、`temp-input`、`topp-slider`、`topp-input`、`save-settings-btn`、`save-status`、`import-settings-btn`、`import-settings-input`、`export-settings-btn`、`clear-chat-btn`、`chat-container`、`input-area-container`、`image-preview-container`、`image-input`、`upload-btn`、`user-input`、`send-btn`、`image-lightbox`、`lightbox-img`、`lightbox-close`、`export-conversation-btn`、`backup-conversation-btn`、`restore-conversation-btn`、`theme-toggle-btn`、`lite-mode-btn`。

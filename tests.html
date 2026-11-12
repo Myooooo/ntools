@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>回归断言 · nTools / nChat</title>
+<!-- 双击即可运行：无网络、无框架、无构建 -->
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/components.css">
+<style>
+    html, body { height: auto; min-height: 100%; }
+    body { overflow-y: auto; overflow-x: hidden; }
+    .tt-wrap { max-width: 1080px; margin: 0 auto; padding: var(--nc-space-6) var(--nc-space-5) var(--nc-space-12); }
+    .tt-header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--nc-space-3); margin-bottom: var(--nc-space-4); }
+    .tt-title { font-size: var(--nc-fs-xl); font-weight: 650; letter-spacing: -0.02em; }
+    .tt-sub { margin-top: 2px; font-size: var(--nc-fs-sm); color: var(--nc-text-3); }
+    .tt-actions { display: flex; flex-wrap: wrap; gap: var(--nc-space-2); }
+    .tt-summary { margin-bottom: var(--nc-space-4); }
+    .tt-summary__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nc-space-3); }
+    .tt-summary__title { font-size: var(--nc-fs-lg); font-weight: 650; }
+    .tt-summary__counts { display: flex; flex-wrap: wrap; gap: var(--nc-space-2); }
+    .tt-summary__meta { margin-top: var(--nc-space-2); font-size: var(--nc-fs-sm); color: var(--nc-text-2); overflow-wrap: anywhere; }
+    .tt-group { margin-bottom: var(--nc-space-3); }
+    .tt-group__title { font-size: var(--nc-fs-md); font-weight: 650; margin-bottom: var(--nc-space-1); }
+    .tt-rows { display: flex; flex-direction: column; }
+    .tt-row { display: flex; align-items: flex-start; gap: var(--nc-space-3); padding: 7px 0; border-top: 1px solid var(--nc-border-faint); }
+    .tt-row:first-child { border-top: 0; }
+    .tt-row__badge { flex: 0 0 auto; min-width: 58px; justify-content: center; }
+    .tt-row__main { flex: 1; min-width: 0; }
+    .tt-row__name { font-size: var(--nc-fs-sm); color: var(--nc-text); }
+    .tt-row__detail { margin-top: 1px; font-size: var(--nc-fs-xs); color: var(--nc-text-3); overflow-wrap: anywhere; }
+    .tt-row.is-fail .tt-row__detail { color: var(--nc-danger); }
+    .tt-empty { padding: var(--nc-space-6); text-align: center; color: var(--nc-text-3); font-size: var(--nc-fs-sm); }
+    .tt-foot { margin-top: var(--nc-space-5); font-size: var(--nc-fs-xs); color: var(--nc-text-3); }
+    .tt-report { width: 100%; min-height: 220px; font-family: var(--nc-font-mono); font-size: var(--nc-fs-xs); }
+</style>
+<script src="js/theme-boot.js"></script>
+<script defer src="js/polyfills.js"></script>
+<script defer src="js/core.js"></script>
+<script defer src="js/compat.js"></script>
+<script defer src="js/icons.js"></script>
+<script defer src="js/storage.js"></script>
+<script defer src="js/ui.js"></script>
+<script defer src="js/theme.js"></script>
+<script defer src="js/schema-todo.js"></script>
+<script defer src="js/schema-chat.js"></script>
+<script defer src="js/sse.js"></script>
+<script defer src="js/api.js"></script>
+</head>
+<body>
+<div class="tt-wrap">
+    <header class="tt-header">
+        <div>
+            <h1 class="tt-title">回归断言</h1>
+            <p class="tt-sub">core.util / storage / schema.todo / schema.chat / sse / api · 纯本地、双击即跑
+                <span id="tt-version"></span>
+            </p>
+        </div>
+        <div class="tt-actions">
+            <a class="nc-btn nc-btn--ghost nc-btn--sm" href="compat-check.html">兼容性自检</a>
+            <button type="button" class="nc-btn nc-btn--outline nc-btn--sm" id="tt-rerun">重新运行</button>
+            <button type="button" class="nc-btn nc-btn--primary nc-btn--sm" id="tt-copy">复制报告</button>
+        </div>
+    </header>
+
+    <section class="nc-card tt-summary" aria-live="polite">
+        <div class="tt-summary__head">
+            <span class="tt-summary__title" id="tt-summary-title">准备运行…</span>
+            <div class="tt-summary__counts" id="tt-summary-counts"></div>
+        </div>
+        <div class="tt-summary__meta" id="tt-summary-meta"></div>
+    </section>
+
+    <div id="tt-groups"><div class="nc-card tt-empty">正在加载模块…</div></div>
+
+    <p class="tt-foot">
+        本页不读取也不修改业务数据；测试键统一使用 <code>__nctest_</code> 前缀并在结束后清理。
+        缺少某个模块时对应用例标记“跳过”，不算失败。
+    </p>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    var NC = null;
+    var REGISTRY = [];
+    var results = [];
+    var state = { startedAt: 0, finishedAt: 0, running: false };
+    var STORAGE_PREFIX = '__nctest_';
+
+    function $(id) { return document.getElementById(id); }
+    function el(tag, cls, text) {
+        var n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text != null) n.textContent = String(text);
+        return n;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 断言
+     * ------------------------------------------------------------------ */
+    function assert(cond, message) {
+        if (!cond) throw new Error(message || '断言失败');
+    }
+    function eq(actual, expected, message) {
+        if (actual !== expected) {
+            throw new Error((message || '期望相等') + '：expected=' + JSON.stringify(expected) + ' actual=' + JSON.stringify(actual));
+        }
+    }
+    function deepEq(actual, expected, message) {
+        var a = JSON.stringify(actual);
+        var b = JSON.stringify(expected);
+        if (a !== b) throw new Error((message || '期望深等') + '：expected=' + b + ' actual=' + a);
+    }
+    function isNum(v) { return typeof v === 'number' && isFinite(v); }
+
+    /* ------------------------------------------------------------------ *
+     * 注册
+     * ------------------------------------------------------------------ */
+    function t(group, name, fn, requires) {
+        REGISTRY.push({ group: group, name: name, fn: fn, requires: requires || null });
+    }
+
+    function getPath(path) {
+        var parts = path.split('.');
+        var node = window;
+        for (var i = 0; i < parts.length; i++) {
+            if (node == null) return undefined;
+            node = node[parts[i]];
+        }
+        return node;
+    }
+
+    function missingRequires(requires) {
+        if (!requires) return null;
+        for (var i = 0; i < requires.length; i++) {
+            var value = getPath(requires[i]);
+            if (!value) return requires[i];
+        }
+        return null;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 测试定义
+     * ------------------------------------------------------------------ */
+    function defineTests() {
+        REGISTRY = [];
+
+        /* ---------------- 基础 ---------------- */
+        t('基础', 'NC 命名空间与版本', function () {
+            assert(window.NC, 'window.NC 不存在');
+            eq(NC.version, '2.0.0');
+        });
+        t('基础', '公共 API 完整性', function () {
+            var names = ['util', 'events', 'compat', 'storage', 'ui', 'icons', 'theme'];
+            names.forEach(function (name) {
+                assert(NC[name] && (typeof NC[name] === 'object' || typeof NC[name] === 'function'), '缺少 NC.' + name);
+            });
+            eq(typeof NC.util.ready, 'function');
+            eq(typeof NC.ui.toast, 'function');
+        });
+        t('基础', '兼容能力表字段', function () {
+            var f = NC.compat.features;
+            assert(typeof f.chromeVersion === 'number', 'chromeVersion');
+            assert(typeof f.storage === 'boolean', 'storage');
+            assert(typeof f.secureContext === 'boolean', 'secureContext');
+            assert(typeof f.cssGap === 'boolean', 'cssGap');
+        });
+
+        /* ---------------- core.util ---------------- */
+        t('core.util', 'escapeHtml 转义与空值', function () {
+            eq(NC.util.escapeHtml('<a href="x">&\'</a>'), '&lt;a href=&quot;x&quot;&gt;&amp;&#39;&lt;/a&gt;');
+            eq(NC.util.escapeHtml(null), '');
+            eq(NC.util.escapeHtml(0), '0');
+            eq(NC.util.escapeAttr, NC.util.escapeHtml);
+        });
+        t('core.util', 'e() 安全建 DOM', function () {
+            var clicked = 0;
+            var node = NC.util.e('button', {
+                class: 'nc-btn',
+                text: '测试',
+                dataset: { probe: 'v1' },
+                on: { click: function () { clicked += 1; } }
+            }, ['子节点']);
+            eq(node.tagName, 'BUTTON');
+            eq(node.className, 'nc-btn');
+            eq(node.textContent, '测试子节点');
+            eq(node.getAttribute('data-probe'), 'v1');
+            node.click();
+            eq(clicked, 1);
+        });
+        t('core.util', 'delegate 事件委托与解绑', function () {
+            var root = document.createElement('div');
+            root.innerHTML = '<button data-k="a">A</button><button data-k="b">B</button>';
+            var hits = [];
+            var off = NC.util.delegate(root, 'click', 'button[data-k]', function (event, matched) {
+                hits.push(matched.getAttribute('data-k'));
+            });
+            root.querySelector('[data-k="a"]').click();
+            root.querySelector('[data-k="b"]').click();
+            off();
+            root.querySelector('[data-k="a"]').click();
+            deepEq(hits, ['a', 'b']);
+        });
+        t('core.util', 'uid 前缀与唯一性', function () {
+            var seen = Object.create(null);
+            for (var i = 0; i < 100; i++) {
+                var id = NC.util.uid('probe');
+                assert(id.indexOf('probe-') === 0, '前缀错误: ' + id);
+                assert(!seen[id], '重复 id: ' + id);
+                seen[id] = true;
+            }
+        });
+        t('core.util', 'cssEscape / clamp / toInt / toNum', function () {
+            var escaped = NC.util.cssEscape('a b');
+            assert(typeof escaped === 'string' && escaped !== 'a b', 'cssEscape 应转义空格: ' + escaped);
+            eq(NC.util.clamp(-5, 0, 10), 0);
+            eq(NC.util.clamp(50, 0, 10), 10);
+            eq(NC.util.clamp('3.5', 0, 10), 3.5);
+            eq(NC.util.clamp(NaN, 2, 10), 2);
+            eq(NC.util.toInt('12px', 0), 12);
+            eq(NC.util.toInt('x', 7), 7);
+            eq(NC.util.toNum('1.25', 0), 1.25);
+            eq(NC.util.toNum('x', 3), 3);
+        });
+        t('core.util', 'isPlainObject / isFiniteNum', function () {
+            assert(NC.util.isPlainObject({}), '{} 应为 plain');
+            assert(!NC.util.isPlainObject([]), '[] 不应为 plain');
+            assert(!NC.util.isPlainObject(null), 'null 不应为 plain');
+            assert(NC.util.isFiniteNum(0), '0 应为有限数');
+            assert(NC.util.isFiniteNum(-1.5), '-1.5');
+            assert(!NC.util.isFiniteNum(NaN), 'NaN');
+            assert(!NC.util.isFiniteNum('1'), '字符串');
+        });
+        t('core.util', 'debounce 延迟/取消/flush', function () {
+            return new Promise(function (resolve, reject) {
+                var calls = 0;
+                var fn = NC.util.debounce(function () { calls += 1; }, 60);
+                fn(); fn(); fn();
+                setTimeout(function () {
+                    try {
+                        eq(calls, 1, '合并调用');
+                        fn(); fn.cancel();
+                        setTimeout(function () {
+                            try {
+                                eq(calls, 1, 'cancel 后不应执行');
+                                fn(); fn.flush();
+                                eq(calls, 2, 'flush 应立即执行');
+                                resolve();
+                            } catch (err) { reject(err); }
+                        }, 120);
+                    } catch (err) { reject(err); }
+                }, 160);
+            });
+        });
+        t('core.util', 'throttle 节流', function () {
+            return new Promise(function (resolve, reject) {
+                var calls = 0;
+                var fn = NC.util.throttle(function () { calls += 1; }, 80);
+                fn(); fn(); fn();
+                eq(calls, 1, '首次立即执行');
+                setTimeout(function () {
+                    try { eq(calls, 2, '等待后补一次'); resolve(); } catch (err) { reject(err); }
+                }, 200);
+            });
+        });
+        t('core.util', 'formatBytes / pad2', function () {
+            eq(NC.util.formatBytes(512), '512 B');
+            eq(NC.util.formatBytes(1024), '1.0 KB');
+            eq(NC.util.formatBytes(1048576), '1.00 MB');
+            eq(NC.util.pad2(3), '03');
+            eq(NC.util.pad2(12), '12');
+        });
+        t('core.util', '日期工具', function () {
+            var base = new Date(2026, 4, 20, 15, 30, 0).getTime();
+            var day = 86400000;
+            eq(NC.util.startOfDay(base), new Date(2026, 4, 20, 0, 0, 0, 0).getTime());
+            eq(NC.util.endOfDay(base), new Date(2026, 4, 20, 0, 0, 0, 0).getTime() + day - 1);
+            eq(NC.util.dayDiff(base, base + day), 1);
+            eq(NC.util.dayDiff(base, base - day), -1);
+            assert(NC.util.isSameDay(base, base + 1000), '同日');
+            assert(!NC.util.isSameDay(base, base + day), '跨日');
+            eq(NC.util.formatTime(base), '15:30');
+            eq(NC.util.formatDate(base), '05-20');
+            eq(NC.util.formatDate(base, true), '2026-05-20');
+            eq(NC.util.formatDateTime(base), '2026-05-20 15:30');
+        });
+        t('core.util', 'relativeTime/dueMeta', function () {
+            var now = new Date(2026, 4, 20, 12, 0, 0).getTime();
+            assert(NC.util.relativeTime(now + 5 * 60000, now).indexOf('后') > -1, '未来');
+            assert(NC.util.relativeTime(now - 5 * 60000, now).indexOf('前') > -1, '过去');
+            var tones = [
+                [now - 3600000, 'overdue'],
+                [now + 60000, 'today'],
+                [now + 86400000, 'tomorrow'],
+                [now + 3 * 86400000, 'soon'],
+                [now + 30 * 86400000, 'later'],
+                [null, 'none']
+            ];
+            tones.forEach(function (pair) {
+                var meta = NC.util.dueMeta(pair[0], now);
+                eq(meta.tone, pair[1], 'dueMeta tone ' + pair[1]);
+                assert(typeof meta.label === 'string' && meta.label.length > 0, 'dueMeta label');
+            });
+        });
+        t('core.util', 'datetime input 往返', function () {
+            var ts = new Date(2026, 4, 20, 8, 5, 0).getTime();
+            var value = NC.util.toDateTimeInputValue(ts);
+            eq(value, '2026-05-20T08:05');
+            eq(NC.util.parseDateTimeInputValue(value), ts);
+            eq(NC.util.parseDateTimeInputValue(''), null);
+            eq(NC.util.parseDateTimeInputValue('not-a-date'), null);
+        });
+        t('core.util', 'parseJSON / prefersReducedMotion / ready', function () {
+            deepEq(NC.util.parseJSON('{"a":1}', null), { a: 1 });
+            eq(NC.util.parseJSON('{bad', 'fb'), 'fb');
+            eq(typeof NC.util.prefersReducedMotion(), 'boolean');
+            var ran = false;
+            NC.util.ready(function () { ran = true; });
+            assert(ran, 'DOM 已就绪时 ready 应同步执行');
+        });
+        t('core.util', 'copyText / downloadBlob 形态', function () {
+            eq(typeof NC.util.copyText, 'function');
+            eq(typeof NC.util.downloadBlob, 'function');
+            var p = NC.util.copyText('x');
+            assert(p && typeof p.then === 'function', 'copyText 应返回 Promise');
+        });
+
+        /* ---------------- storage ---------------- */
+        t('storage', 'available 与 memoryMode 一致', function () {
+            eq(typeof NC.storage.available, 'boolean');
+            eq(NC.storage.memoryMode(), !NC.storage.available);
+        });
+        t('storage', 'raw 往返 / has / remove', function () {
+            var key = STORAGE_PREFIX + 'raw';
+            var res = NC.storage.setRaw(key, 'hello');
+            eq(res.ok, true);
+            eq(NC.storage.getRaw(key), 'hello');
+            assert(NC.storage.has(key), 'has 应为 true');
+            NC.storage.remove(key);
+            assert(!NC.storage.has(key), 'remove 后 has 应为 false');
+        });
+        t('storage', 'JSON set/get 往返', function () {
+            var key = STORAGE_PREFIX + 'json';
+            NC.storage.set(key, { a: 1, b: ['x'] });
+            deepEq(NC.storage.get(key, null), { a: 1, b: ['x'] });
+            NC.storage.remove(key);
+        });
+        t('storage', '缺失键返回 fallback', function () {
+            eq(NC.storage.get(STORAGE_PREFIX + 'missing', 'FB'), 'FB');
+            eq(NC.storage.getRaw(STORAGE_PREFIX + 'missing'), null);
+        });
+        t('storage', '损坏 JSON：fallback + 事件 + 备份', function () {
+            var key = STORAGE_PREFIX + 'bad';
+            NC.storage.setRaw(key, '{oops');
+            var fired = 0;
+            var off = NC.events.on('storage:corrupt', function (payload) {
+                if (payload && payload.key === key) fired += 1;
+            });
+            // NC.storage 对损坏数据会输出一条 console.error（预期行为）；
+            // 测试期间临时接管，避免 tests 页出现 console.error 噪声，断言后恢复。
+            var originalConsoleError = console.error;
+            var captured = [];
+            console.error = function () {
+                captured.push(Array.prototype.slice.call(arguments).join(' '));
+            };
+            var value;
+            try {
+                value = NC.storage.get(key, 'FB');
+            } finally {
+                console.error = originalConsoleError;
+            }
+            off();
+            assert(captured.length >= 1, '损坏数据应通过 console.error 留痕（已在测试内断言）');
+            eq(value, 'FB');
+            eq(fired, 1);
+            assert(NC.storage.keys(key + '.corrupt').length >= 1, '应保留损坏备份');
+        });
+        t('storage', 'estimateBytes 估算', function () {
+            assert(NC.storage.estimateBytes('abc') >= 3, 'ascii 估算');
+            assert(NC.storage.estimateBytes({ a: 1 }) > 0, '对象估算');
+        });
+        t('storage', '超预算触发 quota:warning', function () {
+            var key = STORAGE_PREFIX + 'big';
+            var fired = 0;
+            var off = NC.events.on('quota:warning', function () { fired += 1; });
+            var big = new Array(4 * 1024 * 1024).join('x'); // 约 4MB，超过 3.5MB 预算
+            var res = NC.storage.setRaw(key, big);
+            off();
+            NC.storage.remove(key);
+            assert(res && typeof res.ok === 'boolean', 'setRaw 应返回结果');
+            eq(fired, 1, '应触发一次 quota:warning');
+        });
+        t('storage', 'keys(prefix) / onExternalChange', function () {
+            NC.storage.setRaw(STORAGE_PREFIX + 'k1', '1');
+            NC.storage.setRaw(STORAGE_PREFIX + 'k2', '2');
+            var found = NC.storage.keys(STORAGE_PREFIX);
+            assert(found.indexOf(STORAGE_PREFIX + 'k1') > -1, 'k1');
+            assert(found.indexOf(STORAGE_PREFIX + 'k2') > -1, 'k2');
+            var off = NC.storage.onExternalChange(STORAGE_PREFIX + 'k1', function () {});
+            eq(typeof off, 'function');
+            off();
+        });
+
+        /* ---------------- schema.todo ---------------- */
+        var TODO = 'NC.schema.todo';
+        t('schema.todo', 'emptyDoc 形状', function () {
+            var doc = NC.schema.todo.emptyDoc();
+            eq(doc.schemaVersion, 2);
+            eq(doc.lists.length, 1);
+            eq(doc.tasks.length, 0);
+            eq(doc.settings.view, 'all');
+        }, [TODO]);
+        t('schema.todo', 'normalizeDoc 容错', function () {
+            var out = NC.schema.todo.normalizeDoc(null);
+            assert(out && out.doc, 'doc');
+            eq(out.doc.schemaVersion, 2);
+            assert(Array.isArray(out.issues), 'issues 数组');
+            var again = NC.schema.todo.normalizeDoc('not-an-object');
+            eq(again.doc.tasks.length, 0);
+        }, [TODO]);
+        t('schema.todo', 'normalizeTask 脏字段归一', function () {
+            var ctx = {
+                now: Date.now(), index: 0, issues: [], quarantine: [],
+                ids: Object.create(null), listIds: { list_default: true }, defaultListId: 'list_default'
+            };
+            var task = NC.schema.todo.normalizeTask({
+                id: 'bad id!!',
+                title: '   ',
+                notes: 'line1\nline2',
+                due: 'not-a-date',
+                priority: 'weird',
+                status: 'nope',
+                tags: ['ok', 123, null],
+                subtasks: 'oops'
+            }, ctx);
+            assert(task && typeof task === 'object', 'task 对象');
+            assert(typeof task.id === 'string' && task.id.length > 0, 'id');
+            assert(NC.schema.todo.PRIORITIES.indexOf(task.priority) > -1, 'priority 合法');
+            assert(NC.schema.todo.STATUSES.indexOf(task.status) > -1, 'status 合法');
+            assert(task.due === null || isNum(task.due), 'due 为 null 或数字');
+            assert(Array.isArray(task.tags), 'tags 数组');
+            task.tags.forEach(function (tag) { eq(typeof tag, 'string', 'tag 字符串'); });
+            assert(Array.isArray(task.subtasks), 'subtasks 数组');
+        }, [TODO]);
+        t('schema.todo', 'migrateV1 脏数据迁移', function () {
+            var out = NC.schema.todo.migrateV1([
+                { id: 1, title: 'A', content: 'note', completed: true },
+                { id: 2, content: '只有内容\n第二行', due: 'bad-date' },
+                'not-an-object',
+                { title: '', content: '' }
+            ]);
+            assert(out && out.doc, 'doc');
+            assert(out.doc.tasks.length >= 2, '至少迁移 2 条');
+            out.doc.tasks.forEach(function (task) { assert(task.id.indexOf('v1-') === 0, 'id 前缀 v1-: ' + task.id); });
+            var done = out.doc.tasks.filter(function (task) { return task.status === 'done'; });
+            eq(done.length, 1, 'completed 应迁移为 done');
+            assert(out.stats.quarantined >= 2, '隔离条数: ' + out.stats.quarantined);
+            eq(out.doc.meta.migratedFrom, 'v1');
+        }, [TODO]);
+        t('schema.todo', 'migrateV1 空输入不抛', function () {
+            var out = NC.schema.todo.migrateV1(null);
+            eq(out.doc.tasks.length, 0);
+            eq(out.doc.schemaVersion, 2);
+        }, [TODO]);
+        t('schema.todo', 'parseImport 非法输入', function () {
+            var r1 = NC.schema.todo.parseImport('not json');
+            eq(r1.ok, false);
+            assert(typeof r1.error === 'string' && r1.error.length > 0, 'error');
+            eq(NC.schema.todo.parseImport(null).ok, false);
+        }, [TODO]);
+        t('schema.todo', 'parseImport v2 文档', function () {
+            var doc = NC.schema.todo.emptyDoc();
+            var r = NC.schema.todo.parseImport(JSON.stringify(doc));
+            eq(r.ok, true);
+            eq(r.format, 'v2-doc');
+            eq(r.doc.schemaVersion, 2);
+        }, [TODO]);
+        t('schema.todo', 'parseImport v1 数组', function () {
+            var r = NC.schema.todo.parseImport(JSON.stringify([
+                { id: 9, title: '旧任务', content: 'x' }
+            ]));
+            eq(r.ok, true);
+            eq(r.format, 'v1-array');
+            assert(r.stats.valid >= 1, 'valid');
+            assert(r.stats.total >= 1, 'total');
+        }, [TODO]);
+        t('schema.todo', 'parseImport {data:[...]}', function () {
+            var r = NC.schema.todo.parseImport(JSON.stringify({ data: [{ id: 3, title: 'legacy' }] }));
+            eq(r.ok, true);
+            eq(r.format, 'legacy-data');
+            assert(r.doc.tasks.length >= 1, 'tasks');
+        }, [TODO]);
+        t('schema.todo', 'parseImport 原型污染防护', function () {
+            NC.schema.todo.parseImport('{"tasks":[],"__proto__":{"polluted":true}}');
+            eq(({}).polluted, undefined);
+        }, [TODO]);
+        t('schema.todo', 'validate / exportJSON / mergeDocs', function () {
+            var doc = NC.schema.todo.emptyDoc();
+            var v = NC.schema.todo.validate(doc);
+            eq(v.ok, true);
+            eq(v.errors.length, 0);
+            var json = NC.schema.todo.exportJSON(doc);
+            var parsed = NC.util.parseJSON(json, null);
+            assert(parsed, 'exportJSON 可解析');
+            eq(parsed.schemaVersion, 2);
+            eq(parsed.app, 'nTools');
+            var incoming = NC.schema.todo.emptyDoc();
+            incoming.tasks.push({
+                id: 'task_x', listId: 'list_default', title: '合并任务', notes: '',
+                status: 'open', priority: 'normal', due: null, dueAllDay: false,
+                tags: [], subtasks: [], recurrence: null, reminder: null, order: 1024,
+                createdAt: Date.now(), updatedAt: Date.now(), completedAt: null, deletedAt: null, source: 'test'
+            });
+            var merged = NC.schema.todo.mergeDocs(doc, incoming);
+            assert(merged.stats.added >= 1, 'added: ' + merged.stats.added);
+        }, [TODO]);
+
+        /* ---------------- schema.chat ---------------- */
+        var CHAT = 'NC.schema.chat';
+        t('schema.chat', 'normalizeConfig 脏值归一', function () {
+            var c = NC.schema.chat.normalizeConfig({
+                name: '   ',
+                apiUrl: 'intranet.local/v1/',
+                apiKey: 12345,
+                modelId: '',
+                temperature: 9,
+                top_p: -1
+            });
+            assert(typeof c.name === 'string' && c.name.length > 0, 'name 兜底');
+            assert(c.apiUrl.indexOf('https://') === 0, 'apiUrl 补 https: ' + c.apiUrl);
+            eq(c.apiKey, '12345');
+            eq(c.temperature, 2);
+            eq(c.top_p, 0);
+        }, [CHAT]);
+        t('schema.chat', 'sanitizeApiUrl 规则', function () {
+            var s = NC.schema.chat;
+            eq(s.sanitizeApiUrl('https://api.openai.com/v1/'), 'https://api.openai.com/v1');
+            eq(s.sanitizeApiUrl('api.openai.com/v1'), 'https://api.openai.com/v1');
+            eq(s.sanitizeApiUrl('http://10.0.0.5:8080/v1'), 'http://10.0.0.5:8080/v1');
+            eq(s.sanitizeApiUrl('javascript:alert(1)'), null);
+            eq(s.sanitizeApiUrl('ftp://x/y'), null);
+            eq(s.sanitizeApiUrl('http://user:pass@host/v1'), null);
+            eq(s.sanitizeApiUrl(123), null);
+        }, [CHAT]);
+        t('schema.chat', 'isAllowedImageUrl 白名单', function () {
+            var s = NC.schema.chat;
+            eq(s.isAllowedImageUrl('data:image/png;base64,AAAA'), true);
+            eq(s.isAllowedImageUrl('data:image/jpeg;base64,AAAA'), true);
+            eq(s.isAllowedImageUrl('http://evil.example/x.png'), false);
+            eq(s.isAllowedImageUrl('data:image/svg+xml;base64,AAAA'), false);
+            eq(s.isAllowedImageUrl(null), false);
+        }, [CHAT]);
+        t('schema.chat', 'normalizeConfigs 兜底', function () {
+            var list = NC.schema.chat.normalizeConfigs('not-array');
+            eq(list.length, 1);
+            var dup = NC.schema.chat.normalizeConfigs([{ id: 'same' }, { id: 'same' }]);
+            eq(dup.length, 2);
+            assert(dup[0].id !== dup[1].id, '重复 id 应重新生成');
+        }, [CHAT]);
+        t('schema.chat', 'normalizeSettingsDoc 迁移', function () {
+            var old = { currentId: 'c1', configs: [{ id: 'c1', name: '旧', apiUrl: 'https://x/v1' }] };
+            var out = NC.schema.chat.normalizeSettingsDoc(old);
+            eq(out.doc.version, 2);
+            eq(out.migrated, true);
+            eq(out.doc.currentId, 'c1');
+            eq(out.doc.configs.length, 1);
+        }, [CHAT]);
+        t('schema.chat', 'normalizeMessage / normalizeConversation', function () {
+            var s = NC.schema.chat;
+            eq(s.normalizeMessage({ role: 'system', content: 'x' }), null);
+            eq(s.normalizeMessage({ role: 'user', content: '' }), null);
+            var user = s.normalizeMessage({ id: 'abc', role: 'user', content: 'hi' });
+            eq(user.role, 'user');
+            eq(user.id, 'abc');
+            var list = s.normalizeConversation([
+                { role: 'user', content: 'a' },
+                { role: 'assistant', content: 'b' },
+                { role: 'hacker', content: 'x' }
+            ]);
+            eq(list.length, 2);
+            assert(list[0].id !== list[1].id, 'conversation id 唯一');
+        }, [CHAT]);
+        t('schema.chat', 'normalizeBackup 混合数据', function () {
+            var s = NC.schema.chat;
+            var out = s.normalizeBackup({ conversation: [
+                { role: 'user', content: 'hello' },
+                { role: 'bad', content: 'x' }
+            ] });
+            eq(out.ok, true);
+            eq(out.messages.length, 1);
+            eq(out.rejected, 1);
+            eq(s.normalizeBackup('{bad json').ok, false);
+            eq(s.normalizeBackup({ foo: 1 }).ok, false);
+        }, [CHAT]);
+        t('schema.chat', '原型污染防护', function () {
+            NC.schema.chat.normalizeConfig({ __proto__: { polluted: true }, name: 'x' });
+            eq(({}).polluted, undefined);
+            NC.schema.chat.normalizeBackup({ conversation: [{ role: 'user', content: 'x', __proto__: { polluted2: true } }] });
+            eq(({}).polluted2, undefined);
+        }, [CHAT]);
+
+        /* ---------------- sse ---------------- */
+        var SSE = 'NC.sse';
+        t('sse', '基本多事件', function () {
+            var out = NC.sse.parseSSE('data: a\n\ndata: b\n\n');
+            deepEq(out.events, ['a', 'b']);
+            eq(typeof out.done, 'boolean'); // done=true 表示 end() 已收尾，不代表 [DONE]
+        }, [SSE]);
+        t('sse', 'CRLF 行尾', function () {
+            var out = NC.sse.parseSSE('data: a\r\n\r\ndata: b\r\n\r\n');
+            deepEq(out.events, ['a', 'b']);
+        }, [SSE]);
+        t('sse', '多行 data 合并', function () {
+            var out = NC.sse.parseSSE('data: line1\ndata: line2\n\n');
+            deepEq(out.events, ['line1\nline2']);
+        }, [SSE]);
+        t('sse', '[DONE] 终止', function () {
+            var out = NC.sse.parseSSE('data: hi\n\ndata: [DONE]\n\ndata: after\n\n');
+            deepEq(out.events, ['hi']);
+            eq(out.done, true);
+            eq(NC.sse.DONE_TOKEN, '[DONE]');
+        }, [SSE]);
+        t('sse', '跨 chunk 续接', function () {
+            var events = [];
+            var parser = NC.sse.createParser({ onEvent: function (data) { events.push(data); } });
+            parser.feed('data: he');
+            parser.feed('llo\n');
+            parser.feed('\n');
+            deepEq(events, ['hello']);
+        }, [SSE]);
+        t('sse', 'CRLF 被 chunk 截断', function () {
+            var events = [];
+            var parser = NC.sse.createParser({ onEvent: function (data) { events.push(data); } });
+            parser.feed('data: a\r');
+            parser.feed('\n\r');
+            parser.feed('\n');
+            deepEq(events, ['a']);
+        }, [SSE]);
+        t('sse', 'end() flush 尾事件', function () {
+            var events = [];
+            var parser = NC.sse.createParser({ onEvent: function (data) { events.push(data); } });
+            parser.feed('data: tail');
+            parser.end();
+            deepEq(events, ['tail']);
+            assert(parser.isDone(), 'isDone');
+        }, [SSE]);
+        t('sse', 'onDone 只触发一次', function () {
+            var params = { events: [], dones: 0 };
+            var parser = NC.sse.createParser({
+                onEvent: function (data) { params.events.push(data); },
+                onDone: function () { params.dones += 1; }
+            });
+            parser.feed('data: a\n\ndata: [DONE]\n\n');
+            parser.feed('data: b\n\n');
+            parser.end();
+            eq(params.dones, 1);
+            deepEq(params.events, ['a']);
+        }, [SSE]);
+        t('sse', '注释行忽略', function () {
+            var out = NC.sse.parseSSE(': keep-alive\ndata: x\n\n: comment\n\n');
+            deepEq(out.events, ['x']);
+        }, [SSE]);
+        t('sse', '事件处理异常走 onError（流内 error）', function () {
+            var got = null;
+            var parser = NC.sse.createParser({
+                onEvent: function () { throw new Error('handler-boom'); },
+                onError: function (err) { got = err; }
+            });
+            parser.feed('data: x\n\n');
+            assert(got instanceof Error, 'onError 应收到 Error');
+            assert(String(got.message).indexOf('handler-boom') > -1, '错误内容');
+        }, [SSE]);
+
+        /* ---------------- api ---------------- */
+        var API = 'NC.api';
+        t('api', 'buildUrl 归一化', function () {
+            var b = NC.api.buildUrl;
+            eq(b('https://x/v1'), 'https://x/v1/chat/completions');
+            eq(b('https://x/v1/'), 'https://x/v1/chat/completions');
+            eq(b('https://x/v1/chat/completions'), 'https://x/v1/chat/completions');
+            eq(b(''), '');
+            eq(b(null), '');
+            eq(b('https://x b/v1'), '');
+        }, [API]);
+        t('api', 'buildPayload 白名单', function () {
+            var payload = NC.api.buildPayload({
+                config: { modelId: 'm1', systemPrompt: 'sys', enableAdvanced: false, temperature: 9 },
+                messages: [{
+                    id: 'msg1',
+                    role: 'user',
+                    content: 'hello',
+                    reasoning: 'secret',
+                    stats: { totalLength: 3 },
+                    extra: 'x'
+                }],
+                stream: true
+            });
+            eq(payload.model, 'm1');
+            eq(payload.stream, true);
+            eq(payload.messages.length, 2);
+            eq(payload.messages[0].role, 'system');
+            eq(payload.messages[1].role, 'user');
+            assert(Array.isArray(payload.messages[1].content), 'user content 归一为 parts 数组');
+            eq(payload.messages[1].content[0].type, 'text');
+            eq(payload.messages[1].content[0].text, 'hello');
+            deepEq(Object.keys(payload.messages[1]).sort(), ['content', 'role']);
+            eq(payload.temperature, undefined, '简单模式不发送 temperature');
+        }, [API]);
+        t('api', 'buildPayload 高级参数与 include_usage', function () {
+            var payload = NC.api.buildPayload({
+                config: { modelId: 'm', enableAdvanced: true, temperature: 1.25, top_p: 0.8 },
+                messages: [],
+                stream: true,
+                includeUsage: true
+            });
+            eq(payload.temperature, 1.25);
+            eq(payload.top_p, 0.8);
+            deepEq(payload.stream_options, { include_usage: true });
+            var bad = NC.api.buildPayload({
+                config: { modelId: 'm', enableAdvanced: true, temperature: 9, top_p: -2 },
+                messages: []
+            });
+            eq(bad.temperature, undefined);
+            eq(bad.top_p, undefined);
+        }, [API]);
+        t('api', 'estimateTokens / estimateMessagesTokens', function () {
+            eq(NC.api.estimateTokens(''), 0);
+            assert(NC.api.estimateTokens('hello') >= 1, 'ascii');
+            assert(NC.api.estimateTokens('你好世界') > NC.api.estimateTokens('abcd'), 'CJK 权重更高');
+            assert(NC.api.estimateMessagesTokens([{ role: 'user', content: 'hi' }]) > 0, 'messages');
+        }, [API]);
+        t('api', 'normalizeMessageForApi', function () {
+            eq(NC.api.normalizeMessageForApi({ role: 'hacker', content: 'x' }), null);
+            eq(NC.api.normalizeMessageForApi({ role: 'assistant', content: '' }), null);
+            var user = NC.api.normalizeMessageForApi({
+                role: 'user',
+                content: [
+                    { type: 'text', text: 'hi' },
+                    { type: 'image_url', image_url: { url: 'http://evil/x.png' } },
+                    { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } }
+                ]
+            });
+            eq(user.content.length, 2);
+            eq(user.content[0].type, 'text');
+            eq(user.content[1].image_url.url.indexOf('data:image/png') === 0, true, 'http 图片应被剔除');
+        }, [API]);
+        t('api', 'createThinkFilter 跨 chunk', function () {
+            var state2 = { reasoning: '', answer: '' };
+            var filter = NC.api.createThinkFilter({
+                onReasoning: function (text) { state2.reasoning += text; },
+                onAnswer: function (text) { state2.answer += text; }
+            });
+            filter.feed('<thi');
+            filter.feed('nk>思考中');
+            filter.feed('</thi');
+            filter.feed('nk>正');
+            filter.feed('文');
+            filter.end();
+            assert(state2.reasoning.indexOf('思考中') > -1, 'reasoning: ' + state2.reasoning);
+            assert(state2.answer.indexOf('正文') > -1, 'answer: ' + state2.answer);
+            assert(state2.answer.indexOf('<think>') === -1, 'answer 不应含标签');
+        }, [API]);
+        t('api', 'chat 配置错误映射（无网络）', function () {
+            return new Promise(function (resolve, reject) {
+                var settled = false;
+                var timer = setTimeout(function () {
+                    if (settled) return;
+                    settled = true;
+                    reject(new Error('配置错误应在同步校验阶段返回'));
+                }, 3000);
+                try {
+                    NC.api.chat({
+                        config: { apiUrl: '', modelId: '' },
+                        messages: [{ role: 'user', content: 'hi' }],
+                        onError: function (err) {
+                            if (settled) return;
+                            settled = true;
+                            clearTimeout(timer);
+                            try {
+                                eq(err.type, 'config');
+                                assert(typeof err.message === 'string' && err.message.length > 0, '错误信息');
+                                resolve();
+                            } catch (e) { reject(e); }
+                        },
+                        onDone: function () {
+                            if (settled) return;
+                            settled = true;
+                            clearTimeout(timer);
+                            reject(new Error('无效配置不应进入 onDone'));
+                        }
+                    });
+                } catch (err) {
+                    clearTimeout(timer);
+                    reject(err);
+                }
+            });
+        }, [API]);
+        t('api', 'computeStats 估算兜底', function () {
+            var stats = NC.api.computeStats({ usage: null, messages: [{ role: 'user', content: 'hi' }], content: 'hello' });
+            eq(stats.estimated, true);
+            assert(stats.contextLength > 0, 'contextLength');
+            assert(stats.outputLength > 0, 'outputLength');
+            var withUsage = NC.api.computeStats({ usage: { prompt: 10, completion: 5, total: 15 } });
+            eq(withUsage.estimated, false);
+            eq(withUsage.totalLength, 15);
+        }, [API]);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 渲染与执行
+     * ------------------------------------------------------------------ */
+    function badge(text, cls) {
+        return el('span', 'nc-badge tt-row__badge ' + cls, text);
+    }
+
+    function groupContainer(name) {
+        var existing = document.querySelector('[data-tt-group="' + name + '"]');
+        if (existing) return existing.querySelector('.tt-rows');
+        var card = el('section', 'nc-card tt-group');
+        card.setAttribute('data-tt-group', name);
+        card.appendChild(el('h2', 'tt-group__title', name));
+        var rows = el('div', 'tt-rows');
+        card.appendChild(rows);
+        $('tt-groups').appendChild(card);
+        return rows;
+    }
+
+    function renderRow(test) {
+        var row = el('div', 'tt-row');
+        var b = badge('等待', 'nc-badge--accent');
+        var main = el('div', 'tt-row__main');
+        main.appendChild(el('div', 'tt-row__name', test.name));
+        var detail = el('div', 'tt-row__detail', '');
+        main.appendChild(detail);
+        row.appendChild(b);
+        row.appendChild(main);
+        groupContainer(test.group).appendChild(row);
+        return { row: row, badge: b, detail: detail };
+    }
+
+    function setRowStatus(refs, status, detail) {
+        refs.row.setAttribute('data-result', status);
+        if (status === 'pass') {
+            refs.badge.textContent = '通过';
+            refs.badge.className = 'nc-badge tt-row__badge nc-badge--success';
+        } else if (status === 'fail') {
+            refs.badge.textContent = '失败';
+            refs.badge.className = 'nc-badge tt-row__badge nc-badge--danger';
+            refs.row.classList.add('is-fail');
+        } else if (status === 'skip') {
+            refs.badge.textContent = '跳过';
+            refs.badge.className = 'nc-badge tt-row__badge nc-badge--warning';
+        }
+        if (detail != null) refs.detail.textContent = String(detail);
+    }
+
+    function runOne(test) {
+        var refs = renderRow(test);
+        var missing = missingRequires(test.requires);
+        if (missing) {
+            setRowStatus(refs, 'skip', '缺少模块 ' + missing + '（不判失败）');
+            results.push({ group: test.group, name: test.name, status: 'skip', detail: '缺少 ' + missing });
+            return Promise.resolve();
+        }
+        var started = Date.now();
+        function doneOk(value) {
+            var detail = '';
+            if (value && typeof value === 'object' && typeof value.detail === 'string') detail = value.detail;
+            setRowStatus(refs, 'pass', detail + '（' + (Date.now() - started) + 'ms）');
+            results.push({ group: test.group, name: test.name, status: 'pass', detail: detail });
+        }
+        function doneFail(err) {
+            var message = err && err.message ? err.message : String(err);
+            setRowStatus(refs, 'fail', message);
+            results.push({ group: test.group, name: test.name, status: 'fail', detail: message });
+        }
+        try {
+            var out = test.fn();
+            if (out && typeof out.then === 'function') {
+                return Promise.resolve(out).then(function (value) {
+                    if (value === false) doneFail(new Error('返回 false'));
+                    else doneOk(value);
+                }, doneFail);
+            }
+            if (out === false) doneFail(new Error('返回 false'));
+            else doneOk(out);
+            return Promise.resolve();
+        } catch (err) {
+            doneFail(err);
+            return Promise.resolve();
+        }
+    }
+
+    function cleanupStorage() {
+        try {
+            if (!NC || !NC.storage) return;
+            NC.storage.keys(STORAGE_PREFIX).forEach(function (key) { NC.storage.remove(key); });
+            NC.storage.keys(STORAGE_PREFIX.slice(0, -1) + '.bad.corrupt').forEach(function (key) { NC.storage.remove(key); });
+        } catch (err) { /* ignore */ }
+    }
+
+    function renderSummary() {
+        var pass = 0, fail = 0, skip = 0;
+        results.forEach(function (item) {
+            if (item.status === 'pass') pass += 1;
+            else if (item.status === 'fail') fail += 1;
+            else skip += 1;
+        });
+        var elapsed = state.finishedAt - state.startedAt;
+        var title = $('tt-summary-title');
+        var counts = $('tt-summary-counts');
+        var meta = $('tt-summary-meta');
+        while (counts.firstChild) counts.removeChild(counts.firstChild);
+        title.textContent = fail > 0
+            ? '存在失败项：' + fail
+            : (skip > 0 ? '全部通过（' + skip + ' 项跳过）' : '全部通过');
+        title.style.color = fail > 0 ? 'var(--nc-danger)' : 'var(--nc-success)';
+        counts.appendChild(el('span', 'nc-badge nc-badge--success', '通过 ' + pass));
+        counts.appendChild(el('span', 'nc-badge nc-badge--danger', '失败 ' + fail));
+        counts.appendChild(el('span', 'nc-badge nc-badge--warning', '跳过 ' + skip));
+        var failures = results.filter(function (item) { return item.status === 'fail'; });
+        meta.textContent = '共 ' + results.length + ' 项 · 耗时 ' + elapsed + 'ms · ' +
+            'NC ' + ((NC && NC.version) || '?') + ' · ' + window.location.protocol +
+            (failures.length ? ' · 失败：' + failures.map(function (item) { return item.name; }).join('；') : '');
+        window.__TEST_REPORT = {
+            pass: pass, fail: fail, skip: skip, total: results.length, elapsed: elapsed,
+            failures: failures.map(function (item) { return item.group + ' / ' + item.name + '：' + item.detail; })
+        };
+        document.title = (fail > 0 ? 'TESTS FAIL ' + fail : 'TESTS PASS ' + pass) + (skip ? ' SKIP ' + skip : '');
+    }
+
+    function buildReport() {
+        var lines = ['=== nTools/nChat 回归断言报告 ==='];
+        lines.push('时间: ' + new Date().toISOString());
+        lines.push('协议: ' + window.location.protocol + ' · NC: ' + ((NC && NC.version) || '?') +
+            ' · UA: ' + navigator.userAgent);
+        lines.push('结论: ' + $('tt-summary-title').textContent);
+        lines.push('');
+        var lastGroup = null;
+        results.forEach(function (item) {
+            if (item.group !== lastGroup) { lines.push('[' + item.group + ']'); lastGroup = item.group; }
+            lines.push('  ' + (item.status === 'pass' ? 'PASS' : (item.status === 'fail' ? 'FAIL' : 'SKIP')) +
+                ' ' + item.name + (item.detail ? ' — ' + item.detail : ''));
+        });
+        lines.push('');
+        var report = window.__TEST_REPORT || { pass: 0, fail: 0, skip: 0, elapsed: 0 };
+        lines.push('汇总: 通过 ' + report.pass + ' / 失败 ' + report.fail + ' / 跳过 ' + report.skip +
+            ' / 耗时 ' + report.elapsed + 'ms');
+        lines.push('=== 结束 ===');
+        return lines.join('\n');
+    }
+
+    function copyReport() {
+        var text = buildReport();
+        function fallbackModal() {
+            var wrap = document.createElement('div');
+            var area = document.createElement('textarea');
+            area.className = 'nc-textarea tt-report';
+            area.value = text;
+            area.setAttribute('readonly', 'readonly');
+            wrap.appendChild(area);
+            if (NC && NC.ui && NC.ui.openModal) {
+                NC.ui.openModal({
+                    title: '复制失败：请手动复制报告',
+                    content: wrap,
+                    size: 'lg',
+                    actions: [{ label: '关闭', kind: 'ghost' }]
+                });
+                setTimeout(function () { area.focus(); area.select(); }, 120);
+            }
+        }
+        if (NC && NC.util && NC.util.copyText) {
+            NC.util.copyText(text).then(function (ok) {
+                if (ok) { NC.ui.toast('报告已复制到剪贴板', { type: 'success' }); return; }
+                fallbackModal();
+            });
+            return;
+        }
+        fallbackModal();
+    }
+
+    function runAll() {
+        if (state.running) return;
+        state.running = true;
+        results = [];
+        state.startedAt = Date.now();
+        state.finishedAt = 0;
+        var groups = $('tt-groups');
+        while (groups.firstChild) groups.removeChild(groups.firstChild);
+        cleanupStorage();
+        var chain = Promise.resolve();
+        REGISTRY.forEach(function (test) {
+            chain = chain.then(function () { return runOne(test); });
+        });
+        chain.then(function () {
+            cleanupStorage();
+            state.finishedAt = Date.now();
+            state.running = false;
+            renderSummary();
+        }, function () {
+            state.finishedAt = Date.now();
+            state.running = false;
+            renderSummary();
+        });
+    }
+
+    function boot() {
+        NC = window.NC;
+        var verEl = $('tt-version');
+        if (verEl) verEl.textContent = (NC && NC.version) ? '· v' + NC.version : '· 公共脚本未加载';
+        defineTests();
+        $('tt-rerun').addEventListener('click', runAll);
+        $('tt-copy').addEventListener('click', copyReport);
+        runAll();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot, { once: true });
+    } else {
+        boot();
+    }
+})();
+</script>
+</body>
+</html>
