@@ -1,0 +1,843 @@
+/* ==========================================================================
+ * components.css — 公共组件（nc- 前缀，避免与页面样式冲突）
+ * 依赖 tokens.css / base.css
+ * ========================================================================== */
+
+/* --------------------------------------------------------------------------
+ * 按钮
+ * -------------------------------------------------------------------------- */
+.nc-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-2);
+    color: var(--nc-text);
+    font-size: var(--nc-fs-md);
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    user-select: none;
+    transition:
+        background-color var(--nc-dur-fast) var(--nc-ease),
+        border-color var(--nc-dur-fast) var(--nc-ease),
+        color var(--nc-dur-fast) var(--nc-ease),
+        transform var(--nc-dur-fast) var(--nc-ease),
+        box-shadow var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-btn:hover {
+    background: var(--nc-surface-3);
+    border-color: var(--nc-border-strong);
+}
+
+.nc-btn:active {
+    transform: scale(0.98);
+}
+
+.nc-btn:disabled,
+.nc-btn.is-loading {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.nc-btn--primary {
+    border-color: transparent;
+    background: var(--nc-gradient-accent);
+    color: #fff;
+    box-shadow: var(--nc-shadow-accent);
+}
+
+.nc-btn--primary:hover {
+    background: var(--nc-gradient-accent);
+    filter: brightness(1.06);
+    border-color: transparent;
+}
+
+.nc-btn--ghost {
+    border-color: transparent;
+    background: transparent;
+    color: var(--nc-text-2);
+}
+
+.nc-btn--ghost:hover {
+    background: var(--nc-surface-2);
+    color: var(--nc-text);
+    border-color: transparent;
+}
+
+.nc-btn--danger {
+    border-color: rgba(255, 107, 107, 0.35);
+    background: var(--nc-danger-soft);
+    color: var(--nc-danger);
+}
+
+.nc-btn--danger:hover {
+    background: rgba(255, 107, 107, 0.18);
+    border-color: var(--nc-danger);
+}
+
+.nc-btn--outline {
+    background: transparent;
+    border-color: var(--nc-border-strong);
+}
+
+.nc-btn--outline:hover {
+    background: var(--nc-surface-2);
+}
+
+.nc-btn--sm {
+    height: 28px;
+    padding: 0 10px;
+    font-size: var(--nc-fs-sm);
+    border-radius: var(--nc-radius-sm);
+    gap: 5px;
+}
+
+.nc-btn--lg {
+    height: 42px;
+    padding: 0 20px;
+    font-size: var(--nc-fs-base);
+    border-radius: var(--nc-radius-md);
+}
+
+.nc-btn--block {
+    width: 100%;
+}
+
+.nc-btn--icon {
+    width: 34px;
+    padding: 0;
+    border-radius: var(--nc-radius-md);
+    color: var(--nc-text-2);
+}
+
+.nc-btn--icon.nc-btn--sm {
+    width: 28px;
+}
+
+.nc-btn--icon:hover {
+    color: var(--nc-text);
+}
+
+.nc-btn.is-loading {
+    pointer-events: none;
+}
+
+.nc-btn.is-loading::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: nc-spin 0.7s linear infinite;
+    opacity: 0.85;
+}
+
+.nc-btn.is-loading > * {
+    visibility: hidden;
+}
+
+/* 纯文字按钮 */
+.nc-linkbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    border-radius: var(--nc-radius-xs);
+    transition: color var(--nc-dur-fast) var(--nc-ease), background-color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-linkbtn:hover {
+    color: var(--nc-accent);
+    background: var(--nc-accent-faint);
+}
+
+/* --------------------------------------------------------------------------
+ * 表单
+ * -------------------------------------------------------------------------- */
+.nc-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.nc-label {
+    font-size: var(--nc-fs-sm);
+    font-weight: 500;
+    color: var(--nc-text-2);
+}
+
+.nc-label__optional {
+    margin-left: 6px;
+    color: var(--nc-text-3);
+    font-weight: 400;
+    font-size: var(--nc-fs-xs);
+}
+
+.nc-input,
+.nc-textarea,
+.nc-select {
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-input-bg);
+    color: var(--nc-text);
+    font-size: var(--nc-fs-md);
+    transition:
+        border-color var(--nc-dur-fast) var(--nc-ease),
+        box-shadow var(--nc-dur-fast) var(--nc-ease),
+        background-color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-input::placeholder,
+.nc-textarea::placeholder {
+    color: var(--nc-text-3);
+}
+
+.nc-input:hover,
+.nc-textarea:hover,
+.nc-select:hover {
+    border-color: var(--nc-border-strong);
+}
+
+.nc-input:focus,
+.nc-textarea:focus,
+.nc-select:focus {
+    border-color: var(--nc-accent);
+    box-shadow: var(--nc-focus-ring);
+    outline: none;
+}
+
+.nc-input.has-error,
+.nc-textarea.has-error {
+    border-color: var(--nc-danger);
+    box-shadow: 0 0 0 3px var(--nc-danger-ring);
+}
+
+.nc-input--block {
+    height: auto;
+    padding: 9px 12px;
+    line-height: 1.5;
+}
+
+.nc-textarea {
+    height: auto;
+    min-height: 84px;
+    padding: 10px 12px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+.nc-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 32px;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239caabc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    cursor: pointer;
+}
+
+html[data-theme="light"] .nc-select {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2355657a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+.nc-field-hint {
+    font-size: var(--nc-fs-xs);
+    color: var(--nc-text-3);
+    line-height: 1.5;
+}
+
+.nc-field-hint.is-error {
+    color: var(--nc-danger);
+}
+
+/* 原生复选框（走 accent-color，保证可访问性） */
+.nc-check {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--nc-accent);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+/* 开关 */
+.nc-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: var(--nc-fs-md);
+    color: var(--nc-text-2);
+    user-select: none;
+}
+
+.nc-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.nc-switch__track {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    border-radius: var(--nc-radius-pill);
+    background: var(--nc-surface-3);
+    border: 1px solid var(--nc-border);
+    transition: background-color var(--nc-dur) var(--nc-ease);
+    flex: 0 0 auto;
+}
+
+.nc-switch__track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--nc-text-2);
+    transition: transform var(--nc-dur) var(--nc-ease-spring), background-color var(--nc-dur) var(--nc-ease);
+}
+
+.nc-switch input:checked + .nc-switch__track {
+    background: var(--nc-accent);
+    border-color: var(--nc-accent);
+}
+
+.nc-switch input:checked + .nc-switch__track::after {
+    transform: translateX(16px);
+    background: #fff;
+}
+
+.nc-switch input:focus-visible + .nc-switch__track {
+    box-shadow: var(--nc-focus-ring);
+}
+
+/* --------------------------------------------------------------------------
+ * 卡片 / 面板
+ * -------------------------------------------------------------------------- */
+.nc-card {
+    background: var(--nc-surface);
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-lg);
+    box-shadow: var(--nc-shadow-1);
+}
+
+.nc-panel {
+    background: var(--nc-surface);
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-lg);
+    overflow: hidden;
+}
+
+.nc-panel__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--nc-border);
+}
+
+.nc-panel__title {
+    font-size: var(--nc-fs-md);
+    font-weight: 600;
+}
+
+.nc-panel__body {
+    padding: 16px;
+}
+
+/* --------------------------------------------------------------------------
+ * 徽标 / 标签 / 快捷键
+ * -------------------------------------------------------------------------- */
+.nc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: var(--nc-radius-pill);
+    background: var(--nc-surface-2);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-xs);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.nc-badge--accent {
+    background: var(--nc-accent-soft);
+    color: var(--nc-accent);
+}
+
+.nc-badge--success {
+    background: var(--nc-success-soft);
+    color: var(--nc-success);
+}
+
+.nc-badge--warning {
+    background: var(--nc-warning-soft);
+    color: var(--nc-warning);
+}
+
+.nc-badge--danger {
+    background: var(--nc-danger-soft);
+    color: var(--nc-danger);
+}
+
+.nc-badge--count {
+    min-width: 20px;
+    justify-content: center;
+    padding: 0 6px;
+    font-size: var(--nc-fs-2xs);
+}
+
+.nc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 11px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-pill);
+    background: transparent;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    transition:
+        background-color var(--nc-dur-fast) var(--nc-ease),
+        border-color var(--nc-dur-fast) var(--nc-ease),
+        color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-chip:hover {
+    background: var(--nc-surface-2);
+    color: var(--nc-text);
+}
+
+.nc-chip.is-active {
+    background: var(--nc-accent-soft);
+    border-color: rgba(91, 140, 255, 0.35);
+    color: var(--nc-accent);
+}
+
+.nc-chip__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    flex: 0 0 auto;
+}
+
+.nc-kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border: 1px solid var(--nc-border);
+    border-bottom-width: 2px;
+    border-radius: var(--nc-radius-xs);
+    background: var(--nc-surface-2);
+    color: var(--nc-text-3);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-fs-2xs);
+    line-height: 1;
+}
+
+/* --------------------------------------------------------------------------
+ * 分段控制器（视图切换）
+ * -------------------------------------------------------------------------- */
+.nc-seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: var(--nc-surface-2);
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+}
+
+.nc-seg__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 11px;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-seg__btn:hover {
+    color: var(--nc-text);
+}
+
+.nc-seg__btn.is-active {
+    background: var(--nc-surface);
+    color: var(--nc-text);
+    box-shadow: var(--nc-shadow-1);
+}
+
+/* --------------------------------------------------------------------------
+ * 空状态 / 加载
+ * -------------------------------------------------------------------------- */
+.nc-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 56px 24px;
+    text-align: center;
+    color: var(--nc-text-3);
+}
+
+.nc-empty__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-surface-2);
+    border: 1px solid var(--nc-border);
+    color: var(--nc-text-3);
+    margin-bottom: 2px;
+}
+
+.nc-empty__title {
+    font-size: var(--nc-fs-base);
+    font-weight: 600;
+    color: var(--nc-text-2);
+}
+
+.nc-empty__desc {
+    max-width: 320px;
+    font-size: var(--nc-fs-sm);
+    line-height: 1.6;
+}
+
+.nc-empty__actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.nc-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--nc-border-strong);
+    border-top-color: var(--nc-accent);
+    border-radius: 50%;
+    animation: nc-spin 0.7s linear infinite;
+}
+
+.nc-skeleton {
+    border-radius: var(--nc-radius-sm);
+    background: linear-gradient(90deg, var(--nc-surface-2) 25%, var(--nc-surface-3) 37%, var(--nc-surface-2) 63%);
+    background-size: 400% 100%;
+    animation: nc-shimmer 1.4s ease infinite;
+}
+
+/* --------------------------------------------------------------------------
+ * 模态框
+ * -------------------------------------------------------------------------- */
+.nc-modal-overlay {
+    position: fixed;
+    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--nc-z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--nc-overlay);
+    backdrop-filter: var(--nc-glass-blur);
+    -webkit-backdrop-filter: var(--nc-glass-blur);
+    opacity: 0;
+    transition: opacity var(--nc-dur) var(--nc-ease);
+}
+
+.nc-modal-overlay.show {
+    opacity: 1;
+}
+
+.nc-modal {
+    width: min(520px, 100%);
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    background: var(--nc-elevated);
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-xl);
+    box-shadow: var(--nc-shadow-3);
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+    transition: opacity var(--nc-dur) var(--nc-ease-out), transform var(--nc-dur-slow) var(--nc-ease-out);
+}
+
+.nc-modal-overlay.show .nc-modal {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.nc-modal--sm { width: min(400px, 100%); }
+.nc-modal--lg { width: min(680px, 100%); }
+.nc-modal--wide { width: min(860px, 100%); }
+
+.nc-modal__head {
+    padding: 20px 24px 6px;
+}
+
+.nc-modal__title {
+    font-size: var(--nc-fs-lg);
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+.nc-modal__body {
+    padding: 8px 24px 4px;
+    overflow-y: auto;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-base);
+    line-height: var(--nc-lh-relaxed);
+}
+
+.nc-modal__message {
+    white-space: pre-wrap;
+}
+
+.nc-modal__content {
+    color: var(--nc-text-2);
+}
+
+.nc-modal__foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 18px 24px 20px;
+}
+
+/* --------------------------------------------------------------------------
+ * Toast
+ * -------------------------------------------------------------------------- */
+.nc-toasts {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: var(--nc-z-toast);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: min(480px, calc(100vw - 32px));
+    pointer-events: none;
+}
+
+.nc-toast {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 10px 10px 14px;
+    background: var(--nc-elevated);
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-md);
+    box-shadow: var(--nc-shadow-2);
+    color: var(--nc-text);
+    font-size: var(--nc-fs-md);
+    pointer-events: auto;
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity var(--nc-dur) var(--nc-ease-out), transform var(--nc-dur-slow) var(--nc-ease-out);
+}
+
+.nc-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.nc-toast.is-leaving {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+.nc-toast__icon {
+    flex: 0 0 auto;
+    color: var(--nc-accent);
+}
+
+.nc-toast--success .nc-toast__icon { color: var(--nc-success); }
+.nc-toast--warn .nc-toast__icon { color: var(--nc-warning); }
+.nc-toast--error .nc-toast__icon { color: var(--nc-danger); }
+
+.nc-toast__text {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.5;
+}
+
+.nc-toast__action {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-accent);
+    font-size: var(--nc-fs-sm);
+    font-weight: 600;
+}
+
+.nc-toast__action:hover {
+    background: var(--nc-accent-faint);
+}
+
+.nc-toast__close {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-3);
+}
+
+.nc-toast__close:hover {
+    color: var(--nc-text);
+    background: var(--nc-surface-2);
+}
+
+/* --------------------------------------------------------------------------
+ * 弹出菜单
+ * -------------------------------------------------------------------------- */
+.nc-menu {
+    position: fixed;
+    z-index: var(--nc-z-dropdown);
+    min-width: 196px;
+    max-width: 280px;
+    padding: 6px;
+    background: var(--nc-elevated);
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-md);
+    box-shadow: var(--nc-shadow-3);
+    animation: nc-pop-in var(--nc-dur) var(--nc-ease-out) both;
+}
+
+.nc-menu__item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-md);
+    text-align: left;
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-menu__item:hover,
+.nc-menu__item.is-active,
+.nc-menu__item:focus-visible {
+    background: var(--nc-surface-2);
+    color: var(--nc-text);
+}
+
+.nc-menu__item.is-danger {
+    color: var(--nc-danger);
+}
+
+.nc-menu__item.is-danger:hover {
+    background: var(--nc-danger-soft);
+}
+
+.nc-menu__item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.nc-menu__icon {
+    color: var(--nc-text-3);
+}
+
+.nc-menu__item:hover .nc-menu__icon,
+.nc-menu__item.is-active .nc-menu__icon {
+    color: inherit;
+}
+
+.nc-menu__label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.nc-menu__hint {
+    margin-left: auto;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+}
+
+.nc-menu__divider {
+    height: 1px;
+    margin: 5px 8px;
+    background: var(--nc-border);
+}
+
+/* --------------------------------------------------------------------------
+ * 进度条
+ * -------------------------------------------------------------------------- */
+.nc-progress {
+    height: 6px;
+    border-radius: var(--nc-radius-pill);
+    background: var(--nc-surface-3);
+    overflow: hidden;
+}
+
+.nc-progress__bar {
+    height: 100%;
+    border-radius: var(--nc-radius-pill);
+    background: var(--nc-gradient-accent);
+    transition: width var(--nc-dur-slow) var(--nc-ease);
+}
+
+/* --------------------------------------------------------------------------
+ * 列表项进入/离开动画（待办等）
+ * -------------------------------------------------------------------------- */
+.nc-list-enter {
+    animation: nc-fade-up var(--nc-dur-slow) var(--nc-ease-out) both;
+}
+
+.nc-list-leave {
+    opacity: 0;
+    transform: translateX(8px);
+    transition: opacity var(--nc-dur) var(--nc-ease), transform var(--nc-dur) var(--nc-ease);
+}

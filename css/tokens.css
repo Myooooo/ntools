@@ -1,0 +1,201 @@
+/* ==========================================================================
+ * tokens.css — 设计令牌（唯一来源）
+ * 目标环境：Chromium 102（不用 :has / dvh / color-mix 等新特性）
+ * 主题：默认深色；html[data-theme="light"] 浅色；html[data-lite="true"] 低配模式
+ * ========================================================================== */
+
+:root {
+    /* ---------- 字体 ---------- */
+    --nc-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans CJK SC",
+        "Source Han Sans SC", "WenQuanYi Micro Hei", "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    --nc-font-mono: "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas,
+        "Noto Sans Mono CJK SC", monospace;
+    --nc-fs-2xs: 10.5px;
+    --nc-fs-xs: 11.5px;
+    --nc-fs-sm: 12.5px;
+    --nc-fs-md: 13.5px;
+    --nc-fs-base: 14px;
+    --nc-fs-lg: 16px;
+    --nc-fs-xl: 20px;
+    --nc-fs-2xl: 24px;
+    --nc-fs-3xl: 30px;
+    --nc-lh-tight: 1.25;
+    --nc-lh-normal: 1.55;
+    --nc-lh-relaxed: 1.7;
+
+    /* ---------- 间距 ---------- */
+    --nc-space-1: 4px;
+    --nc-space-2: 8px;
+    --nc-space-3: 12px;
+    --nc-space-4: 16px;
+    --nc-space-5: 20px;
+    --nc-space-6: 24px;
+    --nc-space-8: 32px;
+    --nc-space-10: 40px;
+    --nc-space-12: 48px;
+
+    /* ---------- 圆角 ---------- */
+    --nc-radius-xs: 4px;
+    --nc-radius-sm: 6px;
+    --nc-radius-md: 10px;
+    --nc-radius-lg: 14px;
+    --nc-radius-xl: 20px;
+    --nc-radius-pill: 999px;
+
+    /* ---------- 动效 ---------- */
+    --nc-dur-fast: 120ms;
+    --nc-dur: 180ms;
+    --nc-dur-slow: 260ms;
+    --nc-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --nc-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --nc-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+    /* ---------- 层级 ---------- */
+    --nc-z-sticky: 20;
+    --nc-z-dropdown: 900;
+    --nc-z-modal: 1000;
+    --nc-z-toast: 1100;
+
+    /* ---------- 深色主题（默认） ---------- */
+    --nc-bg: #0a0d13;
+    --nc-bg-soft: #0e131b;
+    --nc-surface: #121924;
+    --nc-surface-2: #172130;
+    --nc-surface-3: #1d2939;
+    --nc-surface-hover: #1c2838;
+    --nc-elevated: #151e2b;
+    --nc-input-bg: rgba(9, 13, 19, 0.6);
+    --nc-border: rgba(255, 255, 255, 0.075);
+    --nc-border-strong: rgba(255, 255, 255, 0.14);
+    --nc-border-faint: rgba(255, 255, 255, 0.04);
+    --nc-text: #e8eef7;
+    --nc-text-2: #9caabc;
+    --nc-text-3: #6d7d92;
+    --nc-text-invert: #0a0d13;
+    --nc-accent: #5b8cff;
+    --nc-accent-hover: #7ba3ff;
+    --nc-accent-soft: rgba(91, 140, 255, 0.14);
+    --nc-accent-faint: rgba(91, 140, 255, 0.07);
+    --nc-accent-ring: rgba(91, 140, 255, 0.32);
+    --nc-accent-2: #9a7bff;
+    --nc-gradient-accent: linear-gradient(135deg, #5b8cff 0%, #9a7bff 100%);
+    --nc-gradient-accent-soft: linear-gradient(135deg, rgba(91, 140, 255, 0.16), rgba(154, 123, 255, 0.14));
+    --nc-success: #3ddc97;
+    --nc-success-soft: rgba(61, 220, 151, 0.12);
+    --nc-warning: #f5c451;
+    --nc-warning-soft: rgba(245, 196, 81, 0.12);
+    --nc-danger: #ff6b6b;
+    --nc-danger-soft: rgba(255, 107, 107, 0.12);
+    --nc-danger-ring: rgba(255, 107, 107, 0.3);
+    --nc-priority-low: #5aa9e6;
+    --nc-priority-normal: #8b9bb4;
+    --nc-priority-high: #f5a04d;
+    --nc-priority-urgent: #ff6b6b;
+    --nc-glass: rgba(17, 24, 35, 0.72);
+    --nc-glass-blur: saturate(150%) blur(16px);
+    --nc-overlay: rgba(4, 7, 12, 0.62);
+    --nc-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.28);
+    --nc-shadow-2: 0 10px 30px -12px rgba(0, 0, 0, 0.55), 0 2px 8px -2px rgba(0, 0, 0, 0.35);
+    --nc-shadow-3: 0 28px 70px -20px rgba(0, 0, 0, 0.7), 0 6px 18px -6px rgba(0, 0, 0, 0.45);
+    --nc-shadow-accent: 0 6px 18px -6px rgba(91, 140, 255, 0.55);
+    --nc-bg-page:
+        radial-gradient(1100px 620px at 82% -12%, rgba(91, 140, 255, 0.11), transparent 62%),
+        radial-gradient(900px 520px at 4% 108%, rgba(154, 123, 255, 0.09), transparent 60%),
+        var(--nc-bg);
+    --nc-code-bg: rgba(3, 6, 10, 0.55);
+    --nc-scrollbar: rgba(255, 255, 255, 0.14);
+    --nc-scrollbar-hover: rgba(255, 255, 255, 0.26);
+    --nc-focus-ring: 0 0 0 3px var(--nc-accent-ring);
+    --nc-mask-fade: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.5));
+}
+
+/* ---------- 浅色主题 ---------- */
+html[data-theme="light"] {
+    --nc-bg: #f4f6fa;
+    --nc-bg-soft: #eef2f7;
+    --nc-surface: #ffffff;
+    --nc-surface-2: #f2f5f9;
+    --nc-surface-3: #e8edf4;
+    --nc-surface-hover: #eef3fa;
+    --nc-elevated: #ffffff;
+    --nc-input-bg: rgba(255, 255, 255, 0.85);
+    --nc-border: rgba(15, 23, 42, 0.09);
+    --nc-border-strong: rgba(15, 23, 42, 0.16);
+    --nc-border-faint: rgba(15, 23, 42, 0.05);
+    --nc-text: #101828;
+    --nc-text-2: #55657a;
+    --nc-text-3: #8494a8;
+    --nc-text-invert: #ffffff;
+    --nc-accent: #2f6fed;
+    --nc-accent-hover: #1f5fe0;
+    --nc-accent-soft: rgba(47, 111, 237, 0.1);
+    --nc-accent-faint: rgba(47, 111, 237, 0.05);
+    --nc-accent-ring: rgba(47, 111, 237, 0.25);
+    --nc-accent-2: #7c5cf5;
+    --nc-gradient-accent: linear-gradient(135deg, #2f6fed 0%, #7c5cf5 100%);
+    --nc-gradient-accent-soft: linear-gradient(135deg, rgba(47, 111, 237, 0.12), rgba(124, 92, 245, 0.1));
+    --nc-success: #0f9d63;
+    --nc-success-soft: rgba(15, 157, 99, 0.1);
+    --nc-warning: #b7791f;
+    --nc-warning-soft: rgba(183, 121, 31, 0.1);
+    --nc-danger: #e5484d;
+    --nc-danger-soft: rgba(229, 72, 77, 0.09);
+    --nc-danger-ring: rgba(229, 72, 77, 0.22);
+    --nc-priority-low: #2f6fed;
+    --nc-priority-normal: #8494a8;
+    --nc-priority-high: #d97706;
+    --nc-priority-urgent: #e5484d;
+    --nc-glass: rgba(255, 255, 255, 0.72);
+    --nc-glass-blur: saturate(150%) blur(14px);
+    --nc-overlay: rgba(15, 23, 42, 0.34);
+    --nc-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06);
+    --nc-shadow-2: 0 12px 32px -14px rgba(16, 24, 40, 0.22), 0 2px 8px -2px rgba(16, 24, 40, 0.08);
+    --nc-shadow-3: 0 28px 64px -22px rgba(16, 24, 40, 0.3), 0 6px 18px -8px rgba(16, 24, 40, 0.12);
+    --nc-shadow-accent: 0 6px 18px -6px rgba(47, 111, 237, 0.4);
+    --nc-bg-page:
+        radial-gradient(1100px 620px at 82% -12%, rgba(47, 111, 237, 0.09), transparent 62%),
+        radial-gradient(900px 520px at 4% 108%, rgba(124, 92, 245, 0.07), transparent 60%),
+        var(--nc-bg);
+    --nc-code-bg: rgba(15, 23, 42, 0.05);
+    --nc-scrollbar: rgba(15, 23, 42, 0.18);
+    --nc-scrollbar-hover: rgba(15, 23, 42, 0.32);
+    --nc-focus-ring: 0 0 0 3px var(--nc-accent-ring);
+}
+
+/* ---------- Lite：关闭毛玻璃/动画/重阴影（低配 ARM 友好） ---------- */
+html[data-lite="true"] {
+    --nc-glass: var(--nc-surface);
+    --nc-glass-blur: none;
+    --nc-shadow-2: var(--nc-shadow-1);
+    --nc-shadow-3: 0 10px 28px -16px rgba(0, 0, 0, 0.5);
+    --nc-dur-fast: 0ms;
+    --nc-dur: 0ms;
+    --nc-dur-slow: 0ms;
+}
+
+html[data-lite="true"] *,
+html[data-lite="true"] *::before,
+html[data-lite="true"] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+}
+
+/* ---------- 系统级减少动效 ---------- */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --nc-dur-fast: 0ms;
+        --nc-dur: 0ms;
+        --nc-dur-slow: 0ms;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

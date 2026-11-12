@@ -1,0 +1,264 @@
+/* ==========================================================================
+ * base.css — Reset、排版、滚动条、焦点可见性、页面底色
+ * 依赖 tokens.css
+ * ========================================================================== */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    height: 100%;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    height: 100%;
+    font-family: var(--nc-font-sans);
+    font-size: var(--nc-fs-base);
+    line-height: var(--nc-lh-normal);
+    color: var(--nc-text);
+    background: var(--nc-bg-page);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+    transition: background-color var(--nc-dur) var(--nc-ease);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    margin: 0;
+    font-weight: 600;
+    line-height: var(--nc-lh-tight);
+    letter-spacing: -0.01em;
+}
+
+p {
+    margin: 0;
+}
+
+a {
+    color: var(--nc-accent);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--nc-accent-hover);
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+button {
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+img,
+svg,
+video {
+    display: block;
+    max-width: 100%;
+}
+
+ul,
+ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+::selection {
+    background: var(--nc-accent-soft);
+    color: var(--nc-text);
+}
+
+:focus {
+    outline: none;
+}
+
+:focus-visible {
+    outline: 2px solid var(--nc-accent);
+    outline-offset: 2px;
+    border-radius: var(--nc-radius-sm);
+}
+
+/* ---------- 滚动条 ---------- */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--nc-scrollbar) transparent;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--nc-scrollbar);
+    border: 3px solid transparent;
+    border-radius: var(--nc-radius-pill);
+    background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--nc-scrollbar-hover);
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+/* ---------- 表单占位符 ---------- */
+::placeholder {
+    color: var(--nc-text-3);
+    opacity: 1;
+}
+
+/* ---------- 通用工具类 ---------- */
+.nc-icon {
+    display: inline-block;
+    flex: 0 0 auto;
+    vertical-align: -0.15em;
+    pointer-events: none;
+}
+
+.nc-icon-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nc-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.nc-hidden {
+    display: none !important;
+}
+
+.nc-truncate {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.nc-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.nc-scroll {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- 动画关键帧（统一节奏） ---------- */
+@keyframes nc-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes nc-fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nc-pop-in {
+    from { opacity: 0; transform: scale(0.96) translateY(6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes nc-slide-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes nc-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes nc-shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+}
+
+.nc-anim-in {
+    animation: nc-fade-up var(--nc-dur-slow) var(--nc-ease-out) both;
+}
+
+/* ---------- 页面骨架 ---------- */
+.nc-app {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.nc-page {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.nc-page__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* 页面内标题 */
+.nc-page-title {
+    font-size: var(--nc-fs-xl);
+    font-weight: 650;
+    letter-spacing: -0.02em;
+}
+
+.nc-page-subtitle {
+    margin-top: 2px;
+    font-size: var(--nc-fs-sm);
+    color: var(--nc-text-3);
+}
+
+/* 分隔线 */
+.nc-hr {
+    height: 1px;
+    background: var(--nc-border);
+    border: 0;
+    margin: var(--nc-space-4) 0;
+}
