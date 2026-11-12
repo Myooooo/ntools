@@ -1,7 +1,9 @@
 /* ==========================================================================
- * tokens.css — 设计令牌（唯一来源）
- * 目标环境：Chromium 102（不用 :has / dvh / color-mix 等新特性）
- * 主题：默认深色；html[data-theme="light"] 浅色；html[data-lite="true"] 低配模式
+ * tokens.css — v4 设计令牌（唯一来源）
+ * 方向：Precision Workbench —— 石墨/纸面、发丝线、仪器蓝强调、铜色时间语义
+ * 目标环境：Chromium 102（不用 :has / dvh 强依赖 / color-mix 等新特性）
+ * 主题：默认深色；html[data-theme="light"] 浅色；
+ *      html[data-lite="true"] = Light 性能模式（标准模式的减法：去高级动效与页面特效）
  * ========================================================================== */
 
 :root {
@@ -9,46 +11,58 @@
     --nc-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans CJK SC",
         "Source Han Sans SC", "WenQuanYi Micro Hei", "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
     --nc-font-mono: "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code", Consolas,
-        "Noto Sans Mono CJK SC", monospace;
+        "Noto Sans Mono CJK SC", ui-monospace, monospace;
+    --nc-font-num: var(--nc-font-sans);
+
     --nc-fs-2xs: 10.5px;
     --nc-fs-xs: 11.5px;
     --nc-fs-sm: 12.5px;
     --nc-fs-md: 13.5px;
     --nc-fs-base: 14px;
-    --nc-fs-lg: 16px;
+    --nc-fs-lg: 15.5px;
     --nc-fs-xl: 20px;
-    --nc-fs-2xl: 24px;
-    --nc-fs-3xl: 30px;
-    --nc-lh-tight: 1.25;
-    --nc-lh-normal: 1.55;
-    --nc-lh-relaxed: 1.7;
+    --nc-fs-2xl: 26px;
+    --nc-fs-3xl: 32px;
 
-    /* ---------- 间距 ---------- */
+    --nc-lh-tight: 1.2;
+    --nc-lh-snug: 1.35;
+    --nc-lh-normal: 1.55;
+    --nc-lh-relaxed: 1.72;
+
+    /* ---------- 间距（4px 栅格） ---------- */
     --nc-space-1: 4px;
     --nc-space-2: 8px;
     --nc-space-3: 12px;
     --nc-space-4: 16px;
     --nc-space-5: 20px;
     --nc-space-6: 24px;
+    --nc-space-7: 28px;
     --nc-space-8: 32px;
     --nc-space-10: 40px;
     --nc-space-12: 48px;
 
-    /* ---------- 圆角 ---------- */
+    /* ---------- 圆角（层级化，不只有一个半径） ---------- */
     --nc-radius-xs: 4px;
     --nc-radius-sm: 6px;
-    --nc-radius-md: 10px;
-    --nc-radius-lg: 14px;
-    --nc-radius-xl: 20px;
+    --nc-radius-md: 9px;
+    --nc-radius-lg: 12px;
+    --nc-radius-xl: 16px;
+    --nc-radius-2xl: 20px;
     --nc-radius-pill: 999px;
 
-    /* ---------- 动效 ---------- */
-    --nc-dur-fast: 120ms;
+    /* ---------- 动效（强曲线，来自设计 skill） ---------- */
+    --nc-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --nc-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    --nc-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+    --nc-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+    --nc-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+    --nc-dur-press: 120ms;
+    --nc-dur-fast: 140ms;
     --nc-dur: 180ms;
     --nc-dur-slow: 260ms;
-    --nc-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-    --nc-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-    --nc-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+    --nc-dur-page: 180ms;
+    --nc-dur-panel: 220ms;
 
     /* ---------- 层级 ---------- */
     --nc-z-sticky: 20;
@@ -56,121 +70,179 @@
     --nc-z-modal: 1000;
     --nc-z-toast: 1100;
 
-    /* ---------- 深色主题（默认） ---------- */
-    --nc-bg: #0a0d13;
-    --nc-bg-soft: #0e131b;
-    --nc-surface: #121924;
-    --nc-surface-2: #172130;
-    --nc-surface-3: #1d2939;
-    --nc-surface-hover: #1c2838;
-    --nc-elevated: #151e2b;
-    --nc-input-bg: rgba(9, 13, 19, 0.6);
+    /* ---------- 深色：石墨 ---------- */
+    --nc-bg: #0b0e13;
+    --nc-bg-soft: #0f141b;
+    --nc-surface: #131922;
+    --nc-surface-2: #18212c;
+    --nc-surface-3: #1e2936;
+    --nc-surface-hover: #1b2531;
+    --nc-elevated: #161d28;
+    --nc-input-bg: rgba(8, 11, 16, 0.55);
     --nc-border: rgba(255, 255, 255, 0.075);
     --nc-border-strong: rgba(255, 255, 255, 0.14);
-    --nc-border-faint: rgba(255, 255, 255, 0.04);
-    --nc-text: #e8eef7;
-    --nc-text-2: #9caabc;
-    --nc-text-3: #6d7d92;
-    --nc-text-invert: #0a0d13;
-    --nc-accent: #5b8cff;
-    --nc-accent-hover: #7ba3ff;
-    --nc-accent-soft: rgba(91, 140, 255, 0.14);
-    --nc-accent-faint: rgba(91, 140, 255, 0.07);
-    --nc-accent-ring: rgba(91, 140, 255, 0.32);
-    --nc-accent-2: #9a7bff;
-    --nc-gradient-accent: linear-gradient(135deg, #5b8cff 0%, #9a7bff 100%);
-    --nc-gradient-accent-soft: linear-gradient(135deg, rgba(91, 140, 255, 0.16), rgba(154, 123, 255, 0.14));
-    --nc-success: #3ddc97;
-    --nc-success-soft: rgba(61, 220, 151, 0.12);
-    --nc-warning: #f5c451;
-    --nc-warning-soft: rgba(245, 196, 81, 0.12);
-    --nc-danger: #ff6b6b;
-    --nc-danger-soft: rgba(255, 107, 107, 0.12);
-    --nc-danger-ring: rgba(255, 107, 107, 0.3);
-    --nc-priority-low: #5aa9e6;
-    --nc-priority-normal: #8b9bb4;
-    --nc-priority-high: #f5a04d;
-    --nc-priority-urgent: #ff6b6b;
-    --nc-glass: rgba(17, 24, 35, 0.72);
-    --nc-glass-blur: saturate(150%) blur(16px);
-    --nc-overlay: rgba(4, 7, 12, 0.62);
-    --nc-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.28);
-    --nc-shadow-2: 0 10px 30px -12px rgba(0, 0, 0, 0.55), 0 2px 8px -2px rgba(0, 0, 0, 0.35);
-    --nc-shadow-3: 0 28px 70px -20px rgba(0, 0, 0, 0.7), 0 6px 18px -6px rgba(0, 0, 0, 0.45);
-    --nc-shadow-accent: 0 6px 18px -6px rgba(91, 140, 255, 0.55);
-    --nc-bg-page:
-        radial-gradient(1100px 620px at 82% -12%, rgba(91, 140, 255, 0.11), transparent 62%),
-        radial-gradient(900px 520px at 4% 108%, rgba(154, 123, 255, 0.09), transparent 60%),
-        var(--nc-bg);
-    --nc-code-bg: rgba(3, 6, 10, 0.55);
-    --nc-scrollbar: rgba(255, 255, 255, 0.14);
-    --nc-scrollbar-hover: rgba(255, 255, 255, 0.26);
+    --nc-border-faint: rgba(255, 255, 255, 0.035);
+    --nc-text: #edf1f7;
+    --nc-text-2: #9aa7b8;
+    --nc-text-3: #7f8c9b;
+    --nc-text-invert: #0b0e13;
+    --nc-accent: #6ea8fe;
+    --nc-accent-hover: #8cbcff;
+    --nc-accent-soft: rgba(110, 168, 254, 0.13);
+    --nc-accent-faint: rgba(110, 168, 254, 0.06);
+    --nc-accent-ring: rgba(110, 168, 254, 0.3);
+    --nc-accent-2: #a78bfa;
+    --nc-gradient-accent: linear-gradient(135deg, #6ea8fe 0%, #a78bfa 100%);
+    --nc-gradient-accent-soft: linear-gradient(135deg, rgba(110, 168, 254, 0.15), rgba(167, 139, 250, 0.12));
+    --nc-time: #d8b06a;
+    --nc-time-soft: rgba(216, 176, 106, 0.12);
+    --nc-success: #45d6a0;
+    --nc-success-soft: rgba(69, 214, 160, 0.12);
+    --nc-warning: #e8b45a;
+    --nc-warning-soft: rgba(232, 180, 90, 0.12);
+    --nc-danger: #ff7a72;
+    --nc-danger-soft: rgba(255, 122, 114, 0.12);
+    --nc-danger-ring: rgba(255, 122, 114, 0.28);
+    --nc-priority-low: #6ea8fe;
+    --nc-priority-normal: #828fa0;
+    --nc-priority-high: #e8a45a;
+    --nc-priority-urgent: #ff7a72;
+
+    /* ---------- 材质 / 效果（标准模式；Lite 会全部移除） ---------- */
+    --nc-glass: rgba(15, 20, 27, 0.72);
+    --nc-glass-bg: rgba(15, 20, 27, 0.72);
+    --nc-glass-blur: saturate(140%) blur(14px);
+    --nc-glass-highlight: rgba(255, 255, 255, 0.06);
+    --nc-overlay: rgba(4, 6, 10, 0.62);
+    --nc-ambient:
+        repeating-linear-gradient(0deg, transparent 0 31px, rgba(255, 255, 255, 0.016) 31px 32px),
+        repeating-linear-gradient(90deg, transparent 0 31px, rgba(255, 255, 255, 0.016) 31px 32px),
+        radial-gradient(980px 560px at 84% -12%, rgba(110, 168, 254, 0.12), transparent 62%),
+        radial-gradient(820px 480px at 2% 108%, rgba(216, 176, 106, 0.06), transparent 60%),
+        linear-gradient(180deg, #0b0e13 0%, #0a0d12 55%, #0b0e13 100%);
+    --nc-grid: none;
+    --nc-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%);
+    --nc-brand-bg: var(--nc-gradient-accent);
+    --nc-brand-fg: #ffffff;
+    --nc-brand-shadow: 0 4px 14px -6px rgba(110, 168, 254, 0.5);
+    --nc-hover-lift: translateY(-1px);
+    --nc-enter-y: 6px;
+    --nc-enter-scale: 0.985;
+
+    --nc-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.22);
+    --nc-shadow-2: 0 14px 36px -18px rgba(0, 0, 0, 0.6), 0 2px 8px -3px rgba(0, 0, 0, 0.35);
+    --nc-shadow-3: 0 32px 80px -28px rgba(0, 0, 0, 0.72), 0 8px 22px -8px rgba(0, 0, 0, 0.4);
+    --nc-shadow-accent: 0 6px 20px -8px rgba(110, 168, 254, 0.5);
+
+    --nc-bg-page: var(--nc-ambient);
+    --nc-code-bg: rgba(3, 5, 9, 0.5);
+    --nc-scrollbar: rgba(255, 255, 255, 0.13);
+    --nc-scrollbar-hover: rgba(255, 255, 255, 0.24);
     --nc-focus-ring: 0 0 0 3px var(--nc-accent-ring);
     --nc-mask-fade: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.5));
+
+    /* 数字排版 */
+    --nc-num-feat: "tnum" 1, "lnum" 1;
 }
 
-/* ---------- 浅色主题 ---------- */
+/* ---------- 浅色：冷纸面 ---------- */
 html[data-theme="light"] {
-    --nc-bg: #f4f6fa;
-    --nc-bg-soft: #eef2f7;
+    --nc-bg: #f4f5f7;
+    --nc-bg-soft: #eef0f3;
     --nc-surface: #ffffff;
-    --nc-surface-2: #f2f5f9;
-    --nc-surface-3: #e8edf4;
-    --nc-surface-hover: #eef3fa;
+    --nc-surface-2: #f7f8fa;
+    --nc-surface-3: #edeff3;
+    --nc-surface-hover: #f0f3f7;
     --nc-elevated: #ffffff;
-    --nc-input-bg: rgba(255, 255, 255, 0.85);
-    --nc-border: rgba(15, 23, 42, 0.09);
-    --nc-border-strong: rgba(15, 23, 42, 0.16);
-    --nc-border-faint: rgba(15, 23, 42, 0.05);
-    --nc-text: #101828;
-    --nc-text-2: #55657a;
-    --nc-text-3: #8494a8;
+    --nc-input-bg: rgba(255, 255, 255, 0.86);
+    --nc-border: rgba(20, 24, 32, 0.09);
+    --nc-border-strong: rgba(20, 24, 32, 0.17);
+    --nc-border-faint: rgba(20, 24, 32, 0.05);
+    --nc-text: #15181d;
+    --nc-text-2: #56616f;
+    --nc-text-3: #5f6c7b;
     --nc-text-invert: #ffffff;
-    --nc-accent: #2f6fed;
-    --nc-accent-hover: #1f5fe0;
-    --nc-accent-soft: rgba(47, 111, 237, 0.1);
-    --nc-accent-faint: rgba(47, 111, 237, 0.05);
-    --nc-accent-ring: rgba(47, 111, 237, 0.25);
+    --nc-accent: #2a63c8;
+    --nc-accent-hover: #255cc0;
+    --nc-accent-soft: rgba(47, 111, 219, 0.1);
+    --nc-accent-faint: rgba(47, 111, 219, 0.05);
+    --nc-accent-ring: rgba(47, 111, 219, 0.24);
     --nc-accent-2: #7c5cf5;
-    --nc-gradient-accent: linear-gradient(135deg, #2f6fed 0%, #7c5cf5 100%);
-    --nc-gradient-accent-soft: linear-gradient(135deg, rgba(47, 111, 237, 0.12), rgba(124, 92, 245, 0.1));
-    --nc-success: #0f9d63;
-    --nc-success-soft: rgba(15, 157, 99, 0.1);
-    --nc-warning: #b7791f;
-    --nc-warning-soft: rgba(183, 121, 31, 0.1);
-    --nc-danger: #e5484d;
-    --nc-danger-soft: rgba(229, 72, 77, 0.09);
-    --nc-danger-ring: rgba(229, 72, 77, 0.22);
-    --nc-priority-low: #2f6fed;
-    --nc-priority-normal: #8494a8;
-    --nc-priority-high: #d97706;
-    --nc-priority-urgent: #e5484d;
+    --nc-gradient-accent: linear-gradient(135deg, #2f6fdb 0%, #7c5cf5 100%);
+    --nc-gradient-accent-soft: linear-gradient(135deg, rgba(47, 111, 219, 0.12), rgba(124, 92, 245, 0.1));
+    --nc-time: #8a5c12;
+    --nc-time-soft: rgba(138, 92, 18, 0.1);
+    --nc-success: #0b7a54;
+    --nc-success-soft: rgba(11, 122, 84, 0.1);
+    --nc-warning: #8a5c12;
+    --nc-warning-soft: rgba(168, 114, 27, 0.1);
+    --nc-danger: #c53b3b;
+    --nc-danger-soft: rgba(197, 59, 59, 0.09);
+    --nc-danger-ring: rgba(197, 59, 59, 0.24);
+    --nc-priority-low: #2f6fdb;
+    --nc-priority-normal: #5f6c7b;
+    --nc-priority-high: #8a5c12;
+    --nc-priority-urgent: #c53b3b;
+
     --nc-glass: rgba(255, 255, 255, 0.72);
+    --nc-glass-bg: rgba(255, 255, 255, 0.72);
     --nc-glass-blur: saturate(150%) blur(14px);
-    --nc-overlay: rgba(15, 23, 42, 0.34);
-    --nc-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06);
-    --nc-shadow-2: 0 12px 32px -14px rgba(16, 24, 40, 0.22), 0 2px 8px -2px rgba(16, 24, 40, 0.08);
-    --nc-shadow-3: 0 28px 64px -22px rgba(16, 24, 40, 0.3), 0 6px 18px -8px rgba(16, 24, 40, 0.12);
-    --nc-shadow-accent: 0 6px 18px -6px rgba(47, 111, 237, 0.4);
-    --nc-bg-page:
-        radial-gradient(1100px 620px at 82% -12%, rgba(47, 111, 237, 0.09), transparent 62%),
-        radial-gradient(900px 520px at 4% 108%, rgba(124, 92, 245, 0.07), transparent 60%),
-        var(--nc-bg);
-    --nc-code-bg: rgba(15, 23, 42, 0.05);
-    --nc-scrollbar: rgba(15, 23, 42, 0.18);
-    --nc-scrollbar-hover: rgba(15, 23, 42, 0.32);
+    --nc-glass-highlight: rgba(255, 255, 255, 0.8);
+    --nc-overlay: rgba(15, 18, 24, 0.3);
+    --nc-ambient:
+        repeating-linear-gradient(0deg, transparent 0 31px, rgba(20, 24, 32, 0.022) 31px 32px),
+        repeating-linear-gradient(90deg, transparent 0 31px, rgba(20, 24, 32, 0.022) 31px 32px),
+        radial-gradient(980px 560px at 84% -12%, rgba(42, 99, 200, 0.08), transparent 62%),
+        radial-gradient(820px 480px at 2% 108%, rgba(138, 92, 18, 0.05), transparent 60%),
+        linear-gradient(180deg, #f4f5f7 0%, #f2f3f6 55%, #f4f5f7 100%);
+    --nc-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.65), transparent 46%);
+    --nc-brand-bg: var(--nc-gradient-accent);
+    --nc-brand-fg: #ffffff;
+    --nc-brand-shadow: 0 4px 14px -6px rgba(47, 111, 219, 0.4);
+
+    --nc-shadow-1: 0 1px 2px rgba(16, 20, 28, 0.05);
+    --nc-shadow-2: 0 14px 36px -20px rgba(16, 20, 28, 0.22), 0 2px 8px -3px rgba(16, 20, 28, 0.07);
+    --nc-shadow-3: 0 32px 80px -30px rgba(16, 20, 28, 0.3), 0 8px 22px -10px rgba(16, 20, 28, 0.12);
+    --nc-shadow-accent: 0 6px 20px -8px rgba(47, 111, 219, 0.4);
+
+    --nc-bg-page: var(--nc-ambient);
+    --nc-code-bg: rgba(20, 24, 32, 0.045);
+    --nc-scrollbar: rgba(20, 24, 32, 0.16);
+    --nc-scrollbar-hover: rgba(20, 24, 32, 0.28);
     --nc-focus-ring: 0 0 0 3px var(--nc-accent-ring);
 }
 
-/* ---------- Lite：关闭毛玻璃/动画/重阴影（低配 ARM 友好） ---------- */
+/* ---------- Light（Lite）性能模式：标准模式的减法 ----------
+ * 只去掉高级动效与页面特效：ambient、网格、玻璃/模糊、渐变、阴影、悬浮位移、
+ * 进入位移/缩放、以及非必要的动画时长；布局、字阶、颜色语义、即时反馈全部保留。
+ * ------------------------------------------------------------------------- */
 html[data-lite="true"] {
-    --nc-glass: var(--nc-surface);
-    --nc-glass-blur: none;
-    --nc-shadow-2: var(--nc-shadow-1);
-    --nc-shadow-3: 0 10px 28px -16px rgba(0, 0, 0, 0.5);
+    --nc-dur-press: 0ms;
     --nc-dur-fast: 0ms;
     --nc-dur: 0ms;
     --nc-dur-slow: 0ms;
+    --nc-dur-page: 0ms;
+    --nc-dur-panel: 0ms;
+
+    --nc-glass: var(--nc-surface);
+    --nc-glass-bg: var(--nc-surface);
+    --nc-glass-blur: none;
+    --nc-glass-highlight: transparent;
+    --nc-ambient: none;
+    --nc-grid: none;
+    --nc-sheen: none;
+    --nc-brand-bg: var(--nc-accent);
+    --nc-brand-shadow: none;
+    --nc-hover-lift: none;
+    --nc-enter-y: 0px;
+    --nc-enter-scale: 1;
+
+    --nc-shadow-1: none;
+    --nc-shadow-2: none;
+    --nc-shadow-3: none;
+    --nc-shadow-accent: none;
+
+    --nc-bg-page: var(--nc-bg);
 }
 
 html[data-lite="true"] *,
@@ -182,12 +254,18 @@ html[data-lite="true"] *::after {
     scroll-behavior: auto !important;
 }
 
-/* ---------- 系统级减少动效 ---------- */
+/* ---------- 系统级减少动效：保留可读的淡入，去掉位移 ---------- */
 @media (prefers-reduced-motion: reduce) {
     :root {
+        --nc-dur-press: 0ms;
         --nc-dur-fast: 0ms;
         --nc-dur: 0ms;
         --nc-dur-slow: 0ms;
+        --nc-dur-page: 0ms;
+        --nc-dur-panel: 0ms;
+        --nc-enter-y: 0px;
+        --nc-enter-scale: 1;
+        --nc-hover-lift: none;
     }
 
     *,

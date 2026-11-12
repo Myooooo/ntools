@@ -234,6 +234,7 @@
             el.upload.addEventListener('click', function () { el.file.click(); });
             el.file.addEventListener('change', onFilesChanged);
         }
+        el.textarea.setAttribute('enterkeyhint', 'send');
         el.textarea.addEventListener('keydown', onKeyDown);
         el.textarea.addEventListener('input', autoGrow);
         el.textarea.addEventListener('compositionstart', function () { state.composing = true; });

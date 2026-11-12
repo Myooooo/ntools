@@ -162,9 +162,20 @@
     function updateMeta() {
         var profile = currentProfile();
         if (el.profileMeta) {
-            el.profileMeta.textContent = profile
-                ? [profile.modelId || '未设置 Model', hostOf(profile.baseUrl)].filter(Boolean).join(' · ')
-                : '未配置端点';
+            el.profileMeta.textContent = '';
+            if (!profile) {
+                el.profileMeta.textContent = '未配置端点';
+                el.profileMeta.removeAttribute('title');
+            } else {
+                // v4：元信息拆成两列（模型 / 主机），不再使用“A · B”中点串
+                var model = profile.modelId || '未设置 Model';
+                var host = hostOf(profile.baseUrl);
+                el.profileMeta.appendChild(util.e('span', { class: 'chat-meta__model', text: model }));
+                if (host) {
+                    el.profileMeta.appendChild(util.e('span', { class: 'chat-meta__host', text: host }));
+                }
+                el.profileMeta.setAttribute('title', host ? model + '  ' + host : model);
+            }
         }
         if (el.profileDot) {
             el.profileDot.classList.remove('is-ready', 'is-warn', 'is-off');

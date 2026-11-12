@@ -242,12 +242,12 @@
                     onSelect: function () { NC.theme.toggle(); }
                 },
                 {
-                    label: NC.theme.isLite() ? '关闭 Lite 模式' : '开启 Lite 模式',
+                    label: NC.theme.isLite() ? '关闭 Light 模式' : '开启 Light 模式',
                     icon: 'zap',
                     hint: NC.theme.isLite() ? '已开启' : '',
                     onSelect: function () {
                         var next = NC.theme.toggleLite();
-                        ui.toast(next ? '已开启 Lite 模式：关闭动画与毛玻璃' : '已关闭 Lite 模式', {
+                        ui.toast(next ? '已开启 Light 模式：关闭高级动效与页面特效' : '已关闭 Light 模式', {
                             type: 'info',
                             duration: 2200
                         });
@@ -299,7 +299,7 @@
             ['运行方式', (features.fileProtocol ? '本地文件 file://' : (features.protocol || '未知协议')) + ' · 无后端'],
             ['内核', 'Chromium ' + (features.chromeVersion || '未知')],
             ['存储', features.storage ? 'localStorage 可用' : '不可用（内存模式）'],
-            ['主题', (NC.theme.isLight() ? '浅色' : '深色') + (NC.theme.isLite() ? ' · Lite' : '')],
+            ['主题', (NC.theme.isLight() ? '浅色' : '深色') + (NC.theme.isLite() ? ' · Light' : '')],
             ['待办数据', counts ? (counts.total + ' 条任务 / ' + counts.trash + ' 条回收站') : '未加载']
         ];
         rows.forEach(function (pair) {

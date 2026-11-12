@@ -189,13 +189,22 @@
         return footer;
     }
 
+    function reasoningLabel(message) {
+        var time = message.reasoningTime;
+        if (message.reasoningStreaming) return '思考中…';
+        if (time != null && isFinite(Number(time))) {
+            return '思考过程 ' + Number(time).toFixed(1) + 's';
+        }
+        return '思考过程';
+    }
+
     function ensureReasoning(article) {
         var existing = article.querySelector('.chat-reasoning');
         if (existing) return existing;
         var details = util.e('details', { class: 'chat-reasoning' });
         details.appendChild(util.e('summary', {
             class: 'chat-reasoning__summary',
-            text: '正在思考...'
+            text: '思考中…'
         }));
         var body = util.e('div', { class: 'chat-reasoning__body chat-md' });
         details.appendChild(body);
@@ -255,8 +264,18 @@
         var role = message.role === 'user' ? 'user' : 'assistant';
         var article = util.e('article', {
             class: 'chat-msg chat-msg--' + role + ' message',
-            dataset: { id: message.id }
+            dataset: { id: message.id },
+            'aria-label': role === 'user' ? '你的消息' : '助手消息'
         });
+        // 访谈记录式角色刻度：只在助手消息左侧保留「助手」刻度；
+        // 用户消息靠右侧蓝块表达角色，不再在最左 gutter 放「你」（避免标签与内容脱节）。
+        if (role === 'assistant') {
+            article.appendChild(util.e('span', {
+                class: 'chat-msg__role',
+                'aria-hidden': 'true',
+                text: '助手'
+            }));
+        }
         var bubble = util.e('div', { class: 'chat-msg__bubble' });
         article.appendChild(bubble);
         var content = util.e('div', { class: 'chat-msg__content' });
@@ -274,9 +293,7 @@
             var body = details.querySelector('.chat-reasoning__body');
             renderMarkdownInto(body, message.reasoning);
             var summary = details.querySelector('.chat-reasoning__summary');
-            summary.textContent = message.reasoningTime != null
-                ? '已思考 (用时 ' + Number(message.reasoningTime).toFixed(1) + ' 秒)'
-                : '已思考';
+            summary.textContent = reasoningLabel(message);
             details.open = false;
         }
         bubble.appendChild(buildFooter(message));
@@ -411,30 +428,53 @@
      * 空状态 / 输入中提示 / 错误
      * ------------------------------------------------------------------ */
     var WELCOME_SUGGESTIONS = [
-        '帮我总结一段文字',
-        '写一个提取 JSON 字段的函数',
-        '解释一个技术概念'
+        '把这段会议纪要整理成待办',
+        '检查这份接口文档有没有歧义',
+        '为季度报告列一个提纲'
     ];
 
     function ensureEmptyEl() {
         if (emptyEl && emptyEl.parentNode) return emptyEl;
         emptyEl = util.e('div', { class: 'chat-welcome message', hidden: true });
         var inner = util.e('div', { class: 'chat-welcome__inner' });
-        inner.appendChild(util.e('div', { class: 'chat-welcome__icon' }, [icons.el('sparkles', 26)]));
-        inner.appendChild(util.e('p', { class: 'chat-welcome__title' }));
+
+        var head = util.e('div', { class: 'chat-welcome__head' });
+        head.appendChild(util.e('span', { class: 'chat-welcome__mark', 'aria-hidden': 'true' }, [icons.el('sparkles', 15)]));
+        head.appendChild(util.e('p', { class: 'chat-welcome__title' }));
+        inner.appendChild(head);
+
         inner.appendChild(util.e('p', {
             class: 'chat-welcome__hint',
-            text: '本地运行 · 按端点独立会话与系统提示词'
+            text: '对话与系统提示词按端点隔离，记录只保存在本机。'
         }));
-        var chips = util.e('div', { class: 'chat-welcome__chips' });
+
+        var suggestions = util.e('div', {
+            class: 'chat-suggest',
+            role: 'group',
+            'aria-label': '建议问题'
+        });
         WELCOME_SUGGESTIONS.forEach(function (prompt) {
-            var chip = util.e('button', { type: 'button', class: 'chat-chip', text: prompt });
-            chip.addEventListener('click', function () {
+            var item = util.e('button', {
+                type: 'button',
+                class: 'chat-suggest__item'
+            }, [
+                util.e('span', { class: 'chat-suggest__label', text: prompt }),
+                util.e('span', { class: 'chat-suggest__arrow', 'aria-hidden': 'true' }, [icons.el('chevron-right', 14)])
+            ]);
+            item.addEventListener('click', function () {
                 if (typeof options.onSuggestion === 'function') options.onSuggestion(prompt);
             });
-            chips.appendChild(chip);
+            suggestions.appendChild(item);
         });
-        inner.appendChild(chips);
+        inner.appendChild(suggestions);
+
+        var foot = util.e('div', { class: 'chat-welcome__foot' });
+        foot.appendChild(util.e('kbd', { class: 'nc-kbd', text: 'Enter' }));
+        foot.appendChild(util.e('span', { text: '发送' }));
+        foot.appendChild(util.e('kbd', { class: 'nc-kbd', text: 'Shift + Enter' }));
+        foot.appendChild(util.e('span', { text: '换行' }));
+        inner.appendChild(foot);
+
         emptyEl.appendChild(inner);
         listEl.appendChild(emptyEl);
         return emptyEl;
@@ -519,12 +559,10 @@
             renderMarkdownInto(body, message.reasoning);
             var summary = details.querySelector('.chat-reasoning__summary');
             if (message.reasoningStreaming) {
-                summary.textContent = '正在思考...';
+                summary.textContent = '思考中…';
                 details.open = true;
             } else {
-                summary.textContent = message.reasoningTime != null
-                    ? '已思考 (用时 ' + Number(message.reasoningTime).toFixed(1) + ' 秒)'
-                    : '已思考';
+                summary.textContent = reasoningLabel(message);
                 details.open = false;
             }
         } else {
@@ -539,6 +577,7 @@
         if (!container || !message || !message.id) return null;
         clearErrors();
         var article = createMessageElement(message);
+        article.classList.add('is-entering');
         dataById[message.id] = message;
         elById[message.id] = article;
         if (order.indexOf(message.id) === -1) order.push(message.id);
@@ -580,12 +619,10 @@
                 renderMarkdownInto(body, message.reasoning);
                 var summary = details.querySelector('.chat-reasoning__summary');
                 if (message.reasoningStreaming) {
-                    summary.textContent = '正在思考...';
+                    summary.textContent = '思考中…';
                     details.open = true;
                 } else {
-                    summary.textContent = message.reasoningTime != null
-                        ? '已思考 (用时 ' + Number(message.reasoningTime).toFixed(1) + ' 秒)'
-                        : '已思考';
+                    summary.textContent = reasoningLabel(message);
                     if (message.streaming !== true) details.open = false;
                 }
             } else {
@@ -682,7 +719,7 @@
         errorEls = [];
         container.classList.add('chat-scroll');
         container.textContent = '';
-        listEl = util.e('div', { class: 'chat-list', role: 'list' });
+        listEl = util.e('div', { class: 'chat-list' });
         container.appendChild(listEl);
 
         container.addEventListener('scroll', util.throttle(updateFollow, 90));

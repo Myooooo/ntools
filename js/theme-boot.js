@@ -29,4 +29,7 @@
     root.setAttribute('data-theme', theme);
     root.setAttribute('data-lite', lite);
     root.style.colorScheme = theme;
+
+    var themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute('content', theme === 'light' ? '#f4f5f7' : '#0b0e13');
 })();

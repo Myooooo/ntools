@@ -1,7 +1,8 @@
-# nTools · v3
+# nTools · v4
 
 > 本地优先的 AI 效率工作台：nChat 原生聊天 + 待办（Todo AI 识别）+ 二维码 / Markdown / 图片工具。
 > 纯静态 HTML，双击即用，无需服务器、无需安装、无需构建链；数据只留在本机浏览器。
+> v4 采用 **Precision Workbench** 设计方向：石墨/纸面、发丝分隔、仪器蓝强调、铜色时间语义；标准模式保留完整材质与动效，**Light（Lite）模式是它的性能减法**。
 > 目标环境：国企内网 / 信创 ARM / 麒麟 Linux / 奇安信可信浏览器（Chromium 102 基线）。
 >
 > **仓库**：[github.com/Myooooo/ntools](https://github.com/Myooooo/ntools)
@@ -58,9 +59,11 @@
 
 ### 设计与性能
 
-- 参考 Apple Design：克制的低饱和配色、细边框材质、清晰层级、圆角与柔和阴影；动效只做 transform/opacity，120–260ms。
-- 深色 / 浅色 / **Lite** 三态；Lite 与系统「减少动效」下关闭毛玻璃与动画。
+- **标准模式**：石墨/纸面配色 + 仪器蓝强调 + 铜色时间语义；发丝线代替卡片阴影；196px 工具导轨、记录式待办 ledger、访谈式聊天记录；小面积玻璃材质、环境光、克制的 tab/列表/弹层动效（仅 transform/opacity）。
+- **Light（Lite）性能模式**：建立在标准模式之上，**去掉高级动效与页面特效**（ambient/玻璃/阴影/渐变/位移动画全部关闭），保留布局、字阶、颜色语义与即时反馈；适合低配 ARM/软渲染/长时间办公。
+- 深色 / 浅色主题均基于同一套 `--nc-*` 令牌；系统「减少动效」自动降级。
 - 性能：聊天 tab 懒加载（首次切到 nChat 才初始化）；待办 keyed diff + 分钟对齐 ticker；500 条任务导入/渲染/搜索在 40ms 级。
+- 移动端原生基线：viewport-fit、theme-color 随主题、tap-highlight 透明、overscroll 抑制、粗指针输入 16px、safe-area、hover 能力门控。
 - 无障碍：语义按钮、aria 标签、模态焦点陷阱 + Esc、`:focus-visible` 焦点环、键盘全流程。
 
 ## 🚀 快速开始
@@ -117,6 +120,9 @@ ntools/
 ├─ docs/
 │  ├─ architecture.md         # 架构、分层、存储键、事件
 │  ├─ v3-implementation-report.md  # v3 交付与验收报告
+│  ├─ v4-design-report.md     # v4 设计改造与验收报告
+│  ├─ design-direction-v4.md  # 设计方向/令牌/动效/Light 定义
+│  ├─ design-break-audit.md   # 最坏数据/移动端原生审计
 │  ├─ v2-implementation-report.md  # v2 重构报告（历史）
 │  ├─ compatibility.md        # 兼容性结论与现场验证步骤
 │  ├─ dev-contract*.md        # 开发契约
@@ -124,7 +130,9 @@ ntools/
 ├─ tools/
 │  ├─ verify.js               # CDP 页面验收（报错/DOM/迁移/原生聊天/设置面板 + 截图）
 │  ├─ e2e.js                  # 回归交互（待办/聊天流式/安全/性能）
-│  ├─ e2e-features.js         # v3 新功能 E2E（端点/系统提示词/Todo AI/快捷时间）
+│  ├─ e2e-features.js         # 新功能 E2E（端点/系统提示词/Todo AI/快捷时间）
+│  ├─ break-ui.js             # 最坏数据 + 响应式 + 移动端原生审计
+│  ├─ design-shots.sh         # v4 设计截图归档（标准/浅色/Lite × 桌面/移动）
 │  ├─ run-tests.js            # 无头运行 tests.html
 │  ├─ screenshot.sh / shots-v3.sh  # 批量截图
 │  └─ check.sh                # 一键全量验收
@@ -138,7 +146,7 @@ ntools/
   - `ntools.llm.v1`：模型端点、聊天系统提示词、Todo AI 配置、下班时间；
   - `nchat-conversation.v2`：按端点隔离的聊天会话；
   - `ntools.todo.v2`：待办文档（含回收站、导入隔离区）；
-  - `nchat-theme` / `nchat-lite-mode`：主题与 Lite。
+  - `nchat-theme` / `nchat-lite-mode`：主题与 Light（Lite）性能模式。
 - 旧版 `nchat-settings` / `nchat-conversation` 会在首次启动时自动迁移，原键保留用于回滚。
 - 导出端点配置默认**不含 API Key**；勾选含密钥需二次确认。
 - 升级/迁移前自动备份；`file://` 下本地页面共享同一存储域（Chromium 行为），共用电脑建议用后清理。
@@ -154,7 +162,7 @@ ntools/
   - 若网关不支持，可改用内网 nginx 同源静态托管/反代。
 - 通知：`file://` 下 Notification 权限被拒 → 待办只用页内提醒；剪贴板可用并保留 `execCommand` 兜底。
 - 字体：内置 CJK 字体栈；无需外网字体。
-- Lite 模式：低配/软渲染机器建议开启；系统「减少动效」会自动适配。
+- Light（Lite）性能模式：低配/软渲染机器建议开启；系统「减少动效」会自动适配。
 
 ## 🧪 开发与验收
 
@@ -167,13 +175,13 @@ bash tools/check.sh
 # 分项
 node tools/verify.js          # 页面级（捕获报错 + DOM/迁移/原生聊天/设置面板 + 截图）
 node tools/e2e.js             # 回归交互（待办/聊天流式/安全/性能）
-node tools/e2e-features.js    # v3 功能（多端点/系统提示词/Todo AI/快捷时间）
+node tools/e2e-features.js    # 功能回归（多端点/系统提示词/Todo AI/快捷时间）
 node tools/run-tests.js       # tests.html 断言（无头）
 open tests.html               # 或双击运行
 ```
 
-- 最近验收结果：页面验收 26 项、回归 E2E 39 项、新功能 E2E 53 项、纯函数 81 项，全部通过。
-- 截图输出：`/tmp/nc-shots/`（基础三页）与 `/tmp/nc-shots/v3/`（聊天/设置/Todo AI/快捷时间）。
+- 最近验收结果：115+ PASS / 0 FAIL（verify 4 页、回归 E2E、功能 E2E 53 项、纯函数 81 项）；`break-ui` 32/32 组合 0 问题、移动端原生 12/12 PASS。
+- 截图输出：`/tmp/nc-shots/v4/design/`（30 张 v4 设计矩阵）、`/tmp/nc-shots/v4/break/`（最坏数据 25 张）、`/tmp/nc-shots/`（基础三页）。
 
 ## ❓ 常见问题
 
@@ -190,7 +198,15 @@ open tests.html               # 或双击运行
 
 ## 🗒️ 版本变更
 
-### v3（当前）
+### v4（当前）
+
+- 设计方向升级为 **Precision Workbench**：石墨/纸面 + 发丝线 + 仪器蓝/铜色语义；工具导轨、记录式待办 ledger、访谈式聊天、检查器设置面板全面重做。
+- 标准模式补全高级效果与细腻动效；**Light（Lite）模式 = 标准模式的减法**（去 ambient/玻璃/阴影/渐变/位移/缩放与不必要的动画），同一套令牌派生。
+- 移动端原生基线：viewport-fit、theme-color 动态、tap-highlight、overscroll、粗指针 16px、safe-area、77/77 hover 能力门控。
+- 可访问性对比度修正（浅色 text-3/accent/time/danger 等）、popover origin-aware、图标按钮尺寸修复。
+- 新增 `break-ui` / `design-shots` 工具与 32 组最坏数据审计；验收 118 PASS / 0 FAIL，纯函数 81/81。
+
+### v3
 
 - nChat 原生嵌入 nTools（移除 iframe），旧入口自动跳转；聊天 tab 懒加载。
 - 多模型端点提升为全局设置（增删改/测试/导入导出/密钥脱敏），聊天按端点独立系统提示词与会话。

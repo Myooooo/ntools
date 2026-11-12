@@ -48,7 +48,7 @@
         return [
             { id: 'profiles', title: '模型端点', desc: '聊天与 Todo AI 共用的 OpenAI 兼容端点', icon: 'layers' },
             { id: 'todo-ai', title: 'Todo AI', desc: '文本识别提示词与采样参数', icon: 'sparkles' },
-            { id: 'general', title: '通用', desc: '主题、Lite、上下班时间', icon: 'settings' },
+            { id: 'general', title: '通用', desc: '主题、Light 性能模式、上下班时间', icon: 'settings' },
             { id: 'data', title: '数据', desc: '导入导出与本地数据清理', icon: 'download' },
             { id: 'about', title: '关于', desc: '版本、兼容性与快捷键', icon: 'info' }
         ].concat(sections);
@@ -181,10 +181,13 @@
             main.appendChild(util.e('span', { class: 'sp-profile__dot' }));
             var text = util.e('span', { class: 'sp-profile__text' });
             text.appendChild(util.e('span', { class: 'sp-profile__name', text: profile.name }));
-            text.appendChild(util.e('span', {
-                class: 'sp-profile__meta',
-                text: (profile.modelId || '未填模型') + ' · ' + (profile.baseUrl || '未填地址') + (profile.apiKey ? '' : ' · 无密钥')
-            }));
+            var meta = util.e('span', { class: 'sp-profile__meta' });
+            meta.appendChild(util.e('span', { class: 'sp-profile__meta-item', text: profile.modelId || '未填模型' }));
+            meta.appendChild(util.e('span', { class: 'sp-profile__meta-item', text: profile.baseUrl || '未填地址' }));
+            if (!profile.apiKey) {
+                meta.appendChild(util.e('span', { class: 'sp-profile__meta-item is-warn', text: '未填写密钥' }));
+            }
+            text.appendChild(meta);
             main.appendChild(text);
             if (selected) main.appendChild(util.e('span', { class: 'nc-badge nc-badge--accent', text: '当前' }));
             main.addEventListener('click', function () {
@@ -458,8 +461,8 @@
         rows.appendChild(themeRow);
 
         var liteRow = util.e('div', { class: 'sp-row' });
-        liteRow.appendChild(util.e('span', { class: 'sp-row__label', text: 'Lite 模式' }));
-        liteRow.appendChild(switchField('关闭毛玻璃与动画', NC.theme.isLite(), function (checked) {
+        liteRow.appendChild(util.e('span', { class: 'sp-row__label', text: 'Light 模式' }));
+        liteRow.appendChild(switchField('关闭高级动效与页面特效，优先性能', NC.theme.isLite(), function (checked) {
             NC.theme.setLite(checked);
             renderSection('general');
         }));
@@ -487,7 +490,7 @@
         nowRow.appendChild(util.e('span', { class: 'sp-row__label', text: '本地存储' }));
         var storageText = NC.storage.memoryMode()
             ? '不可用（内存模式，关闭页面后数据丢失）'
-            : '可用 · ' + NC.storage.available;
+            : '可用（localStorage）';
         nowRow.appendChild(util.e('span', { class: 'sp-row__value' + (NC.storage.memoryMode() ? ' is-error' : ''), text: storageText }));
         rows.appendChild(nowRow);
 

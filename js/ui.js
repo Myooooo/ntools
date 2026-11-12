@@ -437,6 +437,11 @@
         menu.style.left = left + 'px';
         menu.style.top = top + 'px';
 
+        // 来源明确的缩放起点：菜单从触发按钮的方向展开，而不是从中心
+        var flipped = (top !== rect.bottom + 6);
+        var originX = (left + menuRect.width / 2) < (rect.left + rect.width / 2) ? 'left' : 'right';
+        menu.style.setProperty('--nc-menu-origin', originX + ' ' + (flipped ? 'bottom' : 'top'));
+
         setTimeout(function () {
             document.addEventListener('mousedown', onOutside, true);
             document.addEventListener('keydown', onKeydown, true);

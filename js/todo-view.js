@@ -681,7 +681,7 @@
             }
         });
         if (els.stats) {
-            els.stats.textContent = '今日完成 ' + counts.completedToday + ' · 本周完成 ' + counts.completedWeek;
+            els.stats.textContent = '今日完成 ' + counts.completedToday + '　本周完成 ' + counts.completedWeek;
         }
         if (els.subtitle) {
             var list = ui.listId ? findList(doc, ui.listId) : null;
@@ -689,7 +689,7 @@
             if (counts.overdue > 0) parts.push(counts.overdue + ' 项逾期');
             if (list) parts.unshift('清单：' + list.name);
             parts.push('今日完成 ' + counts.completedToday);
-            els.subtitle.textContent = parts.join(' · ');
+            els.subtitle.textContent = parts.join('　');
         }
     }
 
@@ -1011,6 +1011,12 @@
         syncEditingState(li, task, ui);
     }
 
+    var WEEK_SHORT = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+    /**
+     * 记录式 ledger 的左侧时间槽：bucket（今天/明天/周X/日期）+ clock（HH:mm）。
+     * 时间语义统一走铜色（.tone-* 控制），不再渲染秒级图标，保持列对齐。
+     */
     function updateDueLabel(dueEl, task, now) {
         if (!dueEl) return;
         if (!util.isFiniteNum(task.due)) {
@@ -1021,14 +1027,49 @@
         dueEl.hidden = false;
         var meta = util.dueMeta(task.due, now);
         var tone = meta.tone === 'overdue' ? 'overdue' : meta.tone;
+        var bucket;
+        var clock = meta.timeLabel || '';
+        var titleLabel = meta.label;
+
+        if (task.status === 'done') {
+            /* 完成项：时间槽改为「完成 + 完成时刻」，不再显示逾期语义 */
+            tone = 'done';
+            bucket = '完成';
+            clock = util.isFiniteNum(task.completedAt) ? util.formatTime(task.completedAt) : (meta.timeLabel || '');
+            titleLabel = '完成于 ' + util.formatDateTime(task.completedAt || Date.now());
+        } else if (task.status === 'canceled') {
+            tone = 'none';
+            bucket = '取消';
+            clock = meta.timeLabel || '';
+            titleLabel = '已取消 · 原截止 ' + meta.label;
+        } else if (tone === 'overdue') bucket = '逾期';
+        else if (tone === 'today') bucket = '今天';
+        else if (tone === 'tomorrow') bucket = '明天';
+        else if (tone === 'soon') bucket = WEEK_SHORT[new Date(task.due).getDay()];
+        else bucket = meta.dateLabel;
+
+        if (!bucket || !clock) {
+            dueEl.hidden = true;
+            dueEl.textContent = '';
+            return;
+        }
         dueEl.className = 'todo-item__due tone-' + tone;
-        var label = meta.tone === 'overdue' ? meta.label : meta.label;
+        var label = bucket + ' ' + clock;
+
         if (dueEl.__label !== label) {
             dueEl.__label = label;
             while (dueEl.firstChild) dueEl.removeChild(dueEl.firstChild);
-            dueEl.appendChild(icon('clock', 12));
-            dueEl.appendChild(document.createTextNode(label));
+            var bucketEl = document.createElement('span');
+            bucketEl.className = 'todo-item__due-bucket';
+            bucketEl.textContent = bucket;
+            var clockEl = document.createElement('span');
+            clockEl.className = 'todo-item__due-clock';
+            clockEl.textContent = clock;
+            dueEl.appendChild(bucketEl);
+            dueEl.appendChild(clockEl);
         }
+        attr(dueEl, 'title', titleLabel);
+        attr(dueEl, 'aria-label', (task.status === 'done' ? '完成时间：' : '截止时间：') + label);
     }
 
     /* ---- 行内编辑 ---- */
@@ -1291,7 +1332,7 @@
         if (util.isFiniteNum(task.updatedAt)) parts.push('更新 ' + util.formatDateTime(task.updatedAt));
         if (util.isFiniteNum(task.completedAt)) parts.push('完成 ' + util.formatDateTime(task.completedAt));
         if (task.deletedAt) parts.push('删除 ' + util.formatDateTime(task.deletedAt));
-        return parts.join(' · ');
+        return parts.join('　');
     }
 
     function renderDetail(ui, doc, reason) {

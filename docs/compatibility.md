@@ -114,6 +114,22 @@
 - **双击关联**：麒麟默认 `.html` 打开程序可能不是奇安信 → `xdg-mime query default text/html` 检查，必要时右键"打开方式"或设默认。
 - **离线**：项目零外网依赖（无 CDN/Web 字体/远程图标；SVG 内联、data URI），断网可用；仅 API URL 需内网可达。
 
+### 6.1 移动端原生基线（v4 已落地）
+
+| 项 | 实现 | 备注 |
+|---|---|---|
+| viewport | `width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content` | 不禁止缩放（无 `user-scalable=no`/`maximum-scale=1`） |
+| theme-color | 单 meta 由 `theme-boot.js`/`theme.js` 随主题更新（#0b0e13 ⇄ #f4f5f7） | 系统栏跟随深/浅色 |
+| 点击高亮 | `-webkit-tap-highlight-color: transparent` | 同时保留 `:active` 反馈 |
+| 滚动链 | `overscroll-behavior: none`（html/body）；内部滚动 `contain` | 防下拉刷新劫持 |
+| 触控 | `touch-action: manipulation`；控件 `user-select:none` + `-webkit-touch-callout:none` | 正文保持可选中 |
+| 输入缩放 | `@media (pointer:coarse)` 下输入 16px（todo/chat/md 实测） | 防 iOS 聚焦缩放 |
+| hover 门控 | 全部 `:hover` 包 `@media (hover:hover) and (pointer:fine)`（最终 CSS 77/77 条） | 防触屏 sticky hover |
+| 高度 | 应用壳 `100vh` 回退 + `100dvh` | Chromium 102 忽略 dvh，保留 vh 兜底 |
+| 安全区 | `env(safe-area-inset-*)` 14 处（顶部/底部 chrome、Sheet、toast） | 需 `viewport-fit=cover` 配合 |
+
+> 审计证据与截图见 `docs/design-break-audit.md` §5；headless 只能验证代码/计算样式，**sticky hover、软键盘遮挡、safe-area 实机观感需真机复核**。
+
 ## 7. 自检页使用（`compat-check.html`）
 
 1. 双击打开（或托管访问）；等待"检测中"全部完成。
@@ -155,6 +171,7 @@
 | V21 | Todo AI | 配置可用端点后，待办页「AI 识别」粘贴邮件 → 识别 | 填充标题/详情/截止/优先级/标签；**不自动创建**；编辑后手动创建成功 |
 | V22 | 快捷时间 | 创建面板点 6 个 chips；设置改下班时间后重测「下班前/明天前/周五前/月底前」 | 填入时间符合规则；改下班时间后重新计算生效 |
 | V23 | v3 自动化 | `node tools/e2e-features.js`；`tools/shots-v3.sh` | E2E 全绿且无 console.error；截图输出 `/tmp/nc-shots-v3/` |
+| V24 | 移动端原生 | 390 宽移动视口跑 `node tools/break-ui.js`；真机打开一次 | 无横向溢出；输入 ≥16px；hover 无粘滞；状态栏颜色/安全区正常 |
 
 > 未验证项不得对外宣称"已支持"；验收结果回填本表与 `compat-check.html` 报告。
 

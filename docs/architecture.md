@@ -1,8 +1,9 @@
-# nTools v3 架构说明
+# nTools v4 架构说明
 
 > 运行形态：纯静态、`file://` 双击可用、无构建链、无后端；经典 `<script>` + IIFE 命名空间（`window.NC`）。
 > 目标内核：奇安信可信浏览器 Chromium 102 / 麒麟 Linux ARM。
 > 入口：`ntools.html`（主应用，含原生 nChat）；`index.html` 仅做旧书签跳转。
+> 设计层：Precision Workbench；标准模式完整效果，Light（Lite）为同 token 的性能减法（见 docs/design-direction-v4.md）。
 
 ## 1. 分层
 
@@ -136,5 +137,6 @@ todo-time.computeQuickDue(kind, now, workEnd)
 - `tests.html`：81 项纯函数断言（core/storage/schema/sse/api/llm-store/todo-time/ai）；
 - `tools/verify.js`：页面级验收（含原生聊天无 iframe、设置面板、v1→v2 迁移、截图）；
 - `tools/e2e.js`：回归交互（待办/聊天流式/停止/安全/500 条性能）；
-- `tools/e2e-features.js`：v3 功能（多端点 CRUD、系统提示词、端点会话隔离、Todo AI、快捷时间）；
+- `tools/e2e-features.js`：功能回归（多端点 CRUD、系统提示词、端点会话隔离、Todo AI、快捷时间）；
+- `tools/break-ui.js`：最坏数据 / 320–1440 / 200% 缩放 / 移动端原生审计（v4，32 组 0 问题）；
 - 现场：`chrome://version`、CORS（Origin: null + OPTIONS）、存储持久性、中文 IME、下载/剪贴板策略。

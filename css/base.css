@@ -1,6 +1,7 @@
 /* ==========================================================================
- * base.css — Reset、排版、滚动条、焦点可见性、页面底色
+ * base.css — v4 Reset / 排版 / 移动端原生基线 / 焦点 / 滚动条 / 动效关键帧
  * 依赖 tokens.css
+ * 说明：移动端相关修复遵循 (hover)/(pointer) 能力查询，不猜测设备。
  * ========================================================================== */
 
 *,
@@ -13,6 +14,8 @@ html {
     height: 100%;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
 }
 
 body {
@@ -22,20 +25,32 @@ body {
     font-size: var(--nc-fs-base);
     line-height: var(--nc-lh-normal);
     color: var(--nc-text);
-    background: var(--nc-bg-page);
+    background-color: var(--nc-bg);
+    background-image: var(--nc-ambient);
     background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow: hidden;
-    transition: background-color var(--nc-dur) var(--nc-ease);
+    overscroll-behavior: none;
 }
 
+/* 标准模式的一次性工作台 reveal；Lite/reduced-motion 下自动关闭 */
+@keyframes nc-shell-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- 排版 ---------- */
 h1, h2, h3, h4, h5, h6 {
     margin: 0;
     font-weight: 600;
     line-height: var(--nc-lh-tight);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.018em;
 }
+
+h1 { font-size: var(--nc-fs-2xl); }
+h2 { font-size: var(--nc-fs-xl); letter-spacing: -0.012em; }
+h3 { font-size: var(--nc-fs-lg); letter-spacing: -0.008em; }
 
 p {
     margin: 0;
@@ -46,8 +61,12 @@ a {
     text-decoration: none;
 }
 
-a:hover {
-    color: var(--nc-accent-hover);
+code,
+kbd,
+pre,
+samp {
+    font-family: var(--nc-font-mono);
+    font-size: 0.92em;
 }
 
 button,
@@ -63,6 +82,21 @@ button {
     background: none;
     border: none;
     padding: 0;
+}
+
+/* 控件不是内容：不可选中、无长按菜单；正文保持可选中 */
+button,
+[role="button"],
+.nc-btn,
+.nc-chip,
+.nc-seg__btn,
+.todo-group,
+.chat-chip,
+.nc-kbd {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: manipulation;
 }
 
 img,
@@ -94,6 +128,7 @@ fieldset {
     color: var(--nc-text);
 }
 
+/* ---------- 焦点可见性 ---------- */
 :focus {
     outline: none;
 }
@@ -132,10 +167,70 @@ fieldset {
     background-clip: content-box;
 }
 
-/* ---------- 表单占位符 ---------- */
 ::placeholder {
     color: var(--nc-text-3);
     opacity: 1;
+}
+
+/* ---------- 移动端原生基线 ---------- */
+/* iOS 聚焦缩放：粗指针下输入至少 16px；桌面保持设计字号 */
+@media (pointer: coarse) {
+    /* 粗指针下输入一律 16px，避免 iOS/移动 Chromium 聚焦缩放；用 !important 压过类选择器 */
+    input,
+    textarea,
+    select,
+    .nc-input,
+    .nc-textarea,
+    .nc-select,
+    .chat-input,
+    .chat-composer .chat-input,
+    .md-editor,
+    .todo-item__edit,
+    .todo-search__input,
+    .sp-prompt,
+    [contenteditable="true"] {
+        font-size: 16px !important;
+    }
+
+    /* 触控目标：小号图标按钮补到 32px */
+    .nc-btn--icon.nc-btn--sm,
+    .nc-btn--icon {
+        min-width: 32px;
+        min-height: 32px;
+    }
+
+    .nc-btn--sm {
+        min-height: 32px;
+    }
+
+    .nc-menu__item {
+        min-height: 36px;
+    }
+}
+
+@media (hover: hover) and (pointer: fine) {
+    a:hover {
+        color: var(--nc-accent-hover);
+    }
+}
+
+/* 应用壳：移动端地址栏随动；Chromium 102 会忽略 dvh，保留 vh 兜底 */
+.nc-app,
+.tools-app,
+.chat-app {
+    height: 100vh;
+    height: 100dvh;
+}
+
+/* 安全区：只有真正贴边/浮动的 chrome 需要 padding，正文不重复处理 */
+@supports (padding: env(safe-area-inset-bottom)) {
+    .nc-safe-bottom {
+        padding-bottom: calc(var(--nc-space-4) + env(safe-area-inset-bottom, 0px));
+    }
+
+    .nc-safe-top {
+        padding-top: calc(var(--nc-space-4) + env(safe-area-inset-top, 0px));
+    }
 }
 
 /* ---------- 通用工具类 ---------- */
@@ -172,6 +267,7 @@ fieldset {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .nc-clamp-2 {
@@ -187,24 +283,36 @@ fieldset {
     -webkit-overflow-scrolling: touch;
 }
 
-/* ---------- 动画关键帧（统一节奏） ---------- */
+.nc-num,
+.nc-time,
+.nc-count {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: var(--nc-num-feat);
+}
+
+/* ---------- 动效关键帧（标准模式；Lite/reduced-motion 自动停用） ---------- */
 @keyframes nc-fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
 }
 
-@keyframes nc-fade-up {
-    from { opacity: 0; transform: translateY(6px); }
+@keyframes nc-rise-in {
+    from { opacity: 0; transform: translateY(var(--nc-enter-y, 6px)); }
     to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes nc-pop-in {
-    from { opacity: 0; transform: scale(0.96) translateY(6px); }
+    from { opacity: 0; transform: scale(var(--nc-enter-scale, 0.985)) translateY(var(--nc-enter-y, 6px)); }
     to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
+@keyframes nc-sheet-in {
+    from { opacity: 0; transform: translateX(12px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes nc-slide-up {
-    from { opacity: 0; transform: translateY(14px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
@@ -217,14 +325,18 @@ fieldset {
     to { background-position: -200% 0; }
 }
 
+@keyframes nc-breathe {
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 1; }
+}
+
 .nc-anim-in {
-    animation: nc-fade-up var(--nc-dur-slow) var(--nc-ease-out) both;
+    animation: nc-rise-in var(--nc-dur-slow) var(--nc-ease-out) both;
 }
 
 /* ---------- 页面骨架 ---------- */
 .nc-app {
     display: flex;
-    height: 100vh;
     overflow: hidden;
 }
 
@@ -240,25 +352,32 @@ fieldset {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
-/* 页面内标题 */
 .nc-page-title {
-    font-size: var(--nc-fs-xl);
+    font-size: var(--nc-fs-2xl);
     font-weight: 650;
     letter-spacing: -0.02em;
 }
 
 .nc-page-subtitle {
-    margin-top: 2px;
+    margin-top: 3px;
     font-size: var(--nc-fs-sm);
     color: var(--nc-text-3);
+    letter-spacing: 0.002em;
 }
 
-/* 分隔线 */
 .nc-hr {
     height: 1px;
     background: var(--nc-border);
     border: 0;
     margin: var(--nc-space-4) 0;
+}
+
+/* 工作台首次揭示：只作用于应用壳，不做逐段 fade-up */
+@media (prefers-reduced-motion: no-preference) {
+    html:not([data-lite="true"]) .tools-app {
+        animation: nc-shell-in 260ms var(--nc-ease-out) both;
+    }
 }

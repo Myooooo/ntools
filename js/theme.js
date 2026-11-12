@@ -28,6 +28,8 @@
         var next = theme === 'light' ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
         document.documentElement.style.colorScheme = next;
+        var themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) themeMeta.setAttribute('content', next === 'light' ? '#f4f5f7' : '#0b0e13');
         events.emit('theme:changed', { theme: next });
         return next;
     }
