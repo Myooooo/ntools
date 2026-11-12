@@ -1,1082 +1,194 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const getEl = id => document.getElementById(id);
-    const appTitle = getEl('app-title');
-    const titleWrapper = getEl('title-wrapper');
-    const settingsPanel = getEl('settings-panel'), toggleSettingsBtn = getEl('toggle-settings-btn');
-    // Settings Inputs
-    const configSelect = getEl('config-select');
-    const addConfigBtn = getEl('add-config-btn');
-    const delConfigBtn = getEl('delete-config-btn');
-    const configNameInput = getEl('config-name');
-    const systemPromptInput = getEl('system-prompt'), apiUrlInput = getEl('api-url'), apiKeyInput = getEl('api-key'), modelIdInput = getEl('model-id');
-    const saveSettingsBtn = getEl('save-settings-btn'), saveStatus = getEl('save-status');
-    // Advanced Settings Inputs
-    const advancedToggleBtn = getEl('advanced-toggle-btn');
-    const advancedSettingsContainer = getEl('advanced-settings-container');
-    const tempSlider = getEl('temp-slider'), tempInput = getEl('temp-input');
-    const toppSlider = getEl('topp-slider'), toppInput = getEl('topp-input');
-    const clearChatBtn = getEl('clear-chat-btn'), chatContainer = getEl('chat-container');
-    const userInput = getEl('user-input'), sendBtn = getEl('send-btn');
-    const uploadBtn = getEl('upload-btn'), imageInput = getEl('image-input'), imagePreviewContainer = getEl('image-preview-container');
-    const imageLightbox = getEl('image-lightbox'), lightboxImg = getEl('lightbox-img'), lightboxClose = getEl('lightbox-close');
-    const menuBtn = getEl('menu-btn');
-    const dropdownMenu = getEl('main-menu');
-    const configDropdownMenu = getEl('config-dropdown-menu');
-    const exportSettingsBtn = getEl('export-settings-btn');
-    const exportConversationBtn = getEl('export-conversation-btn');
-    const backupConversationBtn = getEl('backup-conversation-btn');
-    const restoreConversationBtn = getEl('restore-conversation-btn');
-    const importSettingsBtn = getEl('import-settings-btn');
-    const importSettingsInput = getEl('import-settings-input');
-    const restoreConversationInput = document.createElement('input');
-    restoreConversationInput.type = 'file';
-    restoreConversationInput.hidden = true;
-    restoreConversationInput.accept = '.json';
-    document.body.appendChild(restoreConversationInput);
-    const customPromptOverlay = getEl('custom-prompt-overlay');
-    const customPromptTitle = getEl('custom-prompt-title');
-    const customPromptMessage = getEl('custom-prompt-message');
-    const customPromptConfirm = getEl('custom-prompt-confirm');
-    const customPromptCancel = getEl('custom-prompt-cancel');
-    const editModalOverlay = getEl('edit-modal-overlay');
-    const editModalTextarea = getEl('edit-modal-textarea');
-    const editModalSave = getEl('edit-modal-save');
-    const editModalCancel = getEl('edit-modal-cancel');
-    const inputAreaContainer = getEl('input-area-container');
-    const themeToggleBtn = getEl('theme-toggle-btn');
-    const liteModeBtn = getEl('lite-mode-btn');
+/**
+ * app.js — 聊天页组合根：初始化 stores/views/controller，wire 菜单/主题/存储提示，首屏渲染。
+ * 业务编排见 js/chat-controller.js（NC.chat.controller）。
+ */
+(function (global) {
+    'use strict';
 
-    let conversationHistory = [];
-    let configList = [];
-    let currentConfigId = null;
-    let currentSettings = {};
-    let stagedImages = [];
-    let isAssistantResponding = false;
-    let currentEditingMessageId = null;
-    let abortController = null; // For aborting requests
-    const MAX_IMAGES = 5;
-    const generateId = () => Math.random().toString(36).substr(2, 9);
-    const CONVERSATION_STORAGE_KEY = 'nchat-conversation';
+    var NC = global.NC;
+    var events = NC.events;
+    var ui = NC.ui;
 
-    // --- Theme Management ---
-    const initTheme = () => {
-        const storedTheme = localStorage.getItem('nchat-theme');
-        if (storedTheme) {
-            document.documentElement.setAttribute('data-theme', storedTheme);
-            updateThemeBtnText(storedTheme);
-        } else {
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const defaultTheme = prefersDark ? 'dark' : 'light';
-            document.documentElement.setAttribute('data-theme', defaultTheme);
-            updateThemeBtnText(defaultTheme);
-        }
-    };
+    var settings;
+    var conversation;
+    var messages;
+    var composer;
+    var settingsView;
+    var controller;
 
-    const toggleTheme = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('nchat-theme', newTheme);
-        updateThemeBtnText(newTheme);
-        dropdownMenu.classList.remove('show');
-    };
+    var WELCOME = '你好，有什么可以帮你？';
 
-    const updateThemeBtnText = (theme) => {
-        themeToggleBtn.textContent = theme === 'light' ? '深色模式' : '浅色模式';
-    };
+    NC.util.ready(init);
 
-    themeToggleBtn.addEventListener('click', toggleTheme);
-    initTheme();
+    function init() {
+        NC.compat.bootstrap();
+        ui.installGlobalErrorHandlers();
+        NC.theme.init();
 
-    // --- Lite Mode Management ---
-    const initLiteMode = () => {
-        const storedLiteMode = localStorage.getItem('nchat-lite-mode');
-        const isLiteMode = storedLiteMode === 'true';
-        document.documentElement.setAttribute('data-lite', isLiteMode);
-        updateLiteModeBtnText(isLiteMode);
-    };
+        settings = NC.store.settings;
+        conversation = NC.store.conversation;
+        controller = NC.chat.controller;
+        settings.init();
+        conversation.init(settings.getState().currentId);
 
-    const toggleLiteMode = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const currentLite = document.documentElement.getAttribute('data-lite');
-        const isLiteMode = currentLite === 'true';
-        const newLiteMode = !isLiteMode;
-        document.documentElement.setAttribute('data-lite', newLiteMode);
-        localStorage.setItem('nchat-lite-mode', newLiteMode);
-        updateLiteModeBtnText(newLiteMode);
-        dropdownMenu.classList.remove('show');
-    };
+        messages = NC.view.messages;
+        composer = NC.view.composer;
+        settingsView = NC.view.settings;
 
-    const updateLiteModeBtnText = (isLiteMode) => {
-        liteModeBtn.textContent = isLiteMode ? '完整模式' : 'Lite 模式';
-    };
-
-    liteModeBtn.addEventListener('click', toggleLiteMode);
-    initLiteMode();
-
-    // --- Helper Functions ---
-    const syncInputs = (range, number) => {
-        range.addEventListener('input', () => number.value = range.value);
-        number.addEventListener('input', () => range.value = number.value);
-    };
-    syncInputs(tempSlider, tempInput);
-    syncInputs(toppSlider, toppInput);
-
-    advancedToggleBtn.addEventListener('click', () => {
-        const isExpanded = advancedSettingsContainer.classList.toggle('show');
-        advancedToggleBtn.classList.toggle('expanded', isExpanded);
-        currentSettings.enableAdvanced = isExpanded;
-        if (isExpanded) {
-            currentSettings.temperature = parseFloat(tempInput.value);
-            currentSettings.top_p = parseFloat(toppInput.value);
-        }
-    });
-
-    const copyTextToClipboard = (text) => {
-        if (navigator.clipboard && window.isSecureContext) {
-            return navigator.clipboard.writeText(text);
-        } else {
-            return new Promise((resolve, reject) => {
-                const textArea = document.createElement("textarea");
-                textArea.value = text;
-                textArea.style.position = "fixed";
-                textArea.style.top = "-9999px";
-                textArea.style.left = "-9999px";
-                document.body.appendChild(textArea);
-                textArea.focus();
-                textArea.select();
-                try {
-                    const successful = document.execCommand('copy');
-                    if (successful) resolve(); else reject(new Error('Fallback: Unable to copy'));
-                } catch (err) { reject(err); } finally { document.body.removeChild(textArea); }
-            });
-        }
-    };
-
-    const adjustChatPadding = () => {
-        const inputAreaHeight = inputAreaContainer.offsetHeight;
-        chatContainer.style.paddingBottom = `${inputAreaHeight + 10}px`;
-    };
-    try {
-        const resizeObserver = new ResizeObserver(adjustChatPadding);
-        resizeObserver.observe(inputAreaContainer);
-    } catch (error) { console.warn("ResizeObserver not supported."); }
-    adjustChatPadding();
-
-    const showCustomPrompt = (title, message, options = {}) => {
-        return new Promise(resolve => {
-            customPromptTitle.textContent = title;
-            customPromptMessage.innerHTML = message;
-            const { isConfirm = false, confirmText = '确认', cancelText = '取消', isDestructive = false } = options;
-            customPromptConfirm.textContent = confirmText;
-            customPromptCancel.textContent = cancelText;
-            customPromptCancel.style.display = isConfirm ? 'block' : 'none';
-            customPromptConfirm.classList.toggle('btn-destructive', isDestructive);
-            customPromptConfirm.classList.toggle('btn-primary', !isDestructive);
-            customPromptOverlay.classList.add('show');
-            const closePrompt = (value) => {
-                customPromptOverlay.classList.remove('show');
-                resolve(value);
-            };
-            customPromptConfirm.onclick = () => closePrompt(true);
-            customPromptCancel.onclick = () => closePrompt(false);
-            customPromptOverlay.onclick = (e) => { if (e.target === customPromptOverlay) closePrompt(false); };
+        controller.init({ settings, conversation, messages, composer, settingsView });
+        messages.init(document.getElementById('chat-container'), {
+            onCopy: function (text) { return NC.util.copyText(text); },
+            onRegenerate: controller.regenerate,
+            onEdit: controller.editMessage,
+            onDelete: controller.deleteMessage,
+            onFollowChange: function (nearBottom) { controller.setJumpVisible(nearBottom); },
+            onSuggestion: function (prompt) { composer.setValue(prompt); },
+            onError: function (message) { ui.toast(message, { type: 'error' }); }
         });
-    };
-
-    // --- Config Management ---
-    const createDefaultConfig = () => ({
-        id: generateId(),
-        name: '默认配置',
-        apiUrl: 'https://api.openai.com/v1',
-        apiKey: '',
-        modelId: 'gpt-4o',
-        systemPrompt: '',
-        enableAdvanced: false,
-        temperature: 1.0,
-        top_p: 0.95
-    });
-
-    const renderConfigSelect = () => {
-        configSelect.innerHTML = '';
-        configList.forEach(config => {
-            const option = document.createElement('option');
-            option.value = config.id;
-            option.textContent = config.name || '(未命名配置)';
-            configSelect.appendChild(option);
+        composer.init({
+            onSend: controller.send,
+            onStop: controller.stop,
+            onError: function (message) { ui.toast(message, { type: 'error' }); },
+            onPreviewImage: function (src) { messages.openLightbox(src, '待发送图片'); }
         });
-        if (currentConfigId) configSelect.value = currentConfigId;
-    };
-
-    const updateTitle = (name) => {
-        appTitle.textContent = `nChat | ${name || '未命名配置'}`;
-    };
-
-    const loadConfigToUI = (id) => {
-        const config = configList.find(c => c.id === id);
-        if (!config) return;
-        currentConfigId = id;
-        currentSettings = { ...config };
-        updateTitle(config.name);
-        
-        configNameInput.value = config.name || '';
-        apiUrlInput.value = config.apiUrl || '';
-        apiKeyInput.value = config.apiKey || '';
-        modelIdInput.value = config.modelId || '';
-        systemPromptInput.value = config.systemPrompt || '';
-        tempInput.value = config.temperature ?? 1.0;
-        tempSlider.value = config.temperature ?? 1.0;
-        toppInput.value = config.top_p ?? 0.95;
-        toppSlider.value = config.top_p ?? 0.95;
-
-        if (config.enableAdvanced) {
-            advancedSettingsContainer.classList.add('show');
-            advancedToggleBtn.classList.add('expanded');
-        } else {
-            advancedSettingsContainer.classList.remove('show');
-            advancedToggleBtn.classList.remove('expanded');
-        }
-    };
-
-    const loadSettings = () => {
-        const savedSettings = localStorage.getItem('nchat-settings');
-        let loadedData = null;
-        try { if (savedSettings) loadedData = JSON.parse(savedSettings); } catch (e) { console.error('Settings parse error', e); }
-        
-        if (!loadedData) {
-            const def = createDefaultConfig();
-            configList = [def];
-            currentConfigId = def.id;
-        } else if (!loadedData.configs) {
-            const newConfig = createDefaultConfig();
-            newConfig.name = '旧配置备份';
-            newConfig.apiUrl = loadedData.apiUrl || newConfig.apiUrl;
-            newConfig.apiKey = loadedData.apiKey || '';
-            newConfig.modelId = loadedData.modelId || newConfig.modelId;
-            newConfig.systemPrompt = loadedData.systemPrompt || '';
-            configList = [newConfig];
-            currentConfigId = newConfig.id;
-            saveSettings();
-        } else {
-            configList = loadedData.configs;
-            currentConfigId = loadedData.currentId;
-            if (!configList.find(c => c.id === currentConfigId)) {
-                currentConfigId = configList[0]?.id || createDefaultConfig().id;
-                if (configList.length === 0) configList = [createDefaultConfig()];
-            }
-        }
-        renderConfigSelect();
-        loadConfigToUI(currentConfigId);
-    };
-
-    const saveSettings = () => {
-        const updatedConfig = {
-            id: currentConfigId,
-            name: configNameInput.value.trim() || '未命名配置',
-            apiUrl: apiUrlInput.value.trim(),
-            apiKey: apiKeyInput.value.trim(),
-            modelId: modelIdInput.value.trim(),
-            systemPrompt: systemPromptInput.value.trim(),
-            enableAdvanced: advancedSettingsContainer.classList.contains('show'),
-            temperature: parseFloat(tempInput.value),
-            top_p: parseFloat(toppInput.value)
-        };
-        const idx = configList.findIndex(c => c.id === currentConfigId);
-        if (idx !== -1) configList[idx] = updatedConfig; else configList.push(updatedConfig);
-        
-        currentSettings = updatedConfig;
-        renderConfigSelect();
-        updateTitle(updatedConfig.name);
-        
-        localStorage.setItem('nchat-settings', JSON.stringify({
-            currentId: currentConfigId,
-            configs: configList
-        }));
-        
-        saveStatus.style.opacity = '1';
-        setTimeout(() => { saveStatus.style.opacity = '0'; }, 2000);
-    };
-
-    const handleAddConfig = () => {
-        const newConfig = createDefaultConfig();
-        newConfig.name = '新配置 ' + (configList.length + 1);
-        configList.push(newConfig);
-        renderConfigSelect();
-        configSelect.value = newConfig.id;
-        loadConfigToUI(newConfig.id);
-    };
-
-    const handleDeleteConfig = async () => {
-        if (configList.length <= 1) {
-            showCustomPrompt('无法删除', '至少保留一个配置。');
-            return;
-        }
-        const confirmed = await showCustomPrompt('删除配置', '确定要删除当前选中的配置吗？', { isConfirm: true, isDestructive: true });
-        if (confirmed) {
-            configList = configList.filter(c => c.id !== currentConfigId);
-            currentConfigId = configList[0].id;
-            renderConfigSelect();
-            loadConfigToUI(currentConfigId);
-            saveSettings();
-        }
-    };
-
-    configSelect.addEventListener('change', (e) => {
-        loadConfigToUI(e.target.value);
-        saveSettings();
-    });
-    addConfigBtn.addEventListener('click', handleAddConfig);
-    delConfigBtn.addEventListener('click', handleDeleteConfig);
-
-    // --- Title Click Quick Switch ---
-    const populateConfigDropdown = () => {
-        configDropdownMenu.innerHTML = '';
-        configList.forEach(config => {
-            const item = document.createElement('div');
-            item.className = 'dropdown-item';
-            if (config.id === currentConfigId) item.classList.add('active');
-            item.textContent = config.name || '(未命名配置)';
-            item.onclick = (e) => {
-                e.stopPropagation();
-                configSelect.value = config.id;
-                loadConfigToUI(config.id);
-                saveSettings();
-                configDropdownMenu.classList.remove('show');
-            };
-            configDropdownMenu.appendChild(item);
-        });
-    };
-
-    titleWrapper.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (configDropdownMenu.classList.contains('show')) {
-            configDropdownMenu.classList.remove('show');
-        } else {
-            dropdownMenu.classList.remove('show');
-            populateConfigDropdown();
-            configDropdownMenu.classList.add('show');
-        }
-    });
-
-    // --- Chat Logic ---
-    const saveConversation = () => {
-        localStorage.setItem(CONVERSATION_STORAGE_KEY, JSON.stringify(conversationHistory));
-    };
-
-    const loadConversation = () => {
-        const saved = localStorage.getItem(CONVERSATION_STORAGE_KEY);
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    conversationHistory = parsed;
-                    chatContainer.innerHTML = '';
-                    conversationHistory.forEach(msg => {
-                        if (msg.role === 'user') {
-                            addMessage({ id: msg.id, role: 'user', content: renderUserMessageHtml(msg.content), isHtml: true });
-                        } else if (msg.role === 'assistant') {
-                            addMessage({ id: msg.id, role: 'assistant', content: msg.content, reasoning: msg.reasoning, stats: msg.stats });
-                        }
-                    });
-                    return true;
-                }
-            } catch (e) {
-                console.error('Failed to load conversation:', e);
-            }
-        }
-        return false;
-    };
-
-    const clearConversation = async () => {
-        if (isAssistantResponding) return;
-        const confirmed = await showCustomPrompt('清除对话', '确定要清除所有对话记录吗？', { isConfirm: true, confirmText: '清除', isDestructive: true });
-        if (confirmed) {
-            conversationHistory = []; chatContainer.innerHTML = '';
-            localStorage.removeItem(CONVERSATION_STORAGE_KEY);
-            addMessage({ role: 'assistant', content: '新对话已开始。' });
-        }
-    };
-
-    const removeErrorMessages = () => {
-        const errorMessages = chatContainer.querySelectorAll('.message.error');
-        errorMessages.forEach(el => {
-            const id = el.dataset.id;
-            if (id) {
-                conversationHistory = conversationHistory.filter(m => m.id !== id);
-            }
-            el.remove();
-        });
-    };
-
-    const autoAdjustTextareaHeight = (el) => {
-        el.style.height = 'auto';
-        el.style.height = (el.scrollHeight) + 'px';
-    };
-
-    const handleDeleteMessage = id => {
-        conversationHistory = conversationHistory.filter(msg => msg.id !== id);
-        document.querySelector(`[data-id='${id}']`)?.remove();
-    };
-
-    const truncateConversation = (startIndex) => {
-        const messagesToRemove = conversationHistory.slice(startIndex);
-        messagesToRemove.forEach(msg => { document.querySelector(`[data-id='${msg.id}']`)?.remove(); });
-        conversationHistory.splice(startIndex);
-    };
-
-    const renderMessageContent = (content) => {
-        marked.setOptions({ breaks: true, gfm: true });
-        return DOMPurify.sanitize(marked.parse(content), { ADD_ATTR: ['target'] });
-    };
-
-    const renderUserMessageHtml = (contentArrayOrString) => {
-        let text = '', images = [];
-        if (Array.isArray(contentArrayOrString)) {
-            const textPart = contentArrayOrString.find(p => p.type === 'text');
-            text = textPart ? textPart.text : '';
-            images = contentArrayOrString.filter(p => p.type === 'image_url').map(img => img.image_url.url);
-        } else {
-            text = contentArrayOrString || '';
-        }
-        let html = text ? `<p>${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>` : '';
-        if (images.length > 0) {
-            html += `<div class="message-images">${images.map(url => ` <img src="${url}">`).join('')}</div>`;
-        }
-        return html;
-    };
-
-    const enterEditMode = (messageElement, id) => {
-        if (isAssistantResponding) return;
-        const message = conversationHistory.find(m => m.id === id);
-        if (!message) return;
-        currentEditingMessageId = id;
-        let originalText = '';
-        if (message.role === 'user') {
-            const textPart = message.content.find(p => p.type === 'text');
-            originalText = textPart ? textPart.text : '';
-        } else {
-            originalText = message.content;
-        }
-        editModalTextarea.value = originalText;
-        editModalOverlay.classList.add('show');
-        editModalTextarea.focus();
-        autoAdjustTextareaHeight(editModalTextarea);
-    };
-
-    const saveEdit = (id, newContent) => {
-        const editIndex = conversationHistory.findIndex(msg => msg.id === id);
-        if (editIndex === -1) return;
-        const messageToUpdate = conversationHistory[editIndex];
-        
-        truncateConversation(editIndex + 1);
-
-        if (messageToUpdate.role === 'user') {
-            const textPart = messageToUpdate.content.find(p => p.type === 'text');
-            if (textPart) textPart.text = newContent; else messageToUpdate.content.unshift({ type: 'text', text: newContent });
-            
-            document.querySelector(`[data-id='${id}'] .message-content`).innerHTML = renderUserMessageHtml(messageToUpdate.content);
-            fetchAssistantResponse();
-        } else {
-             // Should generally not happen as we regenerate assistant, but support direct edit
-             messageToUpdate.content = newContent;
-             document.querySelector(`[data-id='${id}'] .message-content`).innerHTML = renderMessageContent(newContent);
-        }
-    };
-    
-    const handleRegenerate = async (id) => {
-        if (isAssistantResponding) return;
-        removeErrorMessages(); // Remove error messages when regenerating
-        const msgIndex = conversationHistory.findIndex(msg => msg.id === id);
-        if (msgIndex === -1) return;
-        const targetMsg = conversationHistory[msgIndex];
-
-        const truncateIndex = targetMsg.role === 'user' ? msgIndex + 1 : msgIndex;
-        truncateConversation(truncateIndex);
-        fetchAssistantResponse();
-    };
-
-    const addMessage = (message) => {
-        const { id, role, content, isHtml, stats, reasoning } = message;
-        const messageElement = document.createElement('div');
-        messageElement.classList.add('message', role);
-        if (id) messageElement.dataset.id = id;
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'message-content';
-
-        // If there's reasoning content, prepend it as a details element
-        if (reasoning) {
-            const details = document.createElement('details');
-            details.innerHTML = `<summary>已思考</summary><div class="reasoning-wrapper"><div class="reasoning-content"></div></div>`;
-            details.querySelector('.reasoning-content').innerHTML = renderMessageContent(reasoning);
-            contentDiv.appendChild(details);
-        }
-
-        const contentWrapper = document.createElement('div');
-        contentWrapper.innerHTML = isHtml ? content : renderMessageContent(content);
-        contentDiv.appendChild(contentWrapper);
-        messageElement.appendChild(contentDiv);
-
-        if (id && (role === 'user' || role === 'assistant')) {
-            const footer = document.createElement('div');
-            footer.className = 'message-footer';
-
-            // Details Button (only for assistant messages with stats)
-            if (role === 'assistant' && stats) {
-                const detailsBtn = document.createElement('button');
-                detailsBtn.className = 'footer-btn details-btn';
-                detailsBtn.title = '详情';
-                detailsBtn.innerHTML = `
-                    <svg viewBox="0 0 24 24"><path d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM11 9h2V7h-2v2z"/></svg>
-                    <div class="message-stats-tooltip">
-                        <div class="stat-row"><span class="stat-label">Prompt:</span><span class="stat-value">${stats.contextLength || 0} tokens</span></div>
-                        <div class="stat-row"><span class="stat-label">Output:</span><span class="stat-value">${stats.outputLength || 0} tokens</span></div>
-                        <div class="stat-row"><span class="stat-label">Total:</span><span class="stat-value">${stats.totalLength || (stats.contextLength || 0) + (stats.outputLength || 0)} tokens</span></div>
-                        <div class="stat-row"><span class="stat-label">Rate:</span><span class="stat-value">${stats.outputRate || 0} t/s</span></div>
-                        ${stats.outputTime ? `<div class="stat-row"><span class="stat-label">Time:</span><span class="stat-value">${stats.outputTime}s</span></div>` : ''}
-                    </div>
-                `;
-                footer.appendChild(detailsBtn);
-            }
-
-            // Copy Button
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'footer-btn';
-            copyBtn.title = '复制';
-            const copyIconDefault = `<svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"></path></svg>`;
-            copyBtn.innerHTML = copyIconDefault;
-            copyBtn.onclick = () => {
-                const c = messageElement.querySelector('.message-content').cloneNode(true);
-                c.querySelector('details')?.remove();
-                copyTextToClipboard(c.innerText.trim()).then(() => {
-                    copyBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"></path></svg>`;
-                    setTimeout(() => { copyBtn.innerHTML = copyIconDefault; }, 2000);
-                });
-            };
-
-            // Regenerate Button
-            const regenBtn = document.createElement('button');
-            regenBtn.className = 'footer-btn';
-            regenBtn.title = '重新生成';
-            regenBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97-.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>`;
-            regenBtn.onclick = () => handleRegenerate(id);
-
-            // Edit Button
-            const editBtn = document.createElement('button');
-            editBtn.className = 'footer-btn';
-            editBtn.title = '编辑';
-            editBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg>`;
-            editBtn.onclick = () => enterEditMode(messageElement, id);
-
-            // Delete Button
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'footer-btn delete-btn';
-            deleteBtn.title = '删除';
-            deleteBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg>`;
-            deleteBtn.onclick = async () => {
-                const confirmed = await showCustomPrompt('删除消息', '确定删除？', { isConfirm: true, confirmText: '删除', isDestructive: true });
-                if (confirmed) handleDeleteMessage(id);
-            };
-
-            footer.appendChild(copyBtn);
-            footer.appendChild(regenBtn);
-            footer.appendChild(editBtn);
-            footer.appendChild(deleteBtn);
-            messageElement.appendChild(footer);
-        }
-        chatContainer.appendChild(messageElement);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-
-        // If adding message while loading, disable buttons immediately
-        if(isAssistantResponding) {
-             messageElement.querySelectorAll('.footer-btn').forEach(btn => { btn.disabled = true; });
-        }
-
-        // Auto-save conversation after adding a message
-        saveConversation();
-
-        return messageElement;
-    };
-
-    const renderPreviews = () => {
-        imagePreviewContainer.innerHTML = '';
-        stagedImages.forEach(image => {
-            const item = document.createElement('div');
-            item.className = 'image-preview-item';
-            item.innerHTML = `<img src="${image.dataUrl}" alt="Image preview"><button class="remove-image-btn" data-id="${image.id}">&times;</button>`;
-            imagePreviewContainer.appendChild(item);
-        });
-    };
-
-    imagePreviewContainer.addEventListener('click', e => {
-        if (e.target.classList.contains('remove-image-btn')) {
-            stagedImages = stagedImages.filter(img => String(img.id) !== String(e.target.dataset.id));
-            renderPreviews();
-        }
-    });
-
-    const compressImage = (file, maxSize = 1024, quality = 0.8) => {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    let { width, height } = img;
-                    if (width > maxSize || height > maxSize) {
-                        if (width > height) {
-                            height = Math.round((height / width) * maxSize);
-                            width = maxSize;
-                        } else {
-                            width = Math.round((width / height) * maxSize);
-                            height = maxSize;
-                        }
-                    }
-                    const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    resolve(canvas.toDataURL('image/jpeg', quality));
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        });
-    };
-
-    uploadBtn.addEventListener('click', () => imageInput.click());
-    imageInput.addEventListener('change', async e => {
-        const files = Array.from(e.target.files);
-        if (stagedImages.length + files.length > MAX_IMAGES) {
-            showCustomPrompt('超限', `最多 ${MAX_IMAGES} 张图片。`);
-            files.splice(MAX_IMAGES - stagedImages.length);
-        }
-        for (const file of files) {
-            if (!file.type.startsWith('image/')) continue;
-            const compressedDataUrl = await compressImage(file);
-            stagedImages.push({ id: Date.now() + Math.random(), dataUrl: compressedDataUrl });
-        }
-        renderPreviews();
-        imageInput.value = '';
-    });
-    
-    const setInteractionState = (isProcessing) => {
-        isAssistantResponding = isProcessing;
-        // Buttons
-        userInput.disabled = isProcessing;
-        uploadBtn.disabled = isProcessing;
-        // Chat history buttons
-        document.querySelectorAll('.footer-btn').forEach(btn => { btn.disabled = isProcessing; });
-        
-        const sendIcon = sendBtn.querySelector('.send-icon');
-        const stopIcon = sendBtn.querySelector('.stop-icon');
-        
-        if (isProcessing) {
-            sendBtn.classList.add('stop-mode');
-            sendBtn.title = "停止生成";
-            sendIcon.style.display = 'none';
-            stopIcon.style.display = 'block';
-        } else {
-            sendBtn.classList.remove('stop-mode');
-            sendBtn.title = "发送";
-            sendIcon.style.display = 'block';
-            stopIcon.style.display = 'none';
-        }
-    };
-
-    const fetchAssistantResponse = async () => {
-        if (conversationHistory.length === 0) return;
-
-        setInteractionState(true);
-        abortController = new AbortController();
-
-        const typingIndicator = document.createElement('div');
-        typingIndicator.className = 'typing-indicator';
-        typingIndicator.innerHTML = '<span></span><span></span><span></span>';
-        chatContainer.appendChild(typingIndicator);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-
-        let assistantMessage = null, assistantMessageElement = null, finalContentElement = null;
-        let reasoningText = '', reasoningContainer = null, reasoningSummaryElement = null;
-        let thinkingStartTime = null, reasoningFinished = false;
-        let thinkingTime = null;
-        let inThinkingMode = false;
-        let startTime = null;
-        let started = false;
-        let promptTokens = 0, completionTokens = 0, totalTokens = 0;
-
-        const ensureReasoningContainer = () => {
-            if (!reasoningContainer) {
-                thinkingStartTime = performance.now();
-                const details = document.createElement('details');
-                details.innerHTML = '<summary>正在思考...</summary><div class="reasoning-wrapper"><div class="reasoning-content"></div></div>';
-                assistantMessageElement.querySelector('.message-content').prepend(details);
-                reasoningSummaryElement = details.querySelector('summary');
-                reasoningContainer = details.querySelector('.reasoning-content');
-                details.open = true;
-            }
-        };
-
-        const appendReasoning = (text) => {
-            ensureReasoningContainer();
-            reasoningText += text;
-            reasoningContainer.innerHTML = renderMessageContent(reasoningText);
-        };
-
-        const finishReasoning = () => {
-            if (thinkingStartTime && !reasoningFinished) {
-                thinkingTime = (performance.now() - thinkingStartTime) / 1000;
-                if (reasoningSummaryElement) {
-                    reasoningSummaryElement.textContent = '已思考 (用时 ' + thinkingTime.toFixed(1) + '秒)';
-                }
-                reasoningFinished = true;
-                const details = assistantMessageElement?.querySelector('details');
-                if (details) details.open = false;
-            }
-        };
-
-        try {
-            const historyToSend = conversationHistory.map(({ id, ...rest }) => rest);
-            if (currentSettings.systemPrompt) historyToSend.unshift({ role: 'system', content: currentSettings.systemPrompt });
-
-            const payload = {
-                model: currentSettings.modelId,
-                messages: historyToSend,
-                stream: true
-            };
-            if (currentSettings.enableAdvanced) {
-                payload.temperature = parseFloat(currentSettings.temperature);
-                payload.top_p = parseFloat(currentSettings.top_p);
-            }
-
-            let fetchUrl = currentSettings.apiUrl.trim();
-            if (fetchUrl.endsWith('/')) fetchUrl = fetchUrl.slice(0, -1);
-            if (!fetchUrl.endsWith('/chat/completions')) {
-                fetchUrl += '/chat/completions';
-            }
-
-            const response = await fetch(fetchUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentSettings.apiKey}` },
-                body: JSON.stringify(payload),
-                signal: abortController.signal
-            });
-
-            if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder('utf-8');
-            let buffer = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    if (!line.startsWith('data:')) continue;
-                    
-                    typingIndicator.remove();
-
-                    if (!started) {
-                        startTime = performance.now();
-                        started = true;
-                    }
-                    const data = line.substring(5).trimStart();
-                    if (data === '[DONE]') break;
-                    try {
-                        const json = JSON.parse(data);
-                        const delta = json.choices[0]?.delta || {};
-
-                        if (!assistantMessageElement && (delta.reasoning || delta.reasoning_content || delta.content)) {
-                            assistantMessage = { id: Date.now(), role: 'assistant', content: '' };
-                            assistantMessageElement = addMessage(assistantMessage);
-                        }
-
-                        if (delta.reasoning_content || delta.reasoning) {
-                            appendReasoning(delta.reasoning_content || delta.reasoning);
-                        }
-
-                        if (delta.content) {
-                            let content = delta.content;
-                            
-                            if (inThinkingMode) {
-                                let thinkEnd = content.indexOf('</think>');
-                                if (thinkEnd !== -1) {
-                                    appendReasoning(content.substring(0, thinkEnd));
-                                    content = content.substring(thinkEnd + 8);
-                                    inThinkingMode = false;
-                                } else {
-                                    appendReasoning(content);
-                                    chatContainer.scrollTop = chatContainer.scrollHeight;
-                                    continue;
-                                }
-                            }
-                            
-                            let thinkStart = content.indexOf('<think>');
-                            while (thinkStart !== -1) {
-                                let thinkEnd = content.indexOf('</think>', thinkStart);
-                                if (thinkEnd === -1) {
-                                    appendReasoning(content.substring(thinkStart + 7));
-                                    content = '';
-                                    inThinkingMode = true;
-                                    break;
-                                } else {
-                                    appendReasoning(content.substring(thinkStart + 7, thinkEnd));
-                                    content = content.substring(0, thinkStart) + content.substring(thinkEnd + 8);
-                                    thinkStart = content.indexOf('<think>');
-                                }
-                            }
-                            
-                            if (content && !inThinkingMode) {
-                                finishReasoning();
-                                if (!finalContentElement) {
-                                    finalContentElement = document.createElement('div');
-                                    assistantMessageElement.querySelector('.message-content').appendChild(finalContentElement);
-                                }
-                                assistantMessage.content += content;
-                                finalContentElement.innerHTML = renderMessageContent(assistantMessage.content);
-                            }
-                        }
-
-                        if (json.usage) {
-                            promptTokens = json.usage.prompt_tokens || 0;
-                            completionTokens = json.usage.completion_tokens || 0;
-                            totalTokens = json.usage.total_tokens || 0;
-                        }
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                    } catch (e) { }
-                }
-            }
-        } catch (error) {
-            if (typingIndicator.parentNode) typingIndicator.remove();
-            if (error.name === 'AbortError') {
-                if (!assistantMessage) {
-                    addMessage({ role: 'assistant', content: '[已中断生成]' });
-                }
-            } else {
-                addMessage({ role: 'error', content: `请求失败: ${error.message}` });
-            }
-        } finally {
-            finishReasoning();
-            if (assistantMessage) {
-                const hasContent = assistantMessage.content.trim() || reasoningText.trim();
-                if (hasContent) {
-                    const endTime = performance.now();
-                    const duration = (endTime - startTime) / 1000; // seconds
-                    const outputRate = duration > 0 ? ((totalTokens - promptTokens) / duration).toFixed(1) : 0;
-                    const outputTime = duration.toFixed(1);
-
-                    const messageWithStats = {
-                        id: assistantMessage.id,
-                        role: 'assistant',
-                        content: assistantMessage.content,
-                        reasoning: reasoningText || null,
-                        stats: {
-                            contextLength: promptTokens,
-                            outputLength: completionTokens,
-                            totalLength: totalTokens,
-                            outputRate: parseFloat(outputRate),
-                            outputTime: parseFloat(outputTime)
-                        }
-                    };
-
-                    // Update the existing message element with stats (don't remove and re-add)
-                    if (assistantMessageElement) {
-                        // Add details button to the footer
-                        const footer = assistantMessageElement.querySelector('.message-footer');
-                        if (footer && !footer.querySelector('.details-btn')) {
-                            const detailsBtn = document.createElement('button');
-                            detailsBtn.className = 'footer-btn details-btn';
-                            detailsBtn.title = '详情';
-                            detailsBtn.innerHTML = `
-                            <svg viewBox="0 0 24 24"><path d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM11 9h2V7h-2v2z"/></svg>
-                            <div class="message-stats-tooltip">
-                                <div class="stat-row"><span class="stat-label">Prompt:</span><span class="stat-value">${promptTokens} tokens</span></div>
-                                <div class="stat-row"><span class="stat-label">Output:</span><span class="stat-value">${completionTokens} tokens</span></div>
-                                <div class="stat-row"><span class="stat-label">Total:</span><span class="stat-value">${totalTokens} tokens</span></div>
-                                <div class="stat-row"><span class="stat-label">Rate:</span><span class="stat-value">${outputRate} t/s</span></div>
-                                ${outputTime > 0 ? `<div class="stat-row"><span class="stat-label">Time:</span><span class="stat-value">${outputTime}s</span></div>` : ''}
-                            </div>
-                        `;
-                        footer.insertBefore(detailsBtn, footer.firstChild);
-                    }
-                }
-
-                conversationHistory.push(messageWithStats);
-                saveConversation();
-                }
-            } else if (assistantMessageElement) {
-                assistantMessageElement.remove();
-            }
-            setInteractionState(false);
-            abortController = null;
-            userInput.focus();
-        }
-    };
-
-    const handleSendOrStop = () => {
-        if (isAssistantResponding) {
-            // Stop Logic
-            if (abortController) abortController.abort();
-            return;
-        }
-
-        // Remove error messages when sending new message
-        removeErrorMessages();
-
-        // Send Logic
-        const userText = userInput.value.trim();
-        if (!userText && stagedImages.length === 0) return;
-        if (!currentSettings.apiKey || !currentSettings.apiUrl || !currentSettings.modelId) {
-            addMessage({ role: 'error', content: '请先完成并保存 API 配置。' }); return;
-        }
-
-        const userMessageContent = [];
-        if (userText) {
-            userMessageContent.push({ type: 'text', text: userText });
-        }
-        stagedImages.forEach(img => { userMessageContent.push({ type: 'image_url', image_url: { url: img.dataUrl } }); });
-
-        const messageId = Date.now();
-        conversationHistory.push({ id: messageId, role: 'user', content: userMessageContent });
-        addMessage({ id: messageId, role: 'user', content: renderUserMessageHtml(userMessageContent), isHtml: true });
-
-        userInput.value = ''; autoAdjustTextareaHeight(userInput);
-        stagedImages = []; renderPreviews();
-        fetchAssistantResponse();
-    };
-
-    // Global Click to Close Menus
-    document.addEventListener('click', (e) => {
-        if (e.target.tagName === 'IMG' && (e.target.closest('.message-images') || e.target.closest('#image-preview-container'))) {
-            if (e.target.closest('.remove-image-btn')) return;
-            e.preventDefault(); imageLightbox.style.display = 'flex'; lightboxImg.src = e.target.src;
-        }
-        if (!menuBtn.contains(e.target) && !dropdownMenu.contains(e.target)) dropdownMenu.classList.remove('show');
-        if (!titleWrapper.contains(e.target) && !configDropdownMenu.contains(e.target)) configDropdownMenu.classList.remove('show');
-    });
-    
-    lightboxClose.addEventListener('click', () => imageLightbox.style.display = 'none');
-    imageLightbox.addEventListener('click', (e) => { if(e.target === imageLightbox) imageLightbox.style.display = 'none'; });
-    
-    const downloadBlob = (blob, filename) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href); };
-    
-    menuBtn.addEventListener('click', (e) => { e.stopPropagation(); dropdownMenu.classList.toggle('show'); configDropdownMenu.classList.remove('show'); });
-    
-    exportSettingsBtn.addEventListener('click', () => downloadBlob(new Blob([JSON.stringify({ currentId: currentConfigId, configs: configList }, null, 2)], { type: 'application/json' }), 'nchat-settings.json'));
-    
-    exportConversationBtn.addEventListener('click', () => {
-        const timestamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
-        const filename = `nchat_${timestamp}.md`;
-        let md = `# nChat Conversation\n\n**Time:** ${new Date().toLocaleString()}\n\n---\n\n`;
-        conversationHistory.forEach(msg => {
-            const role = msg.role === 'user' ? '👤 User' : '🤖 Assistant';
-            let content = '';
-            if (Array.isArray(msg.content)) {
-                const txt = msg.content.find(i => i.type === 'text')?.text || '';
-                const imgCount = msg.content.filter(i => i.type === 'image_url').length;
-                content = txt + (imgCount ? `\n\n*[Sent ${imgCount} images]*` : '');
-            } else content = msg.content;
-            md += `## ${role}\n\n${content}\n\n---\n\n`;
-        });
-
-        downloadBlob(new Blob([md], { type: 'text/markdown' }), filename);
-        dropdownMenu.classList.remove('show');
-    });
-
-    // Backup conversation to JSON file
-    backupConversationBtn.addEventListener('click', () => {
-        const timestamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-');
-        const filename = `nchat_backup_${timestamp}.json`;
-        const backupData = {
-            version: 1,
-            timestamp: new Date().toISOString(),
-            conversation: conversationHistory
-        };
-        downloadBlob(new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' }), filename);
-        dropdownMenu.classList.remove('show');
-    });
-
-    // Restore conversation from JSON file
-    restoreConversationBtn.addEventListener('click', () => {
-        restoreConversationInput.click();
-        dropdownMenu.classList.remove('show');
-    });
-
-    restoreConversationInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            try {
-                const data = JSON.parse(ev.target.result);
-                if (data.conversation && Array.isArray(data.conversation)) {
-                    conversationHistory = data.conversation;
-                    chatContainer.innerHTML = '';
-                    conversationHistory.forEach(msg => {
-                        if (msg.role === 'user') {
-                            addMessage({ id: msg.id, role: 'user', content: renderUserMessageHtml(msg.content), isHtml: true });
-                        } else if (msg.role === 'assistant') {
-                            addMessage({ id: msg.id, role: 'assistant', content: msg.content, reasoning: msg.reasoning, stats: msg.stats });
-                        }
-                    });
-                    saveConversation();
-                    showCustomPrompt('成功', '对话已恢复');
-                } else {
-                    showCustomPrompt('错误', '无效的备份文件格式');
-                }
-            } catch (err) {
-                showCustomPrompt('错误', '无法解析备份文件');
-            }
-            e.target.value = '';
-        };
-        reader.readAsText(file);
-    });
-
-    importSettingsBtn.addEventListener('click', () => importSettingsInput.click());
-    importSettingsInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            try {
-                const data = JSON.parse(ev.target.result);
-                if (data.configs) {
-                    configList = data.configs; currentConfigId = data.currentId || configList[0]?.id;
-                } else if (data.apiUrl) {
-                     // Legacy/Single import
-                     const c = createDefaultConfig(); Object.assign(c, data, {name: '导入配置'}); 
-                     configList.push(c); currentConfigId = c.id;
-                }
-                renderConfigSelect(); loadConfigToUI(currentConfigId); saveSettings();
-                showCustomPrompt('成功', '配置已导入');
-            } catch (err) { showCustomPrompt('错误', '格式无效'); }
-            e.target.value = '';
-        };
-        reader.readAsText(file);
-    });
-    
-    const closeEditModal = () => { editModalOverlay.classList.remove('show'); currentEditingMessageId = null; };
-    editModalSave.addEventListener('click', () => { if (currentEditingMessageId) saveEdit(currentEditingMessageId, editModalTextarea.value); closeEditModal(); });
-    editModalCancel.addEventListener('click', closeEditModal);
-    
-    toggleSettingsBtn.addEventListener('click', () => settingsPanel.classList.toggle('open'));
-    saveSettingsBtn.addEventListener('click', saveSettings);
-    clearChatBtn.addEventListener('click', () => { clearConversation(); dropdownMenu.classList.remove('show'); });
-    
-    sendBtn.addEventListener('click', handleSendOrStop);
-    userInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendOrStop(); } });
-    userInput.addEventListener('input', () => autoAdjustTextareaHeight(userInput));
-    
-    loadSettings();
-    // Try to load saved conversation, otherwise show welcome message
-    const hasLoadedConversation = loadConversation();
-    if (!hasLoadedConversation) {
-        addMessage({ role: 'assistant', content: '你好，有什么可以帮你？' });
+        settingsView.init();
+
+        wireMenus();
+        wireTheme();
+        wireStorage();
+
+        events.on('config:switched', onConfigSwitched);
+        events.on('settings:changed', updateTitle);
+
+        controller.renderConversation(WELCOME);
+        updateTitle();
+        updateThemeLabels();
+        controller.setJumpVisible(true);
+        composer.focus();
     }
-});
+
+    function onConfigSwitched() {
+        if (!settings || !conversation) return;
+        conversation.switchConfig(settings.getState().currentId);
+        controller.renderConversation(WELCOME);
+        updateTitle();
+        composer.focus();
+    }
+
+    function updateTitle() {
+        var config = settings ? settings.getConfig() : null;
+        var name = config && config.name ? config.name : '未命名配置';
+        var title = 'nChat | ' + name;
+        var titleEl = document.getElementById('app-title');
+        if (titleEl) titleEl.textContent = title;
+        document.title = title;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 菜单 / 主题
+     * ------------------------------------------------------------------ */
+    function wireMenus() {
+        var menuBtn = document.getElementById('menu-btn');
+        var menu = document.getElementById('main-menu');
+        if (!menuBtn || !menu) return;
+
+        function close() {
+            menu.classList.remove('is-open');
+            menu.setAttribute('aria-hidden', 'true');
+            menuBtn.setAttribute('aria-expanded', 'false');
+        }
+        function open() {
+            menu.classList.add('is-open');
+            menu.setAttribute('aria-hidden', 'false');
+            menuBtn.setAttribute('aria-expanded', 'true');
+            var first = menu.querySelector('.chat-menu__item');
+            if (first) first.focus();
+        }
+        menuBtn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            if (menu.classList.contains('is-open')) close();
+            else open();
+        });
+        document.addEventListener('click', function (event) {
+            if (!menu.classList.contains('is-open')) return;
+            var target = event.target;
+            if (!target || !target.closest) return;
+            if (target.closest('#main-menu') || target.closest('#menu-btn')) return;
+            close();
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && menu.classList.contains('is-open')) {
+                close();
+                menuBtn.focus();
+            }
+        });
+        menu.addEventListener('click', function (event) {
+            var item = event.target && event.target.closest ? event.target.closest('.chat-menu__item') : null;
+            if (item) close();
+        });
+    }
+
+    function setMenuLabel(id, label) {
+        var button = document.getElementById(id);
+        var span = button ? button.querySelector('.chat-menu__label') : null;
+        if (span) span.textContent = label;
+    }
+
+    function updateThemeLabels() {
+        setMenuLabel('theme-toggle-btn', NC.theme.isLight() ? '深色模式' : '浅色模式');
+        setMenuLabel('lite-mode-btn', NC.theme.isLite() ? '完整模式' : 'Lite 模式');
+    }
+
+    function wireTheme() {
+        var themeBtn = document.getElementById('theme-toggle-btn');
+        var liteBtn = document.getElementById('lite-mode-btn');
+        if (themeBtn) {
+            themeBtn.addEventListener('click', function () {
+                NC.theme.toggle();
+                updateThemeLabels();
+            });
+        }
+        if (liteBtn) {
+            liteBtn.addEventListener('click', function () {
+                NC.theme.toggleLite();
+                updateThemeLabels();
+            });
+        }
+        events.on('theme:changed', updateThemeLabels);
+        events.on('lite:changed', updateThemeLabels);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 存储 / 配额提示
+     * ------------------------------------------------------------------ */
+    function wireStorage() {
+        var banner = document.getElementById('storage-banner');
+        var timer = null;
+        function show(message, tone) {
+            if (!banner) return;
+            banner.textContent = message;
+            banner.hidden = false;
+            banner.classList.toggle('is-warn', tone !== 'info');
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(function () { banner.hidden = true; }, 9000);
+        }
+        events.on('quota:warning', NC.util.throttle(function () {
+            show('本地存储空间不足，正在尝试清理旧图片以继续保存…', 'warn');
+        }, 5000));
+        events.on('conversation:degraded', function (payload) {
+            show('本地空间不足：已将 ' + payload.removed + ' 张旧图片替换为占位文本，以节省存储空间。', 'warn');
+        });
+        events.on('conversation:save-failed', function () {
+            show('自动保存失败：当前对话仅保留在本页面，请及时导出备份。', 'warn');
+        });
+        events.on('settings:save-failed', function () {
+            show('配置保存失败，请检查本地存储空间。', 'warn');
+        });
+        events.on('storage:error', NC.util.throttle(function () {
+            show('本地存储写入失败，本次修改可能无法保存。', 'warn');
+        }, 5000));
+        if (NC.storage && !NC.storage.available) {
+            show('本地存储不可用：本次修改不会被保存。', 'warn');
+        }
+    }
+})(window);
