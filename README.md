@@ -1,8 +1,8 @@
-# nTools · v4.3
+# nTools · v4.4
 
 > 本地优先的 AI 效率工作台：nChat 原生聊天 + 待办（Todo AI 识别）+ 二维码 / Markdown / 图片工具。
 > 纯静态 HTML，双击即用，无需服务器、无需安装、无需构建链；数据只留在本机浏览器。
-> v4.3 采用 **Precision Workbench** 设计方向：石墨/纸面、发丝分隔、仪器蓝强调、铜色时间语义；标准模式保留完整材质与动效，**Light（Lite）模式是它的性能减法**。
+> v4.4 采用 **Precision Workbench** 设计方向：石墨/纸面、发丝分隔、仪器蓝强调、铜色时间语义；标准模式保留完整材质与动效，**Light（Lite）模式是它的性能减法**。
 > 目标环境：国企内网 / 信创 ARM / 麒麟 Linux / 奇安信可信浏览器（Chromium 102 基线）。
 >
 > **仓库**：[github.com/Myooooo/ntools](https://github.com/Myooooo/ntools)
@@ -52,7 +52,8 @@
 - **置顶**：任务可置顶，永远显示在列表最顶部「置顶」分组；四种排序均优先，快捷键 `P`；行内勾选框/时间/标签/操作按钮统一垂直居中。
 - **详情关闭叉**：右侧详情栏右上角常显关闭按钮；示例数据含每日/每周/每月 3 个循环任务便于测试。
 - **循环任务**：每天 / 每周 / 每月 / 每年；完成后同一任务自动前移到下一周期并重置为未完成，按新到期时间排序；不生成副本、不丢历史（记录完成时间）。月末/闰年自动夹取，错过多个周期会连续前移到未来。
-- **三天内热区**：到期前 72 小时内的未完成任务整行渐变染色，黄→红随剩余时间加深；逾期更深红，完成/取消/无日期不染色。
+- **三天内热区**：按日历天染色——后天到期黄色、明天橙色、**当天到期直接红色**、逾期**深红色**；完成/取消/无日期不染色。
+- **回收站**：行内提供「恢复」「彻底删除」，回收站页头提供「清空回收站」（确认 + 可撤销）。
 - **全景时间线**：任务条按「创建时间 → 到期时间」的真实时长绘制，自动分道、显示「现在」线；左侧视图/清单/搜索/状态筛选实时联动；范围可拖拽刻度区框选，或用起止时间/未来 3 天/本周/本月预设；默认范围自动包含创建时间，窄屏切换纵向时间流水；不显示无日期任务。
 - 优先级、多清单、标签、拖拽排序、统计概览。
 - 页内提醒：对齐分钟检查，页内 Toast + 标题角标 + 逾期计数；关闭页面后不提醒（纯前端限制）。
@@ -132,26 +133,19 @@ ntools/
 │  └─ 组合根：ntools-app
 ├─ docs/
 │  ├─ architecture.md         # 架构、分层、存储键、事件
-│  ├─ v3-implementation-report.md  # v3 交付与验收报告
-│  ├─ v4-design-report.md     # v4 设计改造与验收报告
-│  ├─ v4.1-release-report.md  # v4.1 交付报告
-│  ├─ v42-release-report.md   # v4.2 界面细节与时间线语义修正
-│  ├─ v43-release-report.md   # v4.3 品牌图标/行内细节/自检入口收纳
+│  ├─ compatibility.md        # 兼容性结论与现场验证步骤
 │  ├─ design-direction-v4.md  # 设计方向/令牌/动效/Light 定义
 │  ├─ design-break-audit.md   # 最坏数据/移动端原生审计
-│  ├─ animation-audit-v4.1.md # v4.1 全站动效审计与修复记录
+│  ├─ animation-audit-v4.1.md # 全站动效审计与修复记录
 │  ├─ timeline-view.md        # 全景时间线调研/API/交互与限制
-│  ├─ v41-release-report.md   # v4.1 交付与验收报告
-│  ├─ v2-implementation-report.md  # v2 重构报告（历史）
-│  ├─ compatibility.md        # 兼容性结论与现场验证步骤
-│  ├─ dev-contract*.md        # 开发契约
-│  └─ refactor-and-optimization-plan.md  # v1 评估与改造方案（历史）
+│  ├─ v4-design-report.md     # v4 设计改造与验收报告
+│  └─ v44-release-report.md   # v4.4 到期染色/回收站/仓库清理交付报告
 ├─ tools/
 │  ├─ verify.js               # CDP 页面验收（报错/DOM/迁移/原生聊天/设置面板 + 截图）
 │  ├─ e2e.js                  # 回归交互（待办/聊天流式/安全/性能）
 │  ├─ e2e-features.js         # 功能 E2E（端点/系统提示词/Todo AI/快捷时间）
 │  ├─ e2e-timeline.js         # 全景时间线 E2E（58 断言 + 截图）
-│  ├─ e2e-v41.js              # 交互/置顶/循环/热区/侧栏/设置弹窗/时间线 E2E
+│  ├─ e2e-v41.js              # 交互/置顶/循环/热区/回收站/侧栏/设置弹窗/时间线 E2E
 │  ├─ break-ui.js             # 最坏数据 + 响应式 + 移动端原生审计
 │  ├─ design-shots.sh         # v4 设计截图归档（标准/浅色/Lite × 桌面/移动）
 │  ├─ run-tests.js            # 无头运行 checks/tests.html
@@ -202,8 +196,8 @@ node tools/run-tests.js       # checks/tests.html 断言（无头）
 open checks/tests.html        # 或双击运行
 ```
 
-- 最近验收结果：`bash tools/check.sh` **7/7 全绿**（verify 3 页、回归 E2E、功能 E2E 53 项、时间线 E2E 58 项、v4.1/v4.2/v4.3 E2E、纯函数 81 项，全部 PASS / 0 FAIL）；`break-ui` 32 组最坏数据 0 问题、移动端原生 12/12 PASS。
-- 截图输出：`/tmp/nc-shots/v43/`（v4.3 品牌/行内/自检入口）、`/tmp/nc-shots/v42/final/`（v4.2 明细/时间线/侧栏）、`/tmp/nc-shots/v4/timeline/`、`/tmp/nc-shots/v4/break/`。
+- 最近验收结果：`bash tools/check.sh` **7/7 全绿**（verify 3 页、回归 E2E、功能 E2E 53 项、时间线 E2E 58 项、交互/回收站 E2E、纯函数 81 项，全部 PASS / 0 FAIL）；`break-ui` 32 组最坏数据 0 问题、移动端原生 12/12 PASS。
+- 截图输出：`/tmp/nc-shots/v44/`（v4.4 染色/回收站）、`/tmp/nc-shots/v4/timeline/`、`/tmp/nc-shots/v4/break/`。
 
 ## ❓ 常见问题
 
@@ -220,7 +214,14 @@ open checks/tests.html        # 或双击运行
 
 ## 🗒️ 版本变更
 
-### v4.3（当前）
+### v4.4（当前）
+
+- 到期染色改为日历天语义：后天黄、明天橙、**当天红**、逾期深红；超过 3 个日历天不染色。
+- 回收站行操作改为「恢复 / 彻底删除」，页头新增「清空回收站」按钮（确认 + 撤销）。
+- 仓库清理：删除 8 份过期 docs（v1 方案、v2/v3 报告、旧 dev-contract、v4.1–v4.3 发布报告），保留架构/兼容性/设计/动效/时间线/设计报告；代码与工具文档注释同步更新。
+- 无缓存/临时/未引用资产残留；版本 v4.4.0。
+
+### v4.3
 
 - 品牌图标与 favicon 改为工具箱（toolbox）；左上角 nTools mark 同步更新。
 - Todo 行内标签为右侧操作按钮预留 92px 并截断，不再重叠；循环图标移到标题左侧（置顶图标右侧）。
@@ -264,7 +265,6 @@ open checks/tests.html        # 或双击运行
 ### v2
 
 - 分层重构（经典脚本 + IIFE）、安全修复（XSS/导入校验/密钥脱敏）、SSE 健壮化、Todo 全面增强、统一设计令牌、验收工具链。
-- 详见 [docs/v2-implementation-report.md](docs/v2-implementation-report.md)。
 
 ## 📄 许可
 

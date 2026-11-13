@@ -309,6 +309,7 @@
         ensureModeSwitch();
         ensureRecurrenceField();
         ensureTimeline();
+        ensureTrashClearButton();
         ensureFooterHints();
         bindComposerExtras();
         refreshQuickDue();
@@ -567,6 +568,45 @@
         note.textContent = failed
             ? '全景视图加载失败，可切回列表继续使用。'
             : '全景视图组件尚未加载（js/timeline.js），可切回列表继续使用。';
+    }
+
+    /* ---- 回收站页头「清空回收站」按钮（有任务时显示） ---- */
+    function ensureTrashClearButton() {
+        if (!els.page || document.getElementById('todo-trash-clear')) {
+            els.trashClear = document.getElementById('todo-trash-clear');
+            return;
+        }
+        var actionsWrap = els.page.querySelector('.tools-head__actions');
+        if (!actionsWrap) return;
+        var btn = node('button', 'nc-btn nc-btn--sm nc-btn--danger todo-trash-clear');
+        btn.type = 'button';
+        btn.id = 'todo-trash-clear';
+        attr(btn, 'data-act', 'clear-trash');
+        attr(btn, 'aria-label', '清空回收站');
+        attr(btn, 'title', '清空回收站');
+        btn.appendChild(icon('trash', 14));
+        var text = node('span', 'todo-trash-clear__text', '清空回收站');
+        btn.appendChild(text);
+        btn.hidden = true;
+        btn.addEventListener('click', function () {
+            if (actions.clearTrash) actions.clearTrash();
+            else {
+                ui.confirm('清空回收站中的任务？此操作不可撤销。', { danger: true, confirmText: '清空回收站' }).then(function (ok) {
+                    if (!ok) return;
+                    store.clearTrash();
+                    ui.toast('回收站已清空', { type: 'success' });
+                });
+            }
+        });
+        actionsWrap.appendChild(btn);
+        els.trashClear = btn;
+    }
+
+    function syncTrashClearButton(ui, counts) {
+        if (!els.trashClear) return;
+        var show = ui.view === 'trash' && counts && counts.trash > 0;
+        els.trashClear.hidden = !show;
+        if (els.mainpane) toggleClass(els.mainpane, 'is-trash-view', ui.view === 'trash');
     }
 
     function clearTimelineFallback() {
@@ -876,6 +916,7 @@
         var visible = store.selectVisible();
 
         renderViewState(ui, counts, doc);
+        syncTrashClearButton(ui, counts);
         renderLists(doc, ui, counts);
         renderComposer(doc, ui);
         renderList(visible, ui, doc);
@@ -1201,8 +1242,23 @@
         attr(delBtn, 'data-act', 'delete');
         attr(delBtn, 'aria-label', '删除任务');
         delBtn.appendChild(icon('trash', 15));
+        /* 回收站专用操作 */
+        var restoreBtn = node('button', 'nc-btn nc-btn--icon nc-btn--sm');
+        attr(restoreBtn, 'type', 'button');
+        attr(restoreBtn, 'data-act', 'restore');
+        attr(restoreBtn, 'aria-label', '恢复任务');
+        attr(restoreBtn, 'title', '恢复任务');
+        restoreBtn.appendChild(icon('refresh', 15));
+        var purgeBtn = node('button', 'nc-btn nc-btn--icon nc-btn--sm');
+        attr(purgeBtn, 'type', 'button');
+        attr(purgeBtn, 'data-act', 'purge');
+        attr(purgeBtn, 'aria-label', '彻底删除');
+        attr(purgeBtn, 'title', '彻底删除（不可恢复）');
+        purgeBtn.appendChild(icon('trash', 15));
         acts.appendChild(editBtn);
         acts.appendChild(delBtn);
+        acts.appendChild(restoreBtn);
+        acts.appendChild(purgeBtn);
 
         li.appendChild(check);
         li.appendChild(body);
@@ -1222,6 +1278,7 @@
         if (task.pinned === true) classes += ' is-pinned';
         if (ui.selectedId === task.id) classes += ' is-selected';
         if (ui.editingId === task.id) classes += ' is-editing';
+        if (ui.view === 'trash') classes += ' is-trash';
         if (!done && !canceled && task.due != null && task.due < now) classes += ' is-overdue';
         var heat = heatClass(task, now);
         if (heat) classes += ' ' + heat;
@@ -1233,11 +1290,22 @@
         attr(li, 'data-priority', task.priority);
         li.__task = task;
 
+        var trashView = ui.view === 'trash';
         var check = li.querySelector('.todo-item__check');
         if (check) {
             check.checked = done;
+            check.hidden = trashView;
             attr(check, 'aria-label', (done ? '取消完成：' : '完成任务：') + task.title);
         }
+        /* 回收站只保留「恢复 / 彻底删除」，隐藏置顶/编辑/删除与完成 checkbox */
+        ['[data-act="pin"]', '[data-act="edit"]', '[data-act="delete"]'].forEach(function (selector) {
+            var btn = li.querySelector(selector);
+            if (btn) btn.hidden = trashView;
+        });
+        ['[data-act="restore"]', '[data-act="purge"]'].forEach(function (selector) {
+            var btn = li.querySelector(selector);
+            if (btn) btn.hidden = !trashView;
+        });
         var body = li.querySelector('.todo-item__body');
         if (body) attr(body, 'aria-label', '查看任务：' + task.title);
         var title = li.querySelector('.todo-item__title');
@@ -1303,17 +1371,21 @@
     }
 
     /**
-     * 三天内到期热区：未完成且有 due。
-     * overdue → heat-overdue；<=24h → heat-3；<=48h → heat-2；<=72h → heat-1。
+     * 按「日历天」的到期热区：未完成且有 due。
+     * 逾期 → heat-overdue（深红）；今天（同日历日且未逾期）→ heat-3（红）；
+     * 明天 → heat-2（橙）；后天 → heat-1（黄）；>=3 个日历日外/完成/取消/无 due/回收站 → 不染色。
      */
     function heatClass(task, now) {
-        if (!task || task.status !== 'open' || !util.isFiniteNum(task.due)) return '';
-        var remain = task.due - now;
-        if (remain < 0) return 'heat-overdue';
-        if (remain > 72 * 3600000) return '';
-        if (remain <= 24 * 3600000) return 'heat-3';
-        if (remain <= 48 * 3600000) return 'heat-2';
-        return 'heat-1';
+        if (!task || task.deletedAt || task.status !== 'open' || !util.isFiniteNum(task.due)) return '';
+        var ts = util.isFiniteNum(now) ? now : Date.now();
+        if (task.due < ts) return 'heat-overdue';
+        var today = util.startOfDay(ts);
+        var dueDay = util.startOfDay(task.due);
+        var diff = Math.round((dueDay - today) / 86400000);
+        if (diff <= 0) return 'heat-3';
+        if (diff === 1) return 'heat-2';
+        if (diff === 2) return 'heat-1';
+        return '';
     }
 
     /** tick 时同步热区等级（跨 24/48/72h 边界时无需整树重建） */
@@ -2254,6 +2326,19 @@
         }
         if (act === 'edit' && actBtn.closest('.todo-item__actions')) {
             beginInlineEdit(id);
+            return;
+        }
+        if (act === 'restore' && actBtn.closest('.todo-item__actions')) {
+            if (store.restoreTask(id)) ui.toast('已恢复任务', { type: 'success', duration: 1800 });
+            return;
+        }
+        if (act === 'purge' && actBtn.closest('.todo-item__actions')) {
+            var purging = store.getTask(id);
+            ui.confirm('彻底删除后无法恢复，确定继续吗？', { danger: true, confirmText: '彻底删除' }).then(function (ok) {
+                if (!ok) return;
+                store.purgeTask(id);
+                ui.toast('已彻底删除「' + (purging ? purging.title : '任务') + '」', { type: 'success' });
+            });
             return;
         }
         store.selectTask(id);

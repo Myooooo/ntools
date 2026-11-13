@@ -2,7 +2,7 @@
  * todo-time.js — Todo 快捷时间（纯函数 + llm-store workEnd 读取）
  * 经典脚本，依赖 core.js；可选依赖 llm-store.js（取下班时间）。挂载：NC.todoTime
  *
- * 规则（docs/dev-contract-v3.md §5.2，workEnd 默认 17:30）：
+ * 规则（workEnd 默认 17:30；模块说明见 docs/architecture.md）：
  *   work-end   下班前：工作日且未过 → 今天 workEnd；已过 / 周末 → 下一工作日 workEnd
  *   tomorrow   明天前：明天 workEnd
  *   friday     周五前：本周五 workEnd；已过 → 下周五 workEnd

@@ -1,6 +1,6 @@
 /**
  * polyfills.js — 极小兼容垫片（经典脚本，无依赖，必须最先加载）
- * 目标环境：奇安信可信浏览器（Chromium 102 基线，见 docs/refactor-and-optimization-plan.md）
+ * 目标环境：奇安信可信浏览器（Chromium 102 基线，见 docs/architecture.md）
  * 说明：仅补项目实际使用、且低版本内核可能缺失的能力；不引入任何构建链。
  */
 (function () {

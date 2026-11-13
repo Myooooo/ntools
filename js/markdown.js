@@ -2,7 +2,7 @@
  * markdown.js — 实时 Markdown 工具（经典脚本，依赖 core.js / ui.js / storage.js、
  * js/marked.min.js、js/purify.min.js）
  *
- * 页面接线（见 docs/dev-contract.md §3）：
+ * 页面接线（见 docs/architecture.md）：
  *   #md-input(textarea) #md-preview(div) #md-export(button)
  *   #md-import(input[type=file]) #md-import-btn(button) #md-stats(span)
  * 使用：ntools-app.js 调用 NC.tools.markdown.init()；DOM ready 后也会自动初始化（幂等）。

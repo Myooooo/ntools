@@ -2,7 +2,7 @@
  * todo-ai.js — Todo 大模型识别（文本 → 待办草稿，只填充不创建）
  * 经典脚本，依赖 core / ui / icons / llm-store / ai（可选）。挂载：NC.todoAi
  *
- * 契约（docs/dev-contract-v3.md §5.1）：
+ * 契约（模块说明见 docs/architecture.md）：
  *   buildSystemPrompt(now?, profile?)：每次调用注入 {{NOW}}/{{DATE}}/{{WEEKDAY}}/{{TZ}}/{{WORK_END}}
  *   parseText(text, {signal})：NC.ai.complete 非流式调用 → extractJson → 归一 data
  *   openDialog()：粘贴长文本 → 识别（loading、防误触关闭）→ 关闭 → NC.tools.todo.fillDraft(data)

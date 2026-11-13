@@ -2,7 +2,7 @@
 /**
  * tools/e2e-features.js — v3 新功能端到端验收（CDP 无头 Chrome，mock fetch，不联网）
  *
- * 覆盖（docs/dev-contract-v3.md §6）：
+ * 覆盖（验收清单 §6；模块说明见 docs/architecture.md）：
  *   1. 设置面板：新增端点 → 保存 → 端点下拉同步 → 设为当前 → 刷新持久
  *   2. 原生聊天：#page-nchat 无 iframe；mock SSE 流式/停止；切换端点会话隔离；
  *      系统提示词进入请求 payload

@@ -295,35 +295,48 @@ async function main() {
         const heatResult = await evaluate(`(function(){
             var store = NC.store.todo;
             var now = Date.now();
-            function add(title, offset, completed) {
-                var t = store.addTask({ title: title, due: now + offset });
+            /* 用本地日历日构造：今天/明天/后天/4 天后/逾期 */
+            function localDue(dayOffset, hh, mm) {
+                var d = new Date(now);
+                d.setHours(0, 0, 0, 0);
+                d.setDate(d.getDate() + dayOffset);
+                d.setHours(hh, mm, 0, 0);
+                return d.getTime();
+            }
+            function add(title, due, completed) {
+                var t = store.addTask({ title: title, due: due });
                 if (completed) store.toggleTask(t.id);
                 return t.id;
             }
-            add('E2E 热区 1h', 3600000, false);
-            add('E2E 热区 30h', 30 * 3600000, false);
-            add('E2E 热区 60h', 60 * 3600000, false);
-            add('E2E 热区 100h', 100 * 3600000, false);
-            add('E2E 热区完成', 3600000, true);
+            var todayDue = localDue(0, 18, 0);
+            if (todayDue <= now) todayDue = localDue(0, 23, 59); /* 傍晚后运行时保证仍为“今天且未逾期” */
+            add('E2E 热区 今天', todayDue, false);
+            add('E2E 热区 明天', localDue(1, 12, 0), false);
+            add('E2E 热区 后天', localDue(2, 12, 0), false);
+            add('E2E 热区 4天后', localDue(4, 12, 0), false);
+            add('E2E 热区 逾期', now - 3600000, false);
+            add('E2E 热区 完成', todayDue, true);
             var rows = Array.prototype.map.call(document.querySelectorAll('.todo-item'), function(row){
                 var title=(row.querySelector('.todo-item__title')||{}).textContent||'';
                 if (title.indexOf('E2E 热区') === -1) return null;
                 var before = getComputedStyle(row, '::before');
-                return { title: title, cls: row.className, bg: before.backgroundImage.slice(0, 40) };
+                return { title: title, cls: row.className, bg: before.backgroundImage.slice(0, 40), opacity: before.opacity };
             }).filter(Boolean);
-            return { rows: rows };
+            return { rows: rows, todayDue: todayDue };
         })()`);
         const heatMap = {};
         (heatResult.rows || []).forEach((row) => { heatMap[row.title] = row; });
-        const heat1 = heatMap['E2E 热区 1h'] || {};
-        const heat2 = heatMap['E2E 热区 30h'] || {};
-        const heat3 = heatMap['E2E 热区 60h'] || {};
-        const heat4 = heatMap['E2E 热区 100h'] || {};
-        const heatDone = heatMap['E2E 热区完成'] || {};
-        assert('23h 内热区最深（heat-3）', /heat-3/.test(heat1.cls || '') && /gradient/.test(heat1.bg || ''), JSON.stringify(heat1));
-        assert('48h 内热区（heat-2）', /heat-2/.test(heat2.cls || '') && /gradient/.test(heat2.bg || ''), JSON.stringify(heat2));
-        assert('72h 内热区（heat-1）', /heat-1/.test(heat3.cls || '') && /gradient/.test(heat3.bg || ''), JSON.stringify(heat3));
-        assert('72h 外无热区', !/heat-/.test(heat4.cls || ''), JSON.stringify(heat4));
+        const heatToday = heatMap['E2E 热区 今天'] || {};
+        const heatTomorrow = heatMap['E2E 热区 明天'] || {};
+        const heatAfter = heatMap['E2E 热区 后天'] || {};
+        const heat4 = heatMap['E2E 热区 4天后'] || {};
+        const heatOverdue = heatMap['E2E 热区 逾期'] || {};
+        const heatDone = heatMap['E2E 热区 完成'] || {};
+        assert('今天到期 → 红色 heat-3', /heat-3/.test(heatToday.cls || '') && /gradient/.test(heatToday.bg || '') && parseFloat(heatToday.opacity) > 0, JSON.stringify(heatToday));
+        assert('明天到期 → 橙色 heat-2', /heat-2/.test(heatTomorrow.cls || '') && /gradient/.test(heatTomorrow.bg || ''), JSON.stringify(heatTomorrow));
+        assert('后天到期 → 黄色 heat-1', /heat-1/.test(heatAfter.cls || '') && /gradient/.test(heatAfter.bg || ''), JSON.stringify(heatAfter));
+        assert('4 个日历日外无热区', !/heat-/.test(heat4.cls || ''), JSON.stringify(heat4));
+        assert('逾期 → 深红 heat-overdue', /heat-overdue/.test(heatOverdue.cls || '') && /gradient/.test(heatOverdue.bg || '') && parseFloat(heatOverdue.opacity) > parseFloat(heatToday.opacity), JSON.stringify({ overdue: heatOverdue, today: heatToday }));
         assert('完成项不染色', !/heat-/.test(heatDone.cls || ''), JSON.stringify(heatDone));
 
         /* ---------------- 8. 全景模式：切换按钮位置四态稳定（详情开/关/全景/切回） ---------------- */

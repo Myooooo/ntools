@@ -1,7 +1,7 @@
 # 兼容性说明（执行版）
 
 > 适用：nTools / nChat v2（纯静态、无构建链、经典脚本 IIFE）。目标环境：**奇安信可信浏览器（Chromium 102 基线）/ 麒麟 Linux / 信创 ARM / 内网 `file://` 双击运行**。
-> 完整论证、证据与来源索引见 `docs/refactor-and-optimization-plan.md` 第 2 章（目标环境）与第 11 章（待现场验证清单）；本文件是给开发、实施、验收人员用的压缩版。
+> 完整目标环境、兼容性结论与现场验证步骤见本文件各节；架构与模块边界见 `docs/architecture.md`。
 > 部署前**先双击运行 `checks/compat-check.html`**，并把"复制报告"内容记入验收单。
 
 ## 1. 目标环境与硬约束

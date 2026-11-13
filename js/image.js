@@ -1,7 +1,7 @@
 /**
  * image.js — 图片 ⇄ Base64 工具（经典脚本，依赖 core.js / ui.js）
  *
- * 页面接线（见 docs/dev-contract.md §3）：
+ * 页面接线（见 docs/architecture.md）：
  *   #img-dropzone #img-file(input[type=file]) #img-preview(img)
  *   #img-scale(range) #img-scale-label #img-res-original #img-res-target
  *   #img-convert(button) #img-output(textarea) #img-copy(button) #img-restore(button)

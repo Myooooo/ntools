@@ -2,7 +2,7 @@
  * schema-todo.js — Todo 文档 v2 校验 / 归一化 / v1 迁移 / 导入导出（纯函数）
  * 经典脚本，依赖 core.js（NC.util）。挂载：NC.schema.todo
  *
- * 契约（docs/dev-contract.md §5）：
+ * 契约（模块说明见 docs/architecture.md）：
  *   主键 ntools.todo.v2，迁移备份 ntools.todo.v1_backup，良好备份 ntools.todo.v2_backup，
  *   v1 旧键 ntools_todo（迁移后只读保留）。
  * 设计原则：

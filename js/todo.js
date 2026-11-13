@@ -783,7 +783,7 @@
             },
             {
                 id: 'demo-2', listId: 'list_default', title: '整理 nTools 重构验收清单',
-                notes: '按 dev-contract §5 核对 Todo P0 项：迁移、导入管道、三栏布局、快捷键、提醒。',
+                notes: '按验收清单核对 Todo P0 项：迁移、导入管道、三栏布局、快捷键、提醒。',
                 status: 'open', priority: 'urgent', pinned: true, due: today + 18 * hour, tags: ['重构', '验收'],
                 createdAt: now - 2 * day, updatedAt: now - 2 * hour
             },
@@ -820,7 +820,7 @@
                 createdAt: now - day, updatedAt: now - day
             },
             {
-                id: 'demo-8', listId: 'list_default', title: '阅读 dev-contract 并标注接口疑点',
+                id: 'demo-8', listId: 'list_default', title: '阅读验收清单并标注接口疑点',
                 notes: '',
                 status: 'done', priority: 'normal', due: today - day + 16 * hour,
                 completedAt: today - day + 18 * hour, tags: ['重构'],

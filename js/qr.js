@@ -1,7 +1,7 @@
 /**
  * qr.js — 二维码工具（经典脚本，依赖 core.js / ui.js / js/qrcode.min.js）
  *
- * 页面接线（见 docs/dev-contract.md §3）：
+ * 页面接线（见 docs/architecture.md）：
  *   #qr-input(input) #qr-size(select) #qr-generate(button)
  *   #qr-download(button) #qr-output(div) #qr-placeholder(div)
  * 使用：ntools-app.js 调用 NC.tools.qr.init()；本文件也会在 DOM ready 后自动初始化（幂等）。

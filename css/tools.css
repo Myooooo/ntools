@@ -3425,6 +3425,21 @@ html[data-lite="true"] .tools-nav__item {
     z-index: 1;
 }
 
+/* 热区专用色：深色主题下黄/橙/红/深红；浅色主题用更深一档保证可辨识 */
+.todo-item {
+    --heat-1-color: #e8b45a;
+    --heat-2-color: #f0913e;
+    --heat-3-color: #ff7a72;
+    --heat-overdue-color: #ff5a50;
+}
+
+html[data-theme="light"] .todo-item {
+    --heat-1-color: #b07a12;
+    --heat-2-color: #d2691e;
+    --heat-3-color: #c53b3b;
+    --heat-overdue-color: #9e2b2b;
+}
+
 .todo-item.heat-1::before,
 .todo-item.heat-2::before,
 .todo-item.heat-3::before,
@@ -3434,24 +3449,38 @@ html[data-lite="true"] .tools-nav__item {
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background: linear-gradient(90deg, var(--nc-warning-soft) 0%, var(--nc-danger-soft) 58%, transparent 94%);
-    transition: opacity var(--nc-dur) var(--nc-ease);
+    transition: opacity var(--nc-dur) var(--nc-ease), background var(--nc-dur) var(--nc-ease);
 }
 
-.todo-item.heat-1::before { opacity: 0.38; }
-.todo-item.heat-2::before { opacity: 0.62; }
-.todo-item.heat-3::before { opacity: 0.86; }
+/* 后天 → 黄/琥珀 */
+.todo-item.heat-1::before {
+    background: linear-gradient(90deg, var(--heat-1-color) 0%, transparent 80%);
+    opacity: 0.2;
+}
 
+/* 明天 → 橙 */
+.todo-item.heat-2::before {
+    background: linear-gradient(90deg, var(--heat-2-color) 0%, transparent 82%);
+    opacity: 0.26;
+}
+
+/* 今天（同一日历日、未逾期）→ 明显红 */
+.todo-item.heat-3::before {
+    background: linear-gradient(90deg, var(--heat-3-color) 0%, transparent 86%);
+    opacity: 0.34;
+}
+
+/* 逾期 → 更深红 */
 .todo-item.heat-overdue::before {
-    background: linear-gradient(90deg, var(--nc-danger-soft) 0%, rgba(255, 122, 114, 0.15) 56%, transparent 96%);
-    opacity: 1;
+    background: linear-gradient(90deg, var(--heat-overdue-color) 0%, transparent 94%);
+    opacity: 0.54;
 }
 
 /* Lite：保留信息，降低热区不透明度 */
-html[data-lite="true"] .todo-item.heat-1::before { opacity: 0.22; }
-html[data-lite="true"] .todo-item.heat-2::before { opacity: 0.34; }
-html[data-lite="true"] .todo-item.heat-3::before { opacity: 0.46; }
-html[data-lite="true"] .todo-item.heat-overdue::before { opacity: 0.55; }
+html[data-lite="true"] .todo-item.heat-1::before { opacity: 0.1; }
+html[data-lite="true"] .todo-item.heat-2::before { opacity: 0.12; }
+html[data-lite="true"] .todo-item.heat-3::before { opacity: 0.17; }
+html[data-lite="true"] .todo-item.heat-overdue::before { opacity: 0.27; }
 
 /* ---- 15.5 列表动效（只做 transform / opacity，Lite 自动关闭） ---- */
 @keyframes todo-complete-flash {
@@ -3647,4 +3676,48 @@ html[data-lite="true"] .todo-mainpane.is-mode-entering .todo-timeline {
         display: flex;
         flex-direction: column;
     }
+}
+
+
+/* ==========================================================================
+ * 17. v4.4：回收站行操作 / 页头清空按钮
+ * ========================================================================== */
+/* 回收站行：恢复/彻底删除常显（桌面也无需 hover） */
+.todo-item.is-trash .todo-item__actions {
+    opacity: 1;
+}
+
+.todo-item.is-trash .todo-item__actions .nc-btn[data-act="restore"]:hover {
+    color: var(--nc-success);
+    background: var(--nc-success-soft);
+}
+
+.todo-item.is-trash .todo-item__actions .nc-btn[data-act="purge"]:hover {
+    color: var(--nc-danger);
+    background: var(--nc-danger-soft);
+}
+
+/* 页头「清空回收站」：危险按钮，仅回收站视图且有任务时显示 */
+.todo-trash-clear {
+    flex: 0 0 auto;
+}
+
+@media (max-width: 768px) {
+    .todo-mainpane.is-trash-view .tools-head__actions {
+        flex-wrap: wrap;
+        row-gap: 4px;
+    }
+}
+
+@media (max-width: 560px) {
+    .todo-trash-clear {
+        padding: 0 8px;
+    }
+}
+
+html[data-lite="true"] .todo-item.heat-1::before,
+html[data-lite="true"] .todo-item.heat-2::before,
+html[data-lite="true"] .todo-item.heat-3::before,
+html[data-lite="true"] .todo-item.heat-overdue::before {
+    transition: none;
 }
