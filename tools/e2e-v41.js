@@ -13,6 +13,7 @@
  *  - 列表/全景模式切换（时间线 mount/unmount、横向模式、切换按钮位置稳定）
  *  - v4.2：行元素垂直居中、详情右上关闭叉、demo 循环任务、收起侧栏 logo 悬浮展开
  *  - v4.5：标签右栏贴按钮左缘（选中/悬浮）、关闭叉/保存后详情真正收起（selectedId=null）
+ *  - v4.7：全景视图点击任务弹出右侧覆盖抽屉（不改变时间线宽度），Esc/scrim/X 关闭后仍挂载
  *
  * 用法：node tools/e2e-v41.js
  * 退出码：0 全部通过；1 有失败。
@@ -447,10 +448,94 @@ async function main() {
                      visible: !!c && !c.hidden,
                      root: root ? root.className : null,
                      shell: (document.querySelector('.todo-shell')||{}).className,
-                     detailHidden: !document.querySelector('.todo-detail') || document.querySelector('.todo-detail').offsetParent === null };
+                     detailHidden: (function(){ var d=document.querySelector('.todo-detail'); if(!d) return true; return !d.classList.contains('is-open') || d.getBoundingClientRect().left >= window.innerWidth - 1; })() };
         })()`);
         assert('全景模式挂载时间线', timeline.mode === 'timeline' && timeline.mounted && timeline.visible, JSON.stringify(timeline));
         assert('桌面横向时间轴 + 隐藏检查器', /tl--horizontal/.test(timeline.root || '') && timeline.detailHidden && /is-timeline/.test(timeline.shell || ''), JSON.stringify(timeline));
+
+        /* v4.7：全景视图点击任务 → 右侧覆盖抽屉，且不改变时间线宽度/布局 */
+        const tlBase = await evaluate(`(function(){
+            var c=document.getElementById('todo-timeline'); var root=c.querySelector('.tl-root');
+            return { width: Math.round(c.getBoundingClientRect().width), root: root ? root.className : null,
+                     mounted: !!(NC.timeline && NC.timeline.isMounted && NC.timeline.isMounted()) };
+        })()`);
+        const tlClickOpened = await evaluate(`(function(){ var t=document.querySelector('.tl-task'); if(!t) return null; t.click(); return t.getAttribute('data-id'); })()`);
+        await sleep(430);
+        const tlOpened = await evaluate(`(function(){
+            var d=document.querySelector('.todo-detail'); var c=document.getElementById('todo-timeline');
+            var root=c ? c.querySelector('.tl-root') : null; var r=d.getBoundingClientRect();
+            var scrim=document.getElementById('todo-drawer-scrim'); var s=NC.store.todo.getUi();
+            return { sel: s.selectedId, drawerOpen: s.drawerOpen, isOpen: d.classList.contains('is-open'),
+                     rect: { left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width) },
+                     vw: window.innerWidth, scrimHidden: scrim.hidden, scrimOpen: scrim.classList.contains('is-open'),
+                     width: Math.round(c.getBoundingClientRect().width), root: root ? root.className : null,
+                     mounted: !!(NC.timeline && NC.timeline.isMounted && NC.timeline.isMounted()),
+                     pageOverflow: document.documentElement.scrollWidth - window.innerWidth };
+        })()`);
+        assert('全景点击任务打开覆盖抽屉', !!tlClickOpened && tlOpened.sel === tlClickOpened && tlOpened.drawerOpen === true &&
+            tlOpened.isOpen === true && Math.abs(tlOpened.rect.right - tlOpened.vw) <= 1 &&
+            tlOpened.rect.width >= 300 && tlOpened.rect.width <= 380 && tlOpened.scrimHidden === false && tlOpened.scrimOpen === true,
+            JSON.stringify(tlOpened));
+        assert('全景详情不改变时间线宽度/布局', tlOpened.width === tlBase.width && tlOpened.root === tlBase.root &&
+            /tl--horizontal/.test(tlOpened.root || '') && tlOpened.mounted === true && tlOpened.pageOverflow <= 0 &&
+            tlBase.mounted === true, JSON.stringify({ base: tlBase, opened: tlOpened }));
+
+        // 切换另一任务：保持打开并更新内容
+        const tlSwitch = await evaluate(`(async function(){
+            var chips=document.querySelectorAll('.tl-task'); if (chips.length < 2) return null;
+            var secondId=chips[1].getAttribute('data-id'); chips[1].click();
+            await new Promise(function(r){ setTimeout(r, 320); });
+            var d=document.querySelector('.todo-detail'); var s=NC.store.todo.getUi();
+            return { secondId: secondId, sel: s.selectedId, isOpen: d.classList.contains('is-open') };
+        })()`);
+        assert('全景点击另一任务切换详情内容且保持打开', tlSwitch && tlSwitch.sel === tlSwitch.secondId && tlSwitch.isOpen === true, JSON.stringify(tlSwitch));
+
+        // Esc 关闭：仍挂载 + 宽度/布局不变
+        await evaluate(`(function(){ document.body.dispatchEvent(new KeyboardEvent('keydown',{ key:'Escape', bubbles:true })); return true; })()`);
+        await sleep(400);
+        const tlClosedEsc = await evaluate(`(function(){
+            var d=document.querySelector('.todo-detail'); var c=document.getElementById('todo-timeline');
+            var root=c ? c.querySelector('.tl-root') : null; var r=d.getBoundingClientRect(); var s=NC.store.todo.getUi();
+            return { sel: s.selectedId, drawerOpen: s.drawerOpen, isOpen: d.classList.contains('is-open'),
+                     rectLeft: Math.round(r.left), width: Math.round(c.getBoundingClientRect().width),
+                     root: root ? root.className : null, mounted: !!(NC.timeline && NC.timeline.isMounted && NC.timeline.isMounted()) };
+        })()`);
+        assert('全景详情 Esc 关闭后仍挂载/布局不变', tlClosedEsc.sel === null && tlClosedEsc.drawerOpen === false &&
+            tlClosedEsc.isOpen === false && tlClosedEsc.rectLeft >= tlClosedEsc.width && tlClosedEsc.width === tlBase.width &&
+            tlClosedEsc.root === tlBase.root && tlClosedEsc.mounted === true, JSON.stringify(tlClosedEsc));
+
+        // scrim 关闭
+        await evaluate(`(function(){ var t=document.querySelector('.tl-task'); if(t) t.click(); return true; })()`);
+        await sleep(400);
+        await evaluate(`(function(){ document.getElementById('todo-drawer-scrim').click(); return true; })()`);
+        await sleep(420);
+        const tlClosedScrim = await evaluate(`(function(){
+            var d=document.querySelector('.todo-detail'); var c=document.getElementById('todo-timeline');
+            var s=NC.store.todo.getUi();
+            return { sel: s.selectedId, isOpen: d.classList.contains('is-open'),
+                     width: Math.round(c.getBoundingClientRect().width),
+                     mounted: !!(NC.timeline && NC.timeline.isMounted && NC.timeline.isMounted()) };
+        })()`);
+        assert('全景详情 scrim 关闭后仍挂载/布局不变', tlClosedScrim.sel === null && tlClosedScrim.isOpen === false &&
+            tlClosedScrim.width === tlBase.width && tlClosedScrim.mounted === true, JSON.stringify(tlClosedScrim));
+
+        // X 关闭
+        await evaluate(`(function(){ var t=document.querySelector('.tl-task'); if(t) t.click(); return true; })()`);
+        await sleep(400);
+        await evaluate(`(function(){ document.querySelector('.detail-close').click(); return true; })()`);
+        await sleep(420);
+        const tlClosedX = await evaluate(`(function(){
+            var d=document.querySelector('.todo-detail'); var c=document.getElementById('todo-timeline');
+            var s=NC.store.todo.getUi();
+            return { sel: s.selectedId, isOpen: d.classList.contains('is-open'),
+                     width: Math.round(c.getBoundingClientRect().width),
+                     root: (c.querySelector('.tl-root')||{}).className,
+                     mounted: !!(NC.timeline && NC.timeline.isMounted && NC.timeline.isMounted()) };
+        })()`);
+        assert('全景详情 X 关闭后仍挂载/布局不变', tlClosedX.sel === null && tlClosedX.isOpen === false &&
+            tlClosedX.width === tlBase.width && /tl--horizontal/.test(tlClosedX.root || '') && tlClosedX.mounted === true,
+            JSON.stringify(tlClosedX));
+
         // D) 切回 list（详情仍打开）
         await evaluate(`(function(){ var b=document.querySelector('#todo-mode-seg [data-mode="list"]'); if (b) b.click(); return true; })()`);
         await sleep(600);

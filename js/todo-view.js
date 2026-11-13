@@ -284,7 +284,10 @@
             els.detailInner.addEventListener('blur', onDetailBlur, true);
         }
         if (els.scrim) {
-            els.scrim.addEventListener('click', function () { store.closeDrawer(); });
+            els.scrim.addEventListener('click', function () {
+                flushDetailEdits();
+                closeDetailAnimated();
+            });
         }
 
         /* 空状态按钮 */
@@ -509,11 +512,9 @@
         if (mode !== 'list' && mode !== 'timeline') return false;
         var opts = options || {};
         if (store.getDoc().settings.viewMode === mode) return true;
-        if (mode === 'timeline') {
-            /* 切换前先提交未落库的详情编辑并关闭检查器，避免数据丢失 */
-            flushDetailEdits();
-            if (store.getUi().drawerOpen) store.closeDrawer();
-        }
+        /* 切换前先提交未落库的详情编辑，并收起列表检查器/全景覆盖层 */
+        flushDetailEdits();
+        if (store.getUi().selectedId || store.getUi().drawerOpen) store.clearSelection();
         setSegActive(mode);
         store.updateSettings({ viewMode: mode });
         if (opts.animate !== false) playModeEnter();
@@ -2294,8 +2295,8 @@
 
     function playDetailOpen() {
         if (!els.detail || !canAnimateDetail()) return;
-        /* 移动端抽屉本身有 220ms 滑入，不再叠加内容动画 */
-        if (isMobileDetail()) return;
+        /* 移动端 / timeline 覆盖抽屉本身有 220ms 滑入，不再叠加内容动画 */
+        if (isMobileDetail() || store.getDoc().settings.viewMode === 'timeline') return;
         els.detail.classList.remove('is-detail-opening');
         void els.detail.offsetWidth;
         els.detail.classList.add('is-detail-opening');
@@ -2334,7 +2335,8 @@
         detailClosing = true;
         detailClosingId = store.getUi().selectedId;
         els.detail.classList.remove('is-detail-opening');
-        if (isMobileDetail()) {
+        var overlay = isMobileDetail() || store.getDoc().settings.viewMode === 'timeline';
+        if (overlay) {
             /* 抽屉滑出：立即移除 open 触发 transform 过渡；scrim 保持到结束后再 hidden */
             els.detail.classList.remove('is-open');
             if (els.scrim) els.scrim.classList.remove('is-open');
@@ -2394,7 +2396,9 @@
     function syncDrawer(ui) {
         if (!els.detail) return;
         var mobile = global.matchMedia ? global.matchMedia('(max-width: 1100px)').matches : false;
-        var open = mobile && ui.drawerOpen && !!ui.selectedId;
+        var timeline = store.getDoc().settings.viewMode === 'timeline';
+        var overlay = mobile || timeline;
+        var open = overlay && ui.drawerOpen && !!ui.selectedId;
         toggleClass(els.detail, 'is-open', open);
         if (els.scrim) {
             if (open) {
@@ -2402,8 +2406,8 @@
                 global.requestAnimationFrame(function () { els.scrim.classList.add('is-open'); });
             } else {
                 els.scrim.classList.remove('is-open');
-                /* 移动端关闭动画进行中：等抽屉滑出结束再 hidden（避免 scrim 先消失） */
-                if (!(detailClosing && mobile)) els.scrim.hidden = true;
+                /* 覆盖层关闭动画进行中：等抽屉滑出结束再 hidden（避免 scrim 先消失） */
+                if (!(detailClosing && overlay)) els.scrim.hidden = true;
             }
         }
     }

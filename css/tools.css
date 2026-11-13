@@ -3663,8 +3663,42 @@ html[data-lite="true"] .todo-timeline {
     grid-template-columns: 176px minmax(0, 1fr);
 }
 
+/* 全景模式：详情改为右侧覆盖抽屉（脱离 grid，不改变时间线宽度） */
 .todo-shell.is-timeline .todo-detail {
-    display: none;
+    display: flex;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: min(380px, 94vw);
+    padding: 0;
+    border-left: 1px solid var(--nc-border-strong);
+    background: var(--nc-elevated);
+    box-shadow: var(--nc-shadow-3);
+    z-index: calc(var(--nc-z-modal) - 15);
+    transform: translateX(102%);
+    transition: transform var(--nc-dur-panel) var(--nc-ease-drawer);
+    pointer-events: none;
+}
+
+.todo-shell.is-timeline .todo-detail.is-open {
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.todo-shell.is-timeline .todo-detail__inner {
+    padding: 18px 18px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+
+html[data-lite="true"] .todo-shell.is-timeline .todo-detail {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .todo-shell.is-timeline .todo-detail {
+        transition: none;
+    }
 }
 
 /* 全景模式只保留「列表 / 全景」切换：其他列表控件保留布局占位但不可见/不可点 */
