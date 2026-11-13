@@ -10,7 +10,7 @@
  *  5. 刻度区指针拖拽框选（实时高亮 + 松开生效）与双击重置
  *  6. 任务点击 → NC.store.todo.selectTask（选中态 + 详情抽屉）
  *  7. 范围外计数 / 无日期任务完全不显示 / 显示已完成开关与 settings 同步
- *  8. 截图：标准/浅色/Lite × 1440/390 → /tmp/nc-shots/v4/timeline/
+ *  8. 截图：标准/浅色/Lite × 1440/390（默认 / 最右 / 未来 3 天 / 本周）→ /tmp/nc-shots/v48/timeline/
  *  9. 全程无 console.error / 未捕获异常
  *
  * 用法：node tools/e2e-timeline.js [--verbose]
@@ -27,7 +27,7 @@ const CHROME = process.env.CHROME || '/Applications/Google Chrome for Testing.ap
 const ROOT = path.resolve(__dirname, '..');
 const PORT = 9720 + (process.pid % 160);
 const URL_NTOOLS = 'file://' + path.join(ROOT, 'ntools.html').split(path.sep).join('/');
-const SHOT_DIR = process.env.TIMELINE_SHOT_DIR || '/tmp/nc-shots/v4/timeline';
+const SHOT_DIR = process.env.TIMELINE_SHOT_DIR || '/tmp/nc-shots/v48/timeline';
 const VERBOSE = process.argv.indexOf('--verbose') > -1;
 const DAY = 86400000;
 const HOUR = 3600000;
@@ -207,9 +207,9 @@ function buildMockDoc(now) {
     push({ id: 'tl-done', title: '提交上周周报', status: 'done', completedAt: now - HOUR, due: round(now + 4 * HOUR), createdAt: round(now + 4 * HOUR) - 3 * HOUR });
     push({ id: 'tl-canceled', title: '取消的供应商拜访', status: 'canceled', due: round(now + 26 * HOUR), createdAt: round(now + 26 * HOUR) - 5 * HOUR });
     // ⑤ 时长条专用任务（用于宽度比例断言）
-    push({ id: 'tl-dur-long', title: '时长条·八天任务', due: round(now + 4 * DAY), createdAt: now - 4 * DAY, priority: 'high' });
-    push({ id: 'tl-dur-mid', title: '时长条·四天任务', due: round(now + 2 * DAY), createdAt: now - 2 * DAY });
-    push({ id: 'tl-dur-short', title: '时长条·四十分钟任务', due: round(now + 1 * DAY), createdAt: round(now + 1 * DAY) - 40 * 60000 });
+    push({ id: 'tl-dur-long', title: '时长条·两天任务', due: now + 2 * DAY + 2 * HOUR, createdAt: now + 2 * HOUR, priority: 'high' });
+    push({ id: 'tl-dur-mid', title: '时长条·半天任务', due: now + 1 * DAY + 12 * HOUR, createdAt: now + 1 * DAY });
+    push({ id: 'tl-dur-short', title: '时长条·四十分钟任务', due: now + 1 * DAY + 2 * HOUR, createdAt: now + 1 * DAY + 2 * HOUR - 40 * 60000 });
     // ⑥ 右端溢出：创建于范围内，到期远晚于范围
     push({ id: 'tl-clip-end', title: '跨范围长任务（右端裁剪）', due: round(now + 10 * DAY), createdAt: now + 1 * DAY });
     // ⑦ 左侧清单/搜索筛选专用任务
@@ -242,51 +242,40 @@ function buildMockDoc(now) {
     return base;
 }
 
-/** 与模块 dataDefaultRange() 同口径（默认视图 all / 无搜索 / 无清单过滤） */
-function dataRangeNode(doc, now) {
-    const HOUR = 3600000;
-    const DAY = 86400000;
-    const tasks = doc.tasks.filter((task) => !task.deletedAt && typeof task.due === 'number');
-    if (!tasks.length) return { start: now, end: now + 7 * DAY };
-    const forward = now + 7 * DAY;
-    let earliest = Infinity;
-    let latestDue = forward;
-    tasks.forEach((task) => {
-        const start = Math.min(typeof task.createdAt === 'number' ? task.createdAt : task.due, task.due);
-        if (start < earliest) earliest = start;
-        if (start <= forward && task.due > latestDue) latestDue = task.due;
-    });
-    let start = Math.floor(Math.min(earliest, now) / HOUR) * HOUR;
-    start = Math.max(start, now - 45 * DAY);
-    let end = Math.max(latestDue, forward, start + 7 * DAY);
-    end = Math.min(end, start + 60 * DAY);
-    return { start, end };
+/** 与模块 defaultRange() 同口径：今天 00:00 → +5 天 */
+function defaultRangeNode(now) {
+    const d = new Date(now);
+    d.setHours(0, 0, 0, 0);
+    const start = d.getTime();
+    return { start, end: start + 5 * DAY };
 }
 
-/** 与模块 collect() 同口径：默认 view=all / 无搜索 / 无清单过滤 / showCompleted=true */
+/** 与模块 collect() 同口径：默认 view=all / 无搜索 / 无清单过滤 / showCompleted=false */
 function expectedCounts(doc, now) {
-    const range = dataRangeNode(doc, now);
-    const withDue = doc.tasks.filter((task) => !task.deletedAt && typeof task.due === 'number');
-    const inRange = [];
-    const edge = [];
-    withDue.forEach((task) => {
-        const start = Math.min(typeof task.createdAt === 'number' ? task.createdAt : task.due, task.due);
-        if (task.due < range.start) {
-            if (task.status === 'open') edge.push(task);
-            return;
-        }
-        if (start > range.end) return;
-        inRange.push(task);
-    });
-    const edgeSorted = edge.sort((a, b) => a.due - b.due).slice(0, 12);
+    const range = defaultRangeNode(now);
+    const tasks = doc.tasks.filter((task) => !task.deletedAt && typeof task.due === 'number');
+    const visible = tasks.filter((task) => task.status !== 'done' && task.status !== 'canceled');
+    const inRange = visible.filter((task) => task.due >= range.start && task.due <= range.end);
+    const edgeAll = visible.filter((task) => task.due < range.start && task.status === 'open')
+        .sort((a, b) => a.due - b.due);
+    const edge = edgeAll.slice(0, 12);
+    const outRange = visible.filter((task) => task.due < range.start || task.due > range.end).length;
+    let latestDue = null;
+    visible.forEach((task) => { if (latestDue == null || task.due > latestDue) latestDue = task.due; });
+    const hiddenDone = tasks.filter((task) => {
+        return task.due >= range.start && task.due <= range.end &&
+            (task.status === 'done' || task.status === 'canceled');
+    }).length;
     return {
-        range,
+        range: range,
         total: doc.tasks.length,
-        withDue: withDue.length,
+        withDue: tasks.length,
+        visible: visible.length,
         inRange: inRange.length,
-        edgeOverdue: edgeSorted.length,
-        visible: inRange.length + edgeSorted.length,
-        outRange: withDue.length - inRange.length - edgeSorted.length
+        edge: edge.length,
+        outRange: outRange,
+        latestDue: latestDue,
+        hiddenDone: hiddenDone
     };
 }
 
@@ -436,14 +425,28 @@ async function main() {
         const shape = await evaluate(client, `(function(){
             var root = document.querySelector('.tl-root');
             var state = NC.timeline.getState();
+            var scroll = document.querySelector('.tl-scroll');
+            var canvas = document.querySelector('.tl-canvas');
+            var input = document.querySelector('.tl-switch input');
             return {
                 mode: state.mode,
                 range: state.range,
+                rangeDays: state.rangeDays,
+                dayWidth: state.dayWidth,
+                displayStart: state.displayStart,
+                displayEnd: state.displayEnd,
                 rootMode: root ? root.getAttribute('data-mode') : null,
                 hasAxis: !!document.querySelector('.tl-axis'),
                 hasBrush: !!document.querySelector('.tl-brush-layer'),
                 startInput: (document.querySelector('.tl-field__input') || {}).value || null,
+                viewportWidth: scroll ? scroll.clientWidth : 0,
+                scrollLeft: scroll ? Math.round(scroll.scrollLeft) : null,
+                scrollWidth: scroll ? scroll.scrollWidth : null,
+                canvasWidth: canvas ? canvas.offsetWidth : null,
                 chips: document.querySelectorAll('.tl-task').length,
+                doneBars: document.querySelectorAll('.tl-task.is-done').length,
+                canceledBars: document.querySelectorAll('.tl-task.is-canceled').length,
+                switchChecked: input ? input.checked : null,
                 noDueBlocks: document.querySelectorAll('.tl-nodue').length,
                 noDueChips: document.querySelectorAll('[data-id^="tl-nodue"], .tl-nodue__chip').length,
                 statsText: (document.querySelector('.tl-stats') || {}).textContent || '',
@@ -452,25 +455,33 @@ async function main() {
             };
         })()`);
         report.assert('横向模式（1440 容器）', shape.mode === 'h' && shape.rootMode === 'h', JSON.stringify(shape));
-        report.assert('默认范围数据化（覆盖最早 createdAt / ≥7 天 / 不早于 now-45d）',
+        report.assert('默认范围约 5 天（今天 00:00 起）',
             !!shape.range &&
-            Math.abs(shape.range.start - expected.range.start) <= 120000 &&
-            Math.abs(shape.range.end - expected.range.end) <= 120000 &&
-            shape.range.start <= now - 9 * DAY &&
-            shape.range.start >= now - 45 * DAY - HOUR &&
-            shape.range.end >= now + 7 * DAY &&
-            shape.range.end - shape.range.start >= 7 * DAY,
-            JSON.stringify({ actual: shape.range, expected: expected.range }));
+            Math.abs(shape.range.start - expected.range.start) <= 1000 &&
+            Math.abs((shape.range.end - shape.range.start) - 5 * DAY) <= 60000 &&
+            Math.abs(shape.rangeDays - 5) < 0.01,
+            JSON.stringify({ actual: shape.range, expected: expected.range, rangeDays: shape.rangeDays }));
+        report.assert('默认视口约 5 天（选中天数铺满视口）',
+            Math.abs(shape.dayWidth - shape.viewportWidth / 5) <= 2,
+            JSON.stringify({ dayWidth: shape.dayWidth, viewportWidth: shape.viewportWidth }));
+        report.assert('初始定位到范围开始（现在可见）', shape.scrollLeft <= 1 && shape.nowHidden === false,
+            JSON.stringify({ scrollLeft: shape.scrollLeft, nowHidden: shape.nowHidden }));
         report.assert('刻度区/框选层存在', shape.hasAxis && shape.hasBrush);
-        report.assert('范围内任务渲染',
-            shape.chips === Math.min(expected.visible, 220) && shape.chips === shape.counts.visible && shape.chips === shape.counts.rendered,
-            JSON.stringify({ chips: shape.chips, rendered: shape.counts.rendered, visible: shape.counts.visible, expected: expected.visible, hiddenOverlap: shape.counts.hiddenOverlap }));
+        report.assert('可见任务全部渲染（画布覆盖到最晚任务）',
+            shape.chips === Math.min(expected.visible, 600) && shape.chips === shape.counts.visible && shape.chips === shape.counts.rendered,
+            JSON.stringify({ chips: shape.chips, rendered: shape.counts.rendered, visible: shape.counts.visible, expected: expected.visible }));
         report.assert('顶部输入与范围同步', !!shape.startInput, shape.startInput);
-        report.assert('范围外计数已显示', shape.statsText.indexOf(String(expected.outRange)) > -1, shape.statsText.slice(0, 120));
+        report.assert('范围内/范围外统计正确',
+            shape.statsText.indexOf(String(expected.inRange)) > -1 && shape.statsText.indexOf(String(expected.outRange)) > -1,
+            shape.statsText.slice(0, 120));
+        report.assert('默认隐藏已完成/已取消（开关默认关闭）',
+            shape.doneBars === 0 && shape.canceledBars === 0 && shape.switchChecked === false &&
+            shape.counts.hiddenDone === expected.hiddenDone,
+            JSON.stringify({ done: shape.doneBars, canceled: shape.canceledBars, switchChecked: shape.switchChecked, hiddenDone: shape.counts.hiddenDone, expectedHidden: expected.hiddenDone }));
         report.assert('不再显示无日期区/无日期计数',
             shape.noDueBlocks === 0 && shape.noDueChips === 0 && shape.statsText.indexOf('无日期') === -1 &&
             !(shape.counts && 'noDue' in shape.counts),
-            JSON.stringify({ blocks: shape.noDueBlocks, chips: shape.noDueChips, stats: shape.statsText.slice(0, 120), counts: shape.counts }));
+            JSON.stringify({ blocks: shape.noDueBlocks, chips: shape.noDueChips, stats: shape.statsText.slice(0, 120) }));
         report.assert('“现在”指示线可见', shape.nowHidden === false);
 
         const badges = await evaluate(client, `(function(){
@@ -478,96 +489,140 @@ async function main() {
                 pinned: document.querySelectorAll('.tl-task.is-pinned').length,
                 recurring: document.querySelectorAll('.tl-task.is-recurring').length,
                 overdue: document.querySelectorAll('.tl-task.is-overdue').length,
-                done: document.querySelectorAll('.tl-task.is-done').length,
-                canceled: document.querySelectorAll('.tl-task.is-canceled').length,
-                highPrio: document.querySelectorAll('.tl-task.is-prio-high, .tl-task.is-prio-urgent').length,
                 edge: document.querySelectorAll('.tl-task.is-edge-overdue').length
             };
         })()`);
         report.assert('置顶标识', badges.pinned >= 1, JSON.stringify(badges));
         report.assert('循环标识', badges.recurring >= 1, JSON.stringify(badges));
         report.assert('逾期标识（范围左缘固定）', badges.overdue >= 1 && badges.edge >= 1, JSON.stringify(badges));
-        report.assert('已完成/取消弱化', badges.done >= 1 && badges.canceled >= 1, JSON.stringify(badges));
 
-        // ---------- 时长条：createdAt → due 的宽度/裁剪/最小宽度 ----------
-        const bars = await evaluate(client, `(function(){
+        // ---------- 时长条 / 画布右端 / 右滚到最晚任务 ----------
+        const barState = await evaluate(client, `(function(){
             var canvas = document.querySelector('.tl-canvas');
             var cr = canvas.getBoundingClientRect();
+            var state = NC.timeline.getState();
             var result = {};
+            var maxDue = -Infinity;
+            var maxId = null;
             document.querySelectorAll('.tl-task').forEach(function(chip){
                 var r = chip.getBoundingClientRect();
+                var due = Number(chip.getAttribute('data-due'));
                 result[chip.getAttribute('data-id')] = {
                     left: r.left, right: r.right, width: r.width,
+                    offsetLeft: chip.offsetLeft, offsetWidth: chip.offsetWidth,
                     duration: Number(chip.getAttribute('data-duration')),
-                    due: Number(chip.getAttribute('data-due')),
+                    due: due,
                     start: Number(chip.getAttribute('data-start')),
                     clipStart: chip.getAttribute('data-clip-start') === 'true',
                     clipEnd: chip.getAttribute('data-clip-end') === 'true',
-                    short: chip.getAttribute('data-short') === 'true',
-                    text: chip.textContent.slice(0, 20)
+                    short: chip.getAttribute('data-short') === 'true'
                 };
+                if (due > maxDue) { maxDue = due; maxId = chip.getAttribute('data-id'); }
             });
-            return { bars: result, canvas: { left: cr.left, right: cr.right, width: cr.width }, range: NC.timeline.getState().range };
+            return {
+                bars: result,
+                canvas: { left: cr.left, width: canvas.offsetWidth },
+                state: { dayWidth: state.dayWidth, displayStart: state.displayStart, displayEnd: state.displayEnd, latestDue: state.counts.latestDue },
+                maxDue: maxDue === -Infinity ? null : maxDue,
+                maxId: maxId
+            };
         })()`);
-        const longBar = bars.bars['tl-dur-long'];
-        const midBar = bars.bars['tl-dur-mid'];
-        const shortBar = bars.bars['tl-dur-short'];
-        const pinBar = bars.bars['tl-pin'];
-        const clipEndBar = bars.bars['tl-clip-end'];
+        const longBar = barState.bars['tl-dur-long'];
+        const midBar = barState.bars['tl-dur-mid'];
+        const shortBar = barState.bars['tl-dur-short'];
+        const pinBar = barState.bars['tl-pin'];
+        const clipEndBar = barState.bars['tl-clip-end'];
         report.assert('时长条数据齐全', !!(longBar && midBar && shortBar && pinBar && clipEndBar),
-            Object.keys(bars.bars).slice(0, 12).join(','));
+            Object.keys(barState.bars).slice(0, 12).join(','));
         if (longBar && midBar && shortBar) {
             report.assert('不同时长宽度不同且大于最小宽度',
                 longBar.width > midBar.width + 20 && midBar.width > 44 && longBar.width > 44,
                 JSON.stringify({ long: Math.round(longBar.width), mid: Math.round(midBar.width), short: Math.round(shortBar.width) }));
             const ratio = longBar.width / Math.max(1, midBar.width);
-            // 裁剪到范围后的可见时长（与模块渲染宽度口径一致）
             const clipDuration = (bar) => {
-                const start = Math.max(bar.start, bars.range.start);
-                const end = Math.min(bar.due, bars.range.end);
+                const start = Math.max(bar.start, barState.state.displayStart);
+                const end = Math.min(bar.due, barState.state.displayEnd);
                 return Math.max(1, end - start);
             };
             const durationRatio = clipDuration(longBar) / clipDuration(midBar);
-            report.assert('宽度与（裁剪后）创建→到期时长成比例',
+            report.assert('宽度与创建→到期时长成比例',
                 Math.abs(ratio - durationRatio) / durationRatio < 0.25,
                 JSON.stringify({ ratio: ratio.toFixed(2), durationRatio: durationRatio.toFixed(2) }));
-            const expectedRight = bars.canvas.left + ((shortBar.due - bars.range.start) / (bars.range.end - bars.range.start)) * bars.canvas.width;
+            const pxPerDay = barState.state.dayWidth;
+            const expectedRight = barState.canvas.left + ((shortBar.due - barState.state.displayStart) / DAY) * pxPerDay;
             report.assert('极短任务有最小可视宽度（44–60px，右端锚定 due）',
                 shortBar.width >= 43 && shortBar.width <= 60 && shortBar.short === true &&
                 Math.abs(shortBar.right - expectedRight) <= 5,
                 JSON.stringify({ width: Math.round(shortBar.width), short: shortBar.short, right: Math.round(shortBar.right), expectedRight: Math.round(expectedRight) }));
         }
-        report.assert('默认范围下时长条完整显示（无裁剪标记）',
-            !!pinBar && !!longBar && !!midBar &&
-            pinBar.clipStart === false && pinBar.clipEnd === false &&
+        report.assert('默认窗口内时长条不裁剪（long/mid 完整）',
+            !!longBar && !!midBar &&
             longBar.clipStart === false && longBar.clipEnd === false &&
             midBar.clipStart === false && midBar.clipEnd === false,
-            JSON.stringify({ pin: pinBar && [pinBar.clipStart, pinBar.clipEnd], long: longBar && [longBar.clipStart, longBar.clipEnd], mid: midBar && [midBar.clipStart, midBar.clipEnd] }));
-        // 手动缩小范围 → 裁剪标记（默认数据化范围下条完整，不应有裁剪）
-        await evaluate(client, `(function(){ NC.timeline.setRange(Date.now() - 1 * 86400000, Date.now() + 2 * 86400000); return true; })()`);
-        await sleep(700);
-        const clippedBars = await evaluate(client, `(function(){
-            var canvas = document.querySelector('.tl-canvas').getBoundingClientRect();
-            function info(id){
-                var el = document.querySelector('.tl-task[data-id="' + id + '"]');
-                if (!el) return null;
-                var r = el.getBoundingClientRect();
-                return {
-                    clipStart: el.getAttribute('data-clip-start') === 'true',
-                    clipEnd: el.getAttribute('data-clip-end') === 'true',
-                    left: r.left, right: r.right
-                };
-            }
-            return { canvas: { left: canvas.left, right: canvas.right }, pin: info('tl-pin'), clipEnd: info('tl-clip-end') };
+            JSON.stringify({ long: longBar && [longBar.clipStart, longBar.clipEnd], mid: midBar && [midBar.clipStart, midBar.clipEnd] }));
+        report.assert('画布右端≈最晚任务（16px padding，无多余空白）',
+            !!barState.maxId &&
+            barState.maxDue === barState.state.latestDue &&
+            (barState.canvas.width - (barState.bars[barState.maxId].offsetLeft + barState.bars[barState.maxId].offsetWidth)) >= 8 &&
+            (barState.canvas.width - (barState.bars[barState.maxId].offsetLeft + barState.bars[barState.maxId].offsetWidth)) <= 20,
+            JSON.stringify({ maxId: barState.maxId, maxDue: barState.maxDue, canvasWidth: barState.canvas.width, lastRight: barState.maxId ? Math.round(barState.bars[barState.maxId].offsetLeft + barState.bars[barState.maxId].offsetWidth) : null }));
+
+        const scrolledRight = await evaluate(client, `(function(){
+            var scroll = document.querySelector('.tl-scroll');
+            scroll.scrollLeft = scroll.scrollWidth;
+            var canvas = document.querySelector('.tl-canvas');
+            var state = NC.timeline.getState();
+            var chips = document.querySelectorAll('.tl-task');
+            var maxId = null, maxDue = -Infinity;
+            chips.forEach(function(chip){
+                var due = Number(chip.getAttribute('data-due'));
+                if (due > maxDue) { maxDue = due; maxId = chip.getAttribute('data-id'); }
+            });
+            var target = document.querySelector('.tl-task[data-id="' + maxId + '"]');
+            var r = target ? target.getBoundingClientRect() : null;
+            var sr = scroll.getBoundingClientRect();
+            return {
+                scrollLeft: Math.round(scroll.scrollLeft),
+                maxScroll: Math.round(scroll.scrollWidth - scroll.clientWidth),
+                visible: !!r && r.right <= sr.right + 1 && r.right >= sr.left,
+                rightGap: r ? Math.round(sr.right - r.right) : null,
+                viewportWidth: sr.width,
+                canvasRightGap: canvas ? (canvas.offsetWidth - (target ? target.offsetLeft + target.offsetWidth : 0)) : null
+            };
         })()`);
-        report.assert('手动缩小范围后：createdAt 早于起点 → 左端裁剪标记',
-            !!clippedBars.pin && clippedBars.pin.clipStart === true &&
-            Math.abs(clippedBars.pin.left - clippedBars.canvas.left) <= 3,
-            JSON.stringify(clippedBars.pin && { clipStart: clippedBars.pin.clipStart, left: Math.round(clippedBars.pin.left), canvasLeft: Math.round(clippedBars.canvas.left) }));
-        report.assert('手动缩小范围后：due 晚于终点 → 右端裁剪标记',
-            !!clippedBars.clipEnd && clippedBars.clipEnd.clipEnd === true &&
-            Math.abs(clippedBars.clipEnd.right - clippedBars.canvas.right) <= 4,
-            JSON.stringify(clippedBars.clipEnd && { clipEnd: clippedBars.clipEnd.clipEnd, right: Math.round(clippedBars.clipEnd.right), canvasRight: Math.round(clippedBars.canvas.right) }));
+        report.assert('滚动到最右可见最晚任务（无超限空白）',
+            scrolledRight.scrollLeft >= scrolledRight.maxScroll - 2 &&
+            scrolledRight.visible === true &&
+            scrolledRight.canvasRightGap != null && scrolledRight.canvasRightGap >= 8 && scrolledRight.canvasRightGap <= 20,
+            JSON.stringify(scrolledRight));
+        await evaluate(client, "(function(){ document.querySelector('.tl-scroll').scrollLeft = 0; return true; })()");
+        await sleep(200);
+
+        // 手动缩小范围：左端裁剪保留；画布仍延伸到最晚任务（无右端裁剪）
+        await evaluate(client, `(function(){ NC.timeline.setRange(Date.now() + 1 * 86400000, Date.now() + 2 * 86400000); return true; })()`);
+        await sleep(700);
+        const narrowed = await evaluate(client, `(function(){
+            var canvas = document.querySelector('.tl-canvas');
+            var cr = canvas.getBoundingClientRect();
+            var chip = document.querySelector('.tl-task[data-id="tl-dur-long"]');
+            var r = chip ? chip.getBoundingClientRect() : null;
+            var state = NC.timeline.getState();
+            return {
+                clipStart: chip ? chip.getAttribute('data-clip-start') === 'true' : null,
+                clipEnd: chip ? chip.getAttribute('data-clip-end') === 'true' : null,
+                left: r ? r.left : null, canvasLeft: cr.left,
+                canvasWidth: canvas.offsetWidth,
+                viewportWidth: document.querySelector('.tl-scroll').clientWidth,
+                scrollLeft: Math.round(document.querySelector('.tl-scroll').scrollLeft),
+                scrollWidth: document.querySelector('.tl-scroll').scrollWidth
+            };
+        })()`);
+        report.assert('手动缩小范围：左端裁剪标记保留',
+            narrowed.clipStart === true && Math.abs(narrowed.left - narrowed.canvasLeft) <= 3,
+            JSON.stringify({ clipStart: narrowed.clipStart, left: narrowed.left && Math.round(narrowed.left), canvasLeft: Math.round(narrowed.canvasLeft) }));
+        report.assert('手动缩小范围：画布仍延伸到最晚任务（可向右滚动）',
+            narrowed.canvasWidth > narrowed.viewportWidth && narrowed.scrollWidth > narrowed.viewportWidth,
+            JSON.stringify({ canvasWidth: narrowed.canvasWidth, viewport: narrowed.viewportWidth, scrollWidth: narrowed.scrollWidth }));
         await evaluate(client, `(function(){ NC.timeline.presetRange('reset'); return true; })()`);
         await sleep(700);
 
@@ -634,29 +689,71 @@ async function main() {
             Math.abs(afterInputs.range.end - narrowEnd) < 60000, JSON.stringify(afterInputs));
         report.assert('范围变化后标签更新', afterInputs.label.length > 6, afterInputs.label);
 
-        // ---------- 预设 ----------
-        for (const preset of [{ id: 'next3', days: 3 }, { id: 'month', minDays: 27 }]) {
-            await evaluate(client, `(function(){
-                var btn = document.querySelector('.tl-preset[data-preset="${preset.id}"]');
-                if (btn) btn.click();
-                return true;
+        // ---------- 预设：按选择天数缩放，仍可滚到最晚任务 ----------
+        async function presetInfo() {
+            return evaluate(client, `(function(){
+                var state = NC.timeline.getState();
+                var scroll = document.querySelector('.tl-scroll');
+                var viewportWidth = scroll.clientWidth;
+                var initialScrollLeft = Math.round(scroll.scrollLeft);
+                scroll.scrollLeft = scroll.scrollWidth;
+                var chips = document.querySelectorAll('.tl-task');
+                var maxId = null, maxDue = -Infinity;
+                chips.forEach(function(chip){
+                    var due = Number(chip.getAttribute('data-due'));
+                    if (due > maxDue) { maxDue = due; maxId = chip.getAttribute('data-id'); }
+                });
+                var target = document.querySelector('.tl-task[data-id="' + maxId + '"]');
+                var sr = scroll.getBoundingClientRect();
+                var tr = target ? target.getBoundingClientRect() : null;
+                var result = {
+                    range: state.range,
+                    rangeDays: state.rangeDays,
+                    dayWidth: state.dayWidth,
+                    viewportWidth: viewportWidth,
+                    initialScrollLeft: initialScrollLeft,
+                    maxVisible: !!tr && tr.right <= sr.right + 1 && tr.right >= sr.left,
+                    maxRightGap: tr ? Math.round(sr.right - tr.right) : null,
+                    scrollMax: Math.round(scroll.scrollWidth - scroll.clientWidth)
+                };
+                scroll.scrollLeft = 0;
+                return result;
             })()`);
-            await sleep(500);
-            const presetState = await evaluate(client, 'JSON.stringify(NC.timeline.getState().range)');
-            const range = JSON.parse(presetState);
-            const span = (range.end - range.start) / DAY;
-            if (preset.days) report.assert('预设「未来 3 天」', Math.abs(span - preset.days) < 0.02, 'span=' + span.toFixed(2));
-            else report.assert('预设「本月」', span >= preset.minDays, 'span=' + span.toFixed(2));
+        }
+        for (const preset of [
+            { id: 'next3', label: '未来 3 天', expectDays: 3 },
+            { id: 'week', label: '本周', expectDays: 7 },
+            { id: 'month', label: '本月', minDays: 27 }
+        ]) {
+            await evaluate(client, `(function(){ var btn = document.querySelector('.tl-preset[data-preset="${preset.id}"]'); if (btn) btn.click(); return true; })()`);
+            await sleep(650);
+            const info = await presetInfo();
+            const span = info.rangeDays;
+            if (preset.expectDays) {
+                report.assert('预设「' + preset.label + '」按选择天数缩放',
+                    Math.abs(span - preset.expectDays) < 0.02 &&
+                    Math.abs(info.dayWidth - info.viewportWidth / span) <= 2 &&
+                    info.initialScrollLeft <= 1,
+                    JSON.stringify({ span: span.toFixed(2), dayWidth: Math.round(info.dayWidth), initialScrollLeft: info.initialScrollLeft }));
+            } else {
+                report.assert('预设「' + preset.label + '」按选择天数缩放',
+                    span >= preset.minDays &&
+                    Math.abs(info.dayWidth - info.viewportWidth / span) <= 2 &&
+                    info.initialScrollLeft <= 1,
+                    JSON.stringify({ span: span.toFixed(2), dayWidth: Math.round(info.dayWidth), initialScrollLeft: info.initialScrollLeft }));
+            }
+            report.assert('预设「' + preset.label + '」后仍可滚到最晚任务',
+                info.maxVisible === true && info.maxRightGap != null && info.maxRightGap >= 0 && info.maxRightGap <= info.viewportWidth,
+                JSON.stringify({ maxVisible: info.maxVisible, maxRightGap: info.maxRightGap, scrollMax: info.scrollMax }));
         }
         await evaluate(client, `(function(){ var btn = document.querySelector('.tl-preset[data-preset="reset"]'); if (btn) btn.click(); return true; })()`);
-        await sleep(500);
-        const resetRange = JSON.parse(await evaluate(client, 'JSON.stringify(NC.timeline.getState().range)'));
-        report.assert('重置恢复数据化默认范围（覆盖 createdAt、≥7 天）',
-            Math.abs(resetRange.start - expected.range.start) <= 120000 &&
-            Math.abs(resetRange.end - expected.range.end) <= 120000 &&
-            resetRange.start <= now - 9 * DAY &&
-            resetRange.end - resetRange.start >= 7 * DAY,
-            JSON.stringify({ actual: resetRange, expected: expected.range }));
+        await sleep(600);
+        const resetState = await evaluate(client, '(function(){ var s = NC.timeline.getState(); return { range: s.range, rangeDays: s.rangeDays, scrollLeft: Math.round(document.querySelector(".tl-scroll").scrollLeft) }; })()');
+        report.assert('重置回默认 5 天窗口（今天 00:00 起）',
+            Math.abs(resetState.range.start - expected.range.start) <= 120000 &&
+            Math.abs(resetState.rangeDays - 5) < 0.01 &&
+            resetState.scrollLeft <= 1,
+            JSON.stringify(resetState));
 
         // ---------- 左侧筛选联动：视图 / 清单 / 搜索 ----------
         const chipsAll = await evaluate(client, "document.querySelectorAll('.tl-task').length");
@@ -737,31 +834,40 @@ async function main() {
         await sleep(120);
         await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x2, y, button: 'left', clickCount: 1 });
         await sleep(600);
-        const brushedRange = JSON.parse(await evaluate(client, 'JSON.stringify(NC.timeline.getState().range)'));
-        const brushFraction = (brushedRange.end - brushedRange.start) / resetSpan;
-        report.assert('框选松开生效（范围变窄）', brushFraction > 0.05 && brushFraction < 0.95, 'fraction=' + brushFraction.toFixed(2));
+        const brushedInfo = JSON.parse(await evaluate(client, '(function(){ var s = NC.timeline.getState(); return JSON.stringify({ range: s.range, rangeDays: s.rangeDays, scrollLeft: Math.round(document.querySelector(".tl-scroll").scrollLeft) }); })()'));
+        const brushFraction = (brushedInfo.range.end - brushedInfo.range.start) / resetSpan;
+        report.assert('框选松开生效（范围变窄并回到范围开始）',
+            brushFraction > 0.05 && brushFraction < 0.95 && brushedInfo.scrollLeft <= 1,
+            JSON.stringify({ fraction: Number(brushFraction.toFixed(2)), scrollLeft: brushedInfo.scrollLeft, x1: x1, x2: x2 }));
         const liveHidden = await evaluate(client, "(function(){ var el = document.querySelector('.tl-brush-live'); return !el || el.hidden; })()");
         report.assert('框选完成后高亮隐藏', liveHidden);
 
-        // 双击重置
-        await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: brushRect.left + brushRect.width * 0.5, y, button: 'left', clickCount: 1 });
-        await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: brushRect.left + brushRect.width * 0.5, y, button: 'left', clickCount: 1 });
-        await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: brushRect.left + brushRect.width * 0.5, y, button: 'left', clickCount: 2 });
-        await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: brushRect.left + brushRect.width * 0.5, y, button: 'left', clickCount: 2 });
+        // 双击重置（使用可见区中心，画布可能远宽于视口）
+        const dblX = visibleLeft + (visibleRight - visibleLeft) * 0.5;
+        await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: dblX, y, button: 'left', clickCount: 1 });
+        await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: dblX, y, button: 'left', clickCount: 1 });
+        await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: dblX, y, button: 'left', clickCount: 2 });
+        await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: dblX, y, button: 'left', clickCount: 2 });
         await sleep(500);
-        const dblRange = JSON.parse(await evaluate(client, 'JSON.stringify(NC.timeline.getState().range)'));
-        report.assert('双击刻度区重置为数据化范围', Math.abs(dblRange.start - expected.range.start) <= 120000 &&
-            Math.abs(dblRange.end - expected.range.end) <= 120000,
-            JSON.stringify(dblRange));
+        const dblInfo = JSON.parse(await evaluate(client, '(function(){ var s = NC.timeline.getState(); return JSON.stringify({ range: s.range, rangeDays: s.rangeDays, scrollLeft: Math.round(document.querySelector(".tl-scroll").scrollLeft) }); })()'));
+        report.assert('双击刻度区重置为默认 5 天窗口',
+            Math.abs(dblInfo.range.start - expected.range.start) <= 120000 &&
+            Math.abs(dblInfo.rangeDays - 5) < 0.01 && dblInfo.scrollLeft <= 1,
+            JSON.stringify(dblInfo));
 
-        // ---------- 显示已完成开关 ----------
+        // ---------- 显示已完成开关：默认隐藏 → 打开出现 → 关闭消失 ----------
         const doneBefore = await evaluate(client, "document.querySelectorAll('.tl-task.is-done').length");
+        const canceledBefore = await evaluate(client, "document.querySelectorAll('.tl-task.is-canceled').length");
+        await evaluate(client, `(function(){ var input = document.querySelector('.tl-switch input'); if (input) { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); } return true; })()`);
+        await sleep(600);
+        const shown = await evaluate(client, "(function(){ return { done: document.querySelectorAll('.tl-task.is-done').length, canceled: document.querySelectorAll('.tl-task.is-canceled').length }; })()");
+        report.assert('打开「显示已完成」后出现已完成/取消条',
+            doneBefore === 0 && canceledBefore === 0 && shown.done >= 1 && shown.canceled >= 1,
+            JSON.stringify({ before: { done: doneBefore, canceled: canceledBefore }, after: shown }));
         await evaluate(client, `(function(){ var input = document.querySelector('.tl-switch input'); if (input) { input.checked = false; input.dispatchEvent(new Event('change', { bubbles: true })); } return true; })()`);
         await sleep(500);
-        const doneAfterHide = await evaluate(client, "document.querySelectorAll('.tl-task.is-done').length");
-        report.assert('隐藏已完成开关', doneBefore >= 1 && doneAfterHide === 0, JSON.stringify({ before: doneBefore, after: doneAfterHide }));
-        await evaluate(client, `(function(){ var input = document.querySelector('.tl-switch input'); if (input) { input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); } return true; })()`);
-        await sleep(300);
+        const hiddenAgain = await evaluate(client, "(function(){ return { done: document.querySelectorAll('.tl-task.is-done').length, canceled: document.querySelectorAll('.tl-task.is-canceled').length }; })()");
+        report.assert('关闭开关后已完成/取消条消失', hiddenAgain.done === 0 && hiddenAgain.canceled === 0, JSON.stringify(hiddenAgain));
 
         // ---------- refresh / 数据更新 ----------
         const chipsBeforeRefresh = await evaluate(client, "document.querySelectorAll('.tl-task').length");
@@ -859,26 +965,39 @@ async function main() {
         report.assert('纵向任务点击 → selectTask', JSON.parse(agendaSelected) != null, agendaSelected);
         await evaluate(client, 'NC.store.todo.clearSelection(); true;');
 
-        // ---------- 截图：标准/浅色/Lite × 1440/390 ----------
-        for (const theme of ['standard', 'light', 'lite']) {
+        // ---------- 截图：标准/浅色/Lite × 1440/390（默认 / 最右 / 未来 3 天 / 本周） ----------
+        const shotModes = [
+            { theme: 'standard', label: 'standard' },
+            { theme: 'light', label: 'light' },
+            { theme: 'lite', label: 'lite' }
+        ];
+        for (const shotMode of shotModes) {
             for (const viewport of [{ width: 1440, height: 900, mobile: false, label: '1440' }, { width: 390, height: 844, mobile: true, label: '390' }]) {
                 await setMetrics(client, viewport.width, viewport.height, viewport.mobile);
                 await navigate(client, URL_NTOOLS);
                 await waitFor(client, "!!(window.NC && NC.store && NC.store.todo)", 10000);
                 await seedStore(client, buildMockDoc(Date.now()));
                 await sleep(500);
-                await evaluate(client, `(function(){
-                    var doc = NC.store.todo.getDoc();
-                    var pin = doc.tasks.filter(function(t){ return t.id === 'tl-pin'; })[0];
-                    if (pin) pin.pinned = true;
-                    return true;
-                })()`);
                 await loadTimelineAssets(client);
-                await setTheme(client, theme);
+                await setTheme(client, shotMode.theme);
                 await mountTimeline(client);
                 await sleep(900);
-                const file = await shot(client, 'timeline-' + theme + '-' + viewport.label + '.png');
-                shots.push(file);
+                // 默认（范围开始）
+                await evaluate(client, "(function(){ var s = document.querySelector('.tl-scroll'); if (s) s.scrollLeft = 0; return true; })()");
+                await sleep(200);
+                shots.push(await shot(client, 'timeline-' + shotMode.label + '-' + viewport.label + '-default.png'));
+                // 滚到最右（最晚任务）
+                await evaluate(client, "(function(){ var s = document.querySelector('.tl-scroll'); if (s) s.scrollLeft = s.scrollWidth; return true; })()");
+                await sleep(260);
+                shots.push(await shot(client, 'timeline-' + shotMode.label + '-' + viewport.label + '-rightmost.png'));
+                // 未来 3 天
+                await evaluate(client, "(function(){ var b = document.querySelector('.tl-preset[data-preset=next3]'); if (b) b.click(); return true; })()");
+                await sleep(650);
+                shots.push(await shot(client, 'timeline-' + shotMode.label + '-' + viewport.label + '-next3.png'));
+                // 本周
+                await evaluate(client, "(function(){ var b = document.querySelector('.tl-preset[data-preset=week]'); if (b) b.click(); return true; })()");
+                await sleep(650);
+                shots.push(await shot(client, 'timeline-' + shotMode.label + '-' + viewport.label + '-week.png'));
             }
         }
 

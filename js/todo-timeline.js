@@ -26,13 +26,12 @@
     var DAY = 86400000;
     var HOUR = 3600000;
     var MINUTE = 60000;
-    var DEFAULT_DAYS = 7;          // 默认向前看 7 天
-    var MAX_DEFAULT_LOOKBACK = 45 * DAY;   // 默认范围向左最多回看 45 天
-    var MAX_DEFAULT_SPAN = 60 * DAY;       // 数据化默认范围最大跨度 60 天
+    var DEFAULT_DAYS = 5;          // 默认聚焦窗口：5 天（视口铺满 5 天）
+    var RANGE_PADDING_PX = 16;     // 画布右端在「最晚任务」之后保留的像素
     var MIN_SPAN = 15 * MINUTE;
     var HORIZONTAL_MIN_WIDTH = 900;
-    var MAX_RENDER = 220;          // 单次渲染任务上限（护栏；正常范围远小于此）
-    var MAX_LANES = 60;            // 泳道安全上限（数据化默认范围可能包含更多任务；极端数据折叠提示）
+    var MAX_RENDER = 600;          // 单次渲染任务上限（护栏；v4.8 画布延伸到最晚任务，放宽到 600）
+    var MAX_LANES = 60;            // 泳道安全上限（极端重叠数据折叠提示）
     var AXIS_H = 54;               // 刻度区高度
     var LANE_H = 46;               // 每条泳道高度
     var CHIP_H = 36;               // 任务 chip 高度
@@ -74,7 +73,7 @@
         mode: 'h',
         width: 0,
         range: null,
-        showCompleted: true,
+        showCompleted: false,
         selectedId: null,
         offStore: null,
         resizeObserver: null,
@@ -88,7 +87,8 @@
     };
 
     var memory = {
-        range: null       // 范围仅内存持久化：跨 mount 保留
+        range: null,          // 范围仅内存持久化：跨 mount 保留
+        showCompleted: false  // 时间线本地「显示已完成」开关（默认关闭；不改列表设置）
     };
 
     /* ------------------------------------------------------------------ *
@@ -258,34 +258,14 @@
     }
 
     /**
-     * 数据化默认范围：
-     *  start = 当前筛选后最早 createdAt（向下取整到小时），且不早于 now-45d；
-     *  end   = max(now+7d, 起点+7d, 起点窗口内任务的最晚 due)，上限 start+60d；
-     *  无任何可推导的 createdAt/due 时回退 now → now+7d。
-     * 让「创建→到期」时长条默认完整显示（只有用户手动缩小范围才出现裁剪标记）。
+     * 默认聚焦窗口：今天 00:00 → +5 天。
+     * 画布与视口解耦：range 决定缩放比例（选中天数铺满视口）与初始滚动位置；
+     * 画布右端延伸到「最晚任务 + 16px」（见 renderHorizontal），窗口外任务仍可滚动查看。
      */
-    function dataDefaultRange(now) {
-        var current = isFiniteNum(now) ? now : Date.now();
-        var withDue = filteredDueTasks(current).withDue;
-        if (!withDue.length) return normalizeRange(current, current + DEFAULT_DAYS * DAY);
-        var forward = current + DEFAULT_DAYS * DAY;
-        var earliest = Infinity;
-        var latestDue = forward;
-        withDue.forEach(function (task) {
-            var interval = taskInterval(task);
-            if (interval.start < earliest) earliest = interval.start;
-            // “主要 due”：起点落在默认前向窗口内的任务，其到期时间要完整纳入默认范围
-            if (interval.start <= forward && task.due > latestDue) latestDue = task.due;
-        });
-        var start = Math.floor(Math.min(earliest, current) / HOUR) * HOUR;
-        start = Math.max(start, current - MAX_DEFAULT_LOOKBACK);
-        var end = Math.max(latestDue, forward, start + DEFAULT_DAYS * DAY);
-        end = Math.min(end, start + MAX_DEFAULT_SPAN);
-        return normalizeRange(start, end);
-    }
-
     function defaultRange(now) {
-        return dataDefaultRange(now);
+        var current = isFiniteNum(now) ? now : Date.now();
+        var start = startOfDay(current);
+        return normalizeRange(start, start + DEFAULT_DAYS * DAY);
     }
 
     function presetRange(id, now) {
@@ -376,64 +356,64 @@
         var base = {
             now: now,
             range: range,
-            showCompleted: true,
-            total: 0, withDue: 0, inRange: 0, visible: 0, outRange: 0,
+            showCompleted: !!state.localShowCompleted,
+            total: 0, withDue: 0, inRange: 0, outRange: 0,
             overdue: 0, pinned: 0, hiddenDone: 0,
-            visibleItems: [], inRangeTasks: [], nextOut: null
+            visible: 0, visibleTasks: [], visibleItems: [], edgeTasks: [], latestDue: null
         };
         if (!todoStore || typeof todoStore.getDoc !== 'function') return base;
-        var doc = todoStore.getDoc();
-        base.showCompleted = (typeof state.localShowCompleted === 'boolean')
-            ? state.localShowCompleted
-            : !!(doc && doc.settings && doc.settings.showCompleted !== false);
 
-        // 左侧视图/清单/搜索/状态筛选：以 store 的 selectVisible 为准（全部/今天/逾期/已完成 + listId + search）
+        // 左侧视图/清单/搜索/状态筛选：以 store 的 selectVisible 为准；无 due 任务不纳入时间线
         var pack = filteredDueTasks(now);
         var tasks = pack.tasks;
         var withDue = pack.withDue;
         base.total = tasks.length;
-        // 时间线只关心有 due 的任务；无日期任务完全不纳入（不统计、不展示）
         base.withDue = withDue.length;
 
-        var inRange = [];
-        var edgeOverdue = [];
-        withDue.forEach(function (task) {
-            var interval = taskInterval(task);
-            if (interval.end < range.start) {
-                if (task.status === 'open') edgeOverdue.push(task);
-                return;
-            }
-            if (interval.start > range.end) return;
-            inRange.push(task);
-        });
-        inRange.sort(byIntervalStart);
-        edgeOverdue.sort(function (a, b) { return a.due - b.due; });
-        edgeOverdue = edgeOverdue.slice(0, 12);
-
-        // “显示已完成”与 doc.settings.showCompleted 同步；view=done 时仍显示已完成
-        var visible = inRange.filter(function (task) {
+        // 「显示已完成」= 时间线本地开关（默认关闭，不影响列表设置）
+        var visibleTasks = withDue.filter(function (task) {
             var finished = task.status === 'done' || task.status === 'canceled';
             return base.showCompleted || !finished;
         });
-        var items = visible.map(function (task) { return { task: task, edge: false }; });
-        edgeOverdue.forEach(function (task) { items.push({ task: task, edge: true }); });
+        base.visibleTasks = visibleTasks;
+        base.visible = visibleTasks.length;
 
-        base.inRangeTasks = inRange;
-        base.inRange = inRange.length;
-        base.visibleItems = items;
-        base.visible = items.length;
-        base.edgeOverdue = edgeOverdue.length;
-        base.hiddenDone = inRange.length - visible.length;
-        base.outRange = Math.max(0, withDue.length - inRange.length - edgeOverdue.length);
-        base.overdue = items.filter(function (item) { return item.task.status === 'open' && item.task.due < now; }).length;
-        base.pinned = items.filter(function (item) { return item.task.pinned === true || item.task.pin === true; }).length;
-        withDue.forEach(function (task) {
-            if (task.due < range.start) {
-                if (!base.nextOut || task.due > base.nextOut.due) base.nextOut = task;
-            } else if (task.due > range.end) {
-                if (!base.nextOut || task.due < base.nextOut.due) base.nextOut = task;
-            }
+        var inRangeVisible = visibleTasks.filter(function (task) {
+            return task.due >= range.start && task.due <= range.end;
+        }).sort(byIntervalStart);
+        var outRangeVisible = visibleTasks.filter(function (task) {
+            return task.due < range.start || task.due > range.end;
         });
+        base.inRange = inRangeVisible.length;
+        base.outRange = outRangeVisible.length;
+        base.hiddenDone = withDue.filter(function (task) {
+            return task.due >= range.start && task.due <= range.end &&
+                (task.status === 'done' || task.status === 'canceled');
+        }).length;
+
+        // 早于范围起点的未完成逾期任务：固定左缘/纵向顶部（最多 12 条）
+        var edgeTasks = visibleTasks.filter(function (task) {
+            return task.status === 'open' && task.due < range.start;
+        }).sort(function (a, b) { return a.due - b.due; }).slice(0, 12);
+        base.edgeTasks = edgeTasks;
+
+        var items = inRangeVisible.map(function (task) { return { task: task, edge: false }; });
+        edgeTasks.forEach(function (task) { items.push({ task: task, edge: true }); });
+        base.visibleItems = items;
+
+        // 画布右端用：当前可见任务（含已完成开关打开后）里的最晚 due
+        var latestDue = null;
+        visibleTasks.forEach(function (task) {
+            if (latestDue == null || task.due > latestDue) latestDue = task.due;
+        });
+        base.latestDue = latestDue;
+
+        base.overdue = visibleTasks.filter(function (task) {
+            return task.status === 'open' && task.due < now;
+        }).length;
+        base.pinned = visibleTasks.filter(function (task) {
+            return task.pinned === true || task.pin === true;
+        }).length;
         return base;
     }
 
@@ -488,7 +468,8 @@
         var showDoneLabel = node('label', 'nc-switch tl-switch');
         var showDoneInput = node('input');
         attr(showDoneInput, 'type', 'checkbox');
-        attr(showDoneInput, 'aria-label', '显示已完成和已取消任务');
+        attr(showDoneInput, 'aria-label', '显示已完成和已取消任务（默认隐藏）');
+        attr(showDoneInput, 'title', '默认隐藏已完成/已取消任务；打开后显示并弱化');
         showDoneInput.checked = true;
         showDoneLabel.appendChild(showDoneInput);
         showDoneLabel.appendChild(node('span', 'nc-switch__track'));
@@ -592,7 +573,7 @@
                 { cls: 'is-pinned', text: '置顶', icon: 'flag' },
                 { cls: 'is-recurring', text: '循环', icon: 'refresh' },
                 { cls: 'is-overdue', text: '逾期', icon: 'alert' },
-                { cls: 'is-down', text: '已完成（弱化）', icon: 'check' }
+                { cls: 'is-down', text: '已完成（默认隐藏）', icon: 'check' }
             ];
             items.forEach(function (item) {
                 var span = node('span', 'tl-legend__item ' + item.cls);
@@ -634,16 +615,6 @@
     /* ------------------------------------------------------------------ *
      * 渲染：横向时间轴
      * ------------------------------------------------------------------ */
-    function pickDayWidth(spanDays) {
-        if (spanDays <= 0.4) return 520;   // ≤~10h：小时为主
-        if (spanDays <= 1.2) return 340;
-        if (spanDays <= 3.5) return 240;
-        if (spanDays <= 7.5) return 168;
-        if (spanDays <= 14.5) return 118;
-        if (spanDays <= 45) return 66;
-        return 40;
-    }
-
     function formatTick(ts, stepHours) {
         var date = new Date(ts);
         if (stepHours >= 24) return (date.getMonth() + 1) + '/' + date.getDate();
@@ -652,43 +623,61 @@
 
     function renderHorizontal(data) {
         var range = data.range;
-        var span = range.end - range.start;
-        var spanDays = span / DAY;
-        var dayWidth = pickDayWidth(spanDays);
-        var canvasWidth = Math.max(320, Math.round(spanDays * dayWidth));
-        var viewportWidth = (refs.scroll && refs.scroll.clientWidth) || state.width || 0;
-        canvasWidth = Math.max(canvasWidth, viewportWidth);
-        var pxPerMs = canvasWidth / span;
         var now = Date.now();
+        var viewportWidth = Math.max(320, (refs.scroll && refs.scroll.clientWidth) || state.width || 800);
+        var rangeSpan = Math.max(MIN_SPAN, range.end - range.start);
+        // range 是“聚焦/缩放窗口”：选中天数铺满视口
+        var pxPerMs = viewportWidth / rangeSpan;
+        var dayWidth = pxPerMs * DAY;
+
+        // 画布（display）与选择范围解耦：右端延伸到最晚 visible due + 16px
+        var latestDue = data.latestDue;
+        var displayStart = range.start;
+        var displayEnd = range.end;
+        if (isFiniteNum(latestDue) && latestDue > displayEnd) {
+            displayEnd = latestDue + RANGE_PADDING_PX / pxPerMs;
+        }
+        displayEnd = Math.max(displayEnd, range.end);
+        var displaySpan = displayEnd - displayStart;
+        var canvasWidth = Math.max(viewportWidth, Math.round(displaySpan * pxPerMs));
+        state.lastDayWidth = dayWidth;
+        state.lastDisplayStart = displayStart;
+        state.lastDisplayEnd = displayEnd;
+        state.lastRangeDays = rangeSpan / DAY;
 
         refs.canvas.style.width = canvasWidth + 'px';
         refs.canvas.style.setProperty('--tl-axis-h', AXIS_H + 'px');
         refs.canvas.classList.add('tl-canvas--h');
         clear(refs.axis);
         clear(refs.chips);
+        // 上一次渲染的日带直接挂在 canvas 上，需显式清理，避免旧坐标残留扩大滚动区域
+        Array.prototype.forEach.call(refs.canvas.querySelectorAll('.tl-dayband'), function (el) {
+            if (el.parentNode) el.parentNode.removeChild(el);
+        });
 
-        // 天网格 + 刻度
-        var firstDay = startOfDay(range.start);
-        var lastDay = startOfDay(range.end);
+        // 天网格 + 刻度（覆盖 displayStart → displayEnd）
+        var firstDay = startOfDay(displayStart);
+        var lastDay = startOfDay(displayEnd);
         var dayCells = [];
         var cursor = firstDay;
         var guard = 0;
-        while (cursor <= lastDay && guard++ < 400) {
+        while (cursor <= lastDay && guard++ < 900) {
             dayCells.push(cursor);
             cursor = addDays(cursor, 1);
         }
-        var tickMode = spanDays <= 1.4 ? 'hour' : (dayWidth >= 200 ? 'halfday' : 'day');
-        var labelStep = spanDays > 45 ? 7 : (spanDays > 21 ? 3 : (spanDays > 10 ? 2 : 1));
+        var tickMode = dayWidth >= 200 ? 'halfday' : 'day';
+        var labelStep = dayWidth < 56 ? 7 : (dayWidth < 90 ? 3 : (dayWidth < 140 ? 2 : 1));
         var sparseTicks = dayWidth < 70;
         dayCells.forEach(function (dayStart, dayIndex) {
-            var left = (dayStart - range.start) * pxPerMs;
-            var width = Math.min(DAY, range.end - dayStart) * pxPerMs;
-            if (width <= 0) return;
-            var band = node('div', 'tl-dayband' + (dayCells.indexOf(dayStart) % 2 ? ' is-alt' : ''));
+            var visibleStart = Math.max(dayStart, displayStart);
+            var visibleEnd = Math.min(dayStart + DAY, displayEnd);
+            if (visibleEnd <= visibleStart) return;
+            var left = (visibleStart - displayStart) * pxPerMs;
+            var width = (visibleEnd - visibleStart) * pxPerMs;
+            var isToday = startOfDay(dayStart) === startOfDay(now);
+            var band = node('div', 'tl-dayband' + (dayIndex % 2 ? ' is-alt' : '') + (isToday ? ' is-today' : ''));
             band.style.left = left + 'px';
             band.style.width = width + 'px';
-            var isToday = startOfDay(dayStart) === startOfDay(now);
-            if (isToday) band.classList.add('is-today');
             refs.canvas.appendChild(band);
 
             var cell = node('div', 'tl-daycell' + (isToday ? ' is-today' : ''));
@@ -706,10 +695,10 @@
             cell.appendChild(head);
             if (!sparseTicks) {
                 var ticks = node('div', 'tl-daycell__ticks');
-                var stepHours = tickMode === 'hour' ? 3 : (tickMode === 'halfday' ? 12 : 24);
+                var stepHours = tickMode === 'halfday' ? 12 : 24;
                 for (var hour = 0; hour < 24; hour += stepHours) {
                     var tickTs = dayStart + hour * HOUR;
-                    if (tickTs < range.start || tickTs > range.end) continue;
+                    if (tickTs < displayStart || tickTs > displayEnd) continue;
                     var tick = node('div', 'tl-tick');
                     tick.style.left = (((tickTs - dayStart) / DAY) * 100) + '%';
                     tick.appendChild(node('span', 'tl-tick__label', formatTick(tickTs, stepHours)));
@@ -721,44 +710,31 @@
         });
 
         // 现在线
-        var nowInside = now >= range.start && now <= range.end;
+        var nowInside = now >= displayStart && now <= displayEnd;
         if (nowInside) {
             refs.nowLine.removeAttribute('hidden');
-            refs.nowLine.style.left = Math.round((now - range.start) * pxPerMs) + 'px';
+            refs.nowLine.style.left = Math.round((now - displayStart) * pxPerMs) + 'px';
             refs.nowLine.setAttribute('data-time', '现在 ' + formatTime(now));
         } else {
             refs.nowLine.setAttribute('hidden', 'hidden');
         }
 
-        // 时长条：createdAt → due（按比例尺计算宽度，裁剪到当前范围）
-        var visible = data.visibleItems.slice(0, MAX_RENDER);
+        // 时长条：createdAt → due；范围外任务继续渲染（画布延伸），只按画布边缘裁剪
+        var candidates = (data.visibleTasks || []).slice(0, MAX_RENDER);
         var bars = [];
-        visible.forEach(function (item) {
-            var task = item.task;
+        candidates.forEach(function (task) {
             var interval = taskInterval(task);
-            var clipStart = interval.start < range.start;
-            var clipEnd = interval.end > range.end;
-            var startClamped = Math.min(Math.max(interval.start, range.start), range.end);
-            var endClamped = Math.min(Math.max(interval.end, range.start), range.end);
-            var x1 = (startClamped - range.start) * pxPerMs;
-            var x2 = (endClamped - range.start) * pxPerMs;
-            if (item.edge) {
-                x1 = 0;
-                x2 = Math.min(BAR_MIN_W, canvasWidth);
-                clipStart = true;
-                clipEnd = true;
-            }
-            if (!item.edge && interval.start > range.end) return;
-            if (!item.edge && interval.end < range.start) return;
+            if (interval.end < displayStart || interval.start > displayEnd) return;
+            var clipStart = interval.start < displayStart;
+            var clipEnd = interval.end > displayEnd;
+            var x1 = (Math.max(interval.start, displayStart) - displayStart) * pxPerMs;
+            var x2 = (Math.min(interval.end, displayEnd) - displayStart) * pxPerMs;
             var width = x2 - x1;
             var shortBar = width < BAR_MIN_W;
             if (shortBar) {
                 width = BAR_MIN_W;
                 x1 = x2 - BAR_MIN_W;          // 右端锚定 due
-                if (x1 < 0) {
-                    x1 = 0;
-                    clipStart = true;
-                }
+                if (x1 < 0) { x1 = 0; clipStart = true; }
             }
             if (x2 > canvasWidth) {
                 x2 = canvasWidth;
@@ -766,11 +742,18 @@
                 clipEnd = true;
             }
             bars.push({
-                task: task, x: x1, width: Math.max(BAR_MIN_W, width),
-                clipStart: clipStart, clipEnd: clipEnd,
-                shortBar: shortBar || item.edge, edge: item.edge
+                task: task, x: Math.max(0, x1), width: Math.max(BAR_MIN_W, width),
+                clipStart: clipStart, clipEnd: clipEnd, shortBar: shortBar, edge: false
             });
         });
+        // 早于画布起点的未完成逾期任务：固定在左缘
+        (data.edgeTasks || []).forEach(function (task) {
+            bars.push({
+                task: task, x: 0, width: Math.min(BAR_MIN_W, canvasWidth),
+                clipStart: true, clipEnd: true, shortBar: true, edge: true
+            });
+        });
+
         // 区间贪心分道：[start, end) 不重叠（含最小间隙）
         bars.sort(function (a, b) { return a.x - b.x || a.width - b.width; });
         var laneEnds = [];
@@ -783,7 +766,6 @@
             }
             if (lane === -1) {
                 if (laneEnds.length >= MAX_LANES) {
-                    // 泳道已满：折叠而不是无限阶梯，避免同起点任务把视图撑成楼梯
                     bar.hidden = true;
                     hiddenOverlap += 1;
                     return;
@@ -813,27 +795,23 @@
         state.lastRendered = renderedCount;
         state.lastHiddenOverlap = hiddenOverlap;
 
-        // 范围变化/首次挂载：把视口滚到「现在」附近，避免默认范围很长时打开停在空白左缘
+        // 选择范围变化（预设/框选/输入/重置）：缩放后回到范围开始
         var rangeKey = range.start + ':' + range.end;
         if (state.lastRangeKey !== rangeKey) {
             state.lastRangeKey = rangeKey;
-            if (now >= range.start && now <= range.end && refs.scroll) {
-                var viewport = refs.scroll.clientWidth || 0;
-                var nowX = (now - range.start) * pxPerMs;
-                refs.scroll.scrollLeft = Math.max(0, Math.round(nowX - Math.max(120, viewport * 0.28)));
-            }
+            if (refs.scroll) refs.scroll.scrollLeft = 0;
         }
 
         var emptyText = null;
-        if (!bars.length) {
+        if (!renderedCount) {
             if (data.withDue === 0) emptyText = '当前筛选下还没有带截止时间的任务。在列表视图给任务设置截止时间后，这里会自动出现。';
-            else emptyText = '此范围内没有任务。可拖拽刻度区或使用预设调整范围。';
+            else if (!data.showCompleted && data.hiddenDone > 0 && data.visible === 0) emptyText = '当前筛选下只有已完成/已取消任务；打开「显示已完成」查看。';
+            else emptyText = '当前时间窗口内没有可显示的任务，可滚动到右侧或调整范围/预设。';
         }
         showEmpty(emptyText);
         var note = null;
         if (hiddenOverlap > 0) note = '有 ' + hiddenOverlap + ' 项重叠任务暂未显示，可缩小时间范围或使用左侧筛选查看。';
-        if (data.visible > MAX_RENDER) note = '任务较多，当前仅显示前 ' + MAX_RENDER + ' 项；缩小范围可看到全部。';
-        if (data.outRange && !renderedCount) note = '当前筛选下范围外还有 ' + data.outRange + ' 项任务，点击「扩展至全部」查看。';
+        if (candidates.length >= MAX_RENDER) note = '任务较多，当前仅显示前 ' + MAX_RENDER + ' 项；使用筛选或缩小范围可查看全部。';
         showNote(note);
     }
 
@@ -1085,21 +1063,29 @@
     /* ------------------------------------------------------------------ *
      * 范围框选
      * ------------------------------------------------------------------ */
+    function brushWindow() {
+        var range = ensureRange();
+        var start = isFiniteNum(state.lastDisplayStart) ? state.lastDisplayStart : range.start;
+        var end = isFiniteNum(state.lastDisplayEnd) ? state.lastDisplayEnd : range.end;
+        if (end <= start) return { start: range.start, end: range.end };
+        return { start: start, end: end };
+    }
+
     function xToTime(clientX) {
         var rect = refs.brushLayer.getBoundingClientRect();
         var width = rect.width || 1;
         var ratio = clamp((clientX - rect.left) / width, 0, 1);
-        var range = ensureRange();
-        return range.start + ratio * (range.end - range.start);
+        var win = brushWindow();
+        return win.start + ratio * (win.end - win.start);
     }
 
     function updateBrushPreview(startTs, endTs) {
-        var range = ensureRange();
-        var span = range.end - range.start;
+        var win = brushWindow();
+        var span = win.end - win.start;
         var rect = refs.brushLayer.getBoundingClientRect();
         var width = rect.width || 1;
-        var left = clamp((startTs - range.start) / span * width, 0, width);
-        var right = clamp((endTs - range.start) / span * width, 0, width);
+        var left = clamp((startTs - win.start) / span * width, 0, width);
+        var right = clamp((endTs - win.start) / span * width, 0, width);
         if (right < left) { var swap = left; left = right; right = swap; }
         refs.brushLive.removeAttribute('hidden');
         refs.brushLive.style.left = Math.round(left) + 'px';
@@ -1193,7 +1179,10 @@
     function fitAll() {
         var todoStore = store();
         if (!todoStore || typeof todoStore.getDoc !== 'function') return;
-        var tasks = filteredDueTasks(Date.now()).withDue;
+        var tasks = filteredDueTasks(Date.now()).withDue.filter(function (task) {
+            var finished = task.status === 'done' || task.status === 'canceled';
+            return state.localShowCompleted || !finished;
+        });
         if (!tasks.length) { setStatus('当前筛选下还没有带截止时间的任务', 'error'); return; }
         var min = taskInterval(tasks[0]).start;
         var max = tasks[0].due;
@@ -1213,7 +1202,7 @@
         if (id === 'fit-all') { fitAll(); return; }
         if (id === 'reset') {
             setRange(defaultRange());
-            setStatus('已恢复数据化默认范围（含创建时间）', 'ok');
+            setStatus('已恢复默认 5 天窗口（今天 00:00 起）', 'ok');
             return;
         }
         var preset = presetRange(id);
@@ -1233,14 +1222,10 @@
         refs.endInput.addEventListener('change', applyInputs);
         refs.showDoneInput.addEventListener('change', function () {
             var next = !!refs.showDoneInput.checked;
-            var todoStore = store();
-            if (todoStore && typeof todoStore.updateSettings === 'function') {
-                // 与列表共享同一份设置，避免两套状态不一致
-                todoStore.updateSettings({ showCompleted: next });
-            } else {
-                state.localShowCompleted = next;
-                render(true);
-            }
+            // 时间线本地开关：默认隐藏已完成/已取消，不改变列表页设置
+            state.localShowCompleted = next;
+            memory.showCompleted = next;
+            render(true);
         });
         refs.presetWrap.addEventListener('click', function (event) {
             var button = event.target && event.target.closest('button[data-preset]');
@@ -1271,7 +1256,7 @@
         refs.brushLayer.addEventListener('dblclick', function (event) {
             event.preventDefault();
             setRange(defaultRange());
-            setStatus('已恢复数据化默认范围（含创建时间）', 'ok');
+            setStatus('已恢复默认 5 天窗口（今天 00:00 起）', 'ok');
         });
         refs.brushLayer.addEventListener('keydown', function (event) {
             if (event.key !== 'Escape') return;
@@ -1334,6 +1319,7 @@
         state.mounted = true;
         state.mountCount += 1;
         if (typeof opts.showCompleted === 'boolean') state.localShowCompleted = opts.showCompleted;
+        else state.localShowCompleted = memory.showCompleted === true;
         ensureRange();
         clear(target);
         var root = buildSkeleton();
@@ -1388,6 +1374,8 @@
             withDue: state.lastData.withDue,
             overdue: state.lastData.overdue,
             pinned: state.lastData.pinned,
+            hiddenDone: state.lastData ? state.lastData.hiddenDone : 0,
+            latestDue: state.lastData ? state.lastData.latestDue : null,
             rendered: typeof state.lastRendered === 'number' ? state.lastRendered : null,
             hiddenOverlap: typeof state.lastHiddenOverlap === 'number' ? state.lastHiddenOverlap : 0
         } : null;
@@ -1396,6 +1384,10 @@
             mode: state.mode,
             width: state.width,
             range: state.range ? { start: state.range.start, end: state.range.end } : null,
+            rangeDays: typeof state.lastRangeDays === 'number' ? state.lastRangeDays : null,
+            dayWidth: typeof state.lastDayWidth === 'number' ? state.lastDayWidth : null,
+            displayStart: typeof state.lastDisplayStart === 'number' ? state.lastDisplayStart : null,
+            displayEnd: typeof state.lastDisplayEnd === 'number' ? state.lastDisplayEnd : null,
             showCompleted: state.showCompleted,
             counts: data
         };
