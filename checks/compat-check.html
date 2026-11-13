@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
 <title>兼容性自检 · nTools / nChat</title>
 <!-- 复用统一设计令牌与组件；本页样式只做布局补充（cc-*），不新增控件风格 -->
-<link rel="stylesheet" href="css/tokens.css">
-<link rel="stylesheet" href="css/base.css">
-<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="../css/tokens.css">
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/components.css">
 <style>
     /* 自检页允许纵向滚动（base.css 默认锁滚动） */
     html, body { height: auto; min-height: 100%; }
@@ -64,14 +65,14 @@
         .cc-badge { min-width: 58px; }
     }
 </style>
-<script src="js/theme-boot.js"></script>
-<script defer src="js/polyfills.js"></script>
-<script defer src="js/core.js"></script>
-<script defer src="js/compat.js"></script>
-<script defer src="js/icons.js"></script>
-<script defer src="js/storage.js"></script>
-<script defer src="js/ui.js"></script>
-<script defer src="js/theme.js"></script>
+<script src="../js/theme-boot.js"></script>
+<script defer src="../js/polyfills.js"></script>
+<script defer src="../js/core.js"></script>
+<script defer src="../js/compat.js"></script>
+<script defer src="../js/icons.js"></script>
+<script defer src="../js/storage.js"></script>
+<script defer src="../js/ui.js"></script>
+<script defer src="../js/theme.js"></script>
 </head>
 <body>
 <div class="cc-wrap" id="cc-root">
@@ -709,7 +710,7 @@
                                     resolve({ status: 'pass', detail: '可显示，但跨源（父页不可读）' });
                                 }
                             };
-                            frame.src = 'compat-check.html?embed=1';
+                            frame.src = './compat-check.html?embed=1';
                             document.body.appendChild(frame);
                             function cleanup() {
                                 clearTimeout(timer);

@@ -1159,11 +1159,12 @@
         pinMark.appendChild(icon('flag', 12));
         attr(pinMark, 'aria-hidden', 'true');
         titleline.appendChild(pinMark);
-        var title = node('span', 'todo-item__title');
-        titleline.appendChild(title);
+        /* 循环图标在标题左侧（置顶图标之后）；无循环时 hidden 不占位 */
         var repeatMark = node('span', 'todo-item__repeat');
         repeatMark.appendChild(icon('refresh', 12));
         titleline.appendChild(repeatMark);
+        var title = node('span', 'todo-item__title');
+        titleline.appendChild(title);
         var tags = node('span', 'todo-item__titleline-tags');
         tags.className = 'todo-item__tags';
         titleline.appendChild(tags);
@@ -1717,6 +1718,7 @@
         sub.appendChild(repeatBadge);
         var saveHint = node('span', 'detail-savehint');
         attr(saveHint, 'data-detail-saved', '');
+        attr(saveHint, 'aria-live', 'polite');
         sub.appendChild(saveHint);
         headText.appendChild(sub);
         head.appendChild(headText);
@@ -1886,12 +1888,13 @@
         foot.appendChild(purgeBtn);
         var spacer = node('span', 'detail-foot__spacer');
         foot.appendChild(spacer);
-        var completeBtn = node('button', 'nc-btn nc-btn--sm');
-        attr(completeBtn, 'type', 'button');
-        attr(completeBtn, 'data-act', 'detail-toggle');
-        completeBtn.appendChild(icon('check', 14));
-        completeBtn.appendChild(node('span', null, '完成'));
-        foot.appendChild(completeBtn);
+        var saveBtn = node('button', 'nc-btn nc-btn--sm');
+        attr(saveBtn, 'type', 'button');
+        attr(saveBtn, 'data-act', 'detail-save');
+        attr(saveBtn, 'aria-label', '保存任务详情');
+        saveBtn.appendChild(icon('check', 14));
+        saveBtn.appendChild(node('span', null, '保存'));
+        foot.appendChild(saveBtn);
         form.appendChild(foot);
         return form;
     }
@@ -1919,7 +1922,7 @@
         var deleteBtn = root.querySelector('[data-act="detail-delete"]');
         var restoreBtn = root.querySelector('[data-act="detail-restore"]');
         var purgeBtn = root.querySelector('[data-act="detail-purge"]');
-        var completeBtn = root.querySelector('[data-act="detail-toggle"]');
+        var saveBtn = root.querySelector('[data-act="detail-save"]');
         var pinBtn = root.querySelector('[data-act="detail-pin"]');
         var repeatSelect = root.querySelector('[data-field="recurrence"]');
         var repeatBadge = root.querySelector('[data-detail-repeat]');
@@ -1994,9 +1997,9 @@
         if (deleteBtn) deleteBtn.hidden = !!task.deletedAt;
         if (restoreBtn) restoreBtn.hidden = !task.deletedAt;
         if (purgeBtn) purgeBtn.hidden = !task.deletedAt;
-        if (completeBtn) {
-            completeBtn.hidden = !!task.deletedAt;
-            completeBtn.lastChild && (completeBtn.lastChild.textContent = done ? '取消完成' : '完成');
+        if (saveBtn) {
+            /* 保存按钮只管保存；完成由左上角 checkbox 负责；已删除任务按原逻辑不显示 */
+            saveBtn.hidden = !!task.deletedAt;
         }
         attr(checkEl, 'aria-label', done ? '取消完成任务' : '完成任务');
     }
@@ -2144,7 +2147,10 @@
                 store.purgeTask(id);
                 ui.toast('已彻底删除', { type: 'success' });
             });
+        } else if (act === 'detail-save') {
+            saveDetailWithFeedback(id);
         } else if (act === 'detail-toggle') {
+            /* 兼容旧按钮：仍按完成/取消完成处理 */
             toggleTaskWithFeedback(id);
         } else if (act === 'detail-pin') {
             togglePinWithFeedback(id);
@@ -2160,6 +2166,25 @@
             if (!task2) return;
             store.updateTask(id, { tags: task2.tags.filter(function (item) { return item !== tag; }) }, { label: '移除标签' });
         }
+    }
+
+    /**
+     * 保存详情：先提交 debounce 中的标题/备注/标签编辑，再显示「已保存」。
+     * 不关闭抽屉、不改变完成状态（完成由左上角 checkbox 负责）。
+     */
+    function saveDetailWithFeedback(id) {
+        var task = store.getTask(id);
+        if (!task) return;
+        flushDetailEdits();
+        var savedEl = els.detailInner ? els.detailInner.querySelector('[data-detail-saved]') : null;
+        if (savedEl) {
+            savedEl.textContent = '已保存';
+            savedEl.classList.add('is-saved');
+            global.setTimeout(function () {
+                if (savedEl) savedEl.classList.remove('is-saved');
+            }, 1800);
+        }
+        ui.toast('已保存', { type: 'success', duration: 1600 });
     }
 
     function syncDetailColumn(ui) {

@@ -1377,7 +1377,8 @@ input[type="range"]::-webkit-slider-thumb {
     align-items: center;
     gap: 10px;
     min-height: 57px;
-    padding: 11px 54px 11px 6px;
+    /* 右侧预留 3 个操作按钮（pin/edit/delete ≈80px）+ 间距，避免标签伸到按钮下方 */
+    padding: 11px 92px 11px 6px;
     border-radius: 0;
     border-top: 1px solid var(--nc-border-faint);
     background: transparent;
@@ -1494,8 +1495,18 @@ input[type="range"]::-webkit-slider-thumb {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
+}
+
+.todo-item__tags .todo-item__tag {
+    flex: 0 0 auto;
+}
+
+/* 标签区最多占标题行一半，避免长标题被多标签挤成省略号 */
+.todo-item__tags {
+    max-width: 52%;
 }
 
 .todo-item__tag {
@@ -2008,6 +2019,12 @@ input[type="range"]::-webkit-slider-thumb {
     color: var(--nc-text-3);
     font-size: var(--nc-fs-2xs);
     font-variant-numeric: tabular-nums;
+    transition: color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.detail-savehint.is-saved {
+    color: var(--nc-success);
+    font-weight: 600;
 }
 
 .detail-empty {

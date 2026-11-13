@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * tools/run-tests.js — 无头运行 tests.html 并输出断言结果
+ * tools/run-tests.js — 无头运行 checks/tests.html 并输出断言结果
  * 依赖 Node 18+ 内置 fetch/WebSocket 与 Chrome for Testing。
  * 用法：node tools/run-tests.js [--verbose]
  * 退出码：0 全部通过 / 1 有失败 / 2 环境错误
@@ -15,7 +15,7 @@ const path = require('path');
 const CHROME = process.env.CHROME || '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
 const ROOT = path.resolve(__dirname, '..');
 const PORT = 9700 + (process.pid % 150);
-const URL_TESTS = 'file://' + path.join(ROOT, 'tests.html').split(path.sep).join('/');
+const URL_TESTS = 'file://' + path.join(ROOT, 'checks', 'tests.html').split(path.sep).join('/');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 (async () => {
@@ -107,13 +107,13 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
         }
 
         if (!report) {
-            console.error('未获取到 tests.html 的断言报告（页面可能未完成）');
+            console.error('未获取到 checks/tests.html 的断言报告（页面可能未完成）');
             process.exit(1);
         }
         if (process.argv.indexOf('--verbose') > -1 && report.failures) {
             report.failures.forEach((failure) => console.log('  FAIL  ' + failure));
         }
-        console.log('tests.html: 通过 ' + report.pass + ' / 失败 ' + report.fail + ' / 跳过 ' + report.skip +
+        console.log('checks/tests.html: 通过 ' + report.pass + ' / 失败 ' + report.fail + ' / 跳过 ' + report.skip +
             '（共 ' + report.total + '，' + Math.round(report.elapsed) + 'ms）');
         if (consoleErrors.length) {
             console.log('页面 console.error: ' + consoleErrors.length + ' 条');

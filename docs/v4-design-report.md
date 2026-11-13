@@ -40,7 +40,7 @@
 | `css/settings.css` | v4 检查器式设置 Sheet：ledger 端点行、发丝分隔、来源明确的过渡、移动端 |
 | `js/ui.js` | 菜单 `transform-origin` 跟随触发按钮 |
 | `js/theme-boot.js` / `theme.js` | `theme-color` 随深/浅主题同步 |
-| `ntools.html` / `index.html` | viewport-fit=cover、theme-color meta、版本 v4.0 |
+| `ntools.html` | viewport-fit=cover、theme-color meta、版本 v4.0 |
 | `js/message-view.js` / `chat-embed.js` / `composer.js` | 角色刻度轻量 DOM、元信息拆列、触屏输入提示（B） |
 | `js/todo-view.js` | 时间槽 bucket+clock、完成/取消中性语义、去中点串（A） |
 | `docs/design-direction-v4.md`、`docs/design-break-audit.md` | 方向规格、审计与修复轨迹 |
@@ -80,7 +80,7 @@
 
 ## 6. 已知限制与建议
 
-- **真机复核**：headless 无法验证 sticky hover、软键盘遮挡、safe-area 实机观感、125%/150% 缩放字体；建议在麒麟 ARM/奇安信实机跑 `compat-check.html` 与手工清单。
+- **真机复核**：headless 无法验证 sticky hover、软键盘遮挡、safe-area 实机观感、125%/150% 缩放字体；建议在麒麟 ARM/奇安信实机跑 `checks/compat-check.html` 与手工清单。
 - **极端数据决策**（审计建议，未强制改）：长标题可加 title 悬浮、长清单/端点名可中段截断、20 标签可加 `+N`；当前用 `aria-label` 保证可访问。
 - **动效验收**：建议在实机录屏并用 DevTools Animations 慢放，确认 tab 淡入/列表增删/弹层的手感；Lite 下应无任何位移动画。
 - 聊天长代码块保持 `pre` 内横向滚动，不全局换行（决定与安全渲染一致）。

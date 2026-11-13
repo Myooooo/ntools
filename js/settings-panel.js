@@ -612,7 +612,7 @@
         var links = util.e('div', { class: 'sp-about-actions' });
         links.appendChild(button('兼容性自检', {
             small: true, ghost: true, icon: 'external',
-            onClick: function () { global.open('compat-check.html', '_blank'); }
+            onClick: function () { global.open('checks/compat-check.html', '_blank'); }
         }));
         links.appendChild(button('快捷键与帮助', {
             small: true, ghost: true, icon: 'command',

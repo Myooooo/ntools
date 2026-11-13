@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="nTools 工具箱">
+  <rect width="64" height="64" rx="14" fill="#2a63c8"/>
+  <g fill="none" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="13" y="24" width="38" height="26" rx="4"/>
+    <path d="M23 24v-5.5A4.5 4.5 0 0 1 27.5 14h9A4.5 4.5 0 0 1 41 18.5V24"/>
+    <path d="M13 35h12l3 4h8l3-4h12"/>
+  </g>
+</svg>

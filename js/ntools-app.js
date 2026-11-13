@@ -301,6 +301,19 @@
                         else showFallbackHelp();
                     }
                 },
+                { type: 'divider' },
+                {
+                    label: '兼容性自检',
+                    icon: 'shield',
+                    hint: '部署前',
+                    onSelect: function () { openSelfCheck('compat'); }
+                },
+                {
+                    label: '回归测试',
+                    icon: 'check-circle',
+                    hint: '自检',
+                    onSelect: function () { openSelfCheck('tests'); }
+                },
                 {
                     label: '关于 nTools',
                     icon: 'info',
@@ -308,6 +321,24 @@
                 }
             ]);
         });
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 工具自检入口：兼容性自检 / 回归测试（已收纳到 checks/）
+     * ------------------------------------------------------------------ */
+    var SELF_CHECK_PAGES = {
+        compat: 'checks/compat-check.html',
+        tests: 'checks/tests.html'
+    };
+
+    function openSelfCheck(page) {
+        var url = SELF_CHECK_PAGES[page] || SELF_CHECK_PAGES.compat;
+        try {
+            var win = global.open(url, '_blank');
+            if (!win) global.location.href = url;
+        } catch (err) {
+            global.location.href = url;
+        }
     }
 
     function showFallbackHelp() {
@@ -324,7 +355,7 @@
         var features = (NC.compat && NC.compat.features) || {};
         var counts = NC.store && NC.store.todo ? NC.store.todo.counts(true) : null;
         var rows = [
-            ['版本', 'nTools ' + (NC.version || '3.0.0')],
+            ['版本', 'nTools ' + (NC.version || '4.3.0')],
             ['运行方式', (features.fileProtocol ? '本地文件 file://' : (features.protocol || '未知协议')) + ' · 无后端'],
             ['内核', 'Chromium ' + (features.chromeVersion || '未知')],
             ['存储', features.storage ? 'localStorage 可用' : '不可用（内存模式）'],
@@ -352,7 +383,11 @@
             title: '关于 nTools',
             content: wrap,
             size: 'sm',
-            actions: [{ label: '知道了', kind: 'primary' }]
+            actions: [
+                { label: '兼容性自检', kind: 'outline', onClick: function () { openSelfCheck('compat'); } },
+                { label: '回归测试', kind: 'outline', onClick: function () { openSelfCheck('tests'); } },
+                { label: '知道了', kind: 'primary' }
+            ]
         });
     }
 

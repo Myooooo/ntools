@@ -3,14 +3,14 @@
  * tools/verify.js — 无依赖 CDP 验收工具（Node 18+ / Chrome for Testing）
  *
  * 功能：
- *  1. 逐个打开 index.html / ntools.html / compat-check.html / tests.html
+ *  1. 逐个打开 ntools.html / checks/compat-check.html / checks/tests.html
  *  2. 捕获 console.error、未捕获异常、资源加载失败
  *  3. 执行页面内断言（DOM/迁移/主题/关键文本）
  *  4. 输出深/浅/Lite × 桌面/移动截图到 /tmp/nc-shots/
  *
  * 用法：
- *   node tools/verify.js                 # 全量
- *   node tools/verify.js index.html      # 指定页面
+ *   node tools/verify.js                          # 全量
+ *   node tools/verify.js checks/tests.html        # 指定页面（相对仓库根）
  * 退出码：0 = 全部通过；1 = 有失败
  */
 'use strict';
@@ -26,7 +26,7 @@ const PORT = 9333 + (process.pid % 200);
 const SHOT_DIR = process.env.SHOT_DIR || '/tmp/nc-shots';
 const PAGES = process.argv.slice(2).length
     ? process.argv.slice(2)
-    : ['index.html', 'ntools.html', 'compat-check.html', 'tests.html'];
+    : ['ntools.html', 'checks/compat-check.html', 'checks/tests.html'];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -178,24 +178,20 @@ async function runPage(browserJson, pageName) {
         await waitFor(client, "typeof window.NC !== 'undefined' && !!window.NC.version", 6000);
         await sleep(300);
 
-        if (pageName === 'index.html') {
-            report.checks.push(await checkRedirect(client));
-        } else {
-            report.checks.push(await checkGeneric(client, pageName));
-            if (pageName === 'ntools.html') report.checks.push(await checkNtools(client));
-            if (pageName === 'compat-check.html') report.checks.push(await checkCompat(client));
-            if (pageName === 'tests.html') report.checks.push(await checkTests(client));
-        }
+        report.checks.push(await checkGeneric(client, pageName));
+        if (pageName === 'ntools.html') report.checks.push(await checkNtools(client));
+        if (pageName === 'checks/compat-check.html') report.checks.push(await checkCompat(client));
+        if (pageName === 'checks/tests.html') report.checks.push(await checkTests(client));
 
         // 主题 & 截图
         fs.mkdirSync(SHOT_DIR, { recursive: true });
-        const base = pageName.replace(/\.html$/, '');
+        const base = pageName.replace(/\.html$/, '').replace(/[\\/]/g, '-');
         await capture(client, `${base}-dark-1440.png`, url, { theme: 'dark', lite: false, width: 1440, height: 900, mobile: false });
         report.shots.push(path.join(SHOT_DIR, `${base}-dark-1440.png`));
-        if (pageName !== 'tests.html') {
+        if (pageName !== 'checks/tests.html') {
             await capture(client, `${base}-light-1440.png`, url, { theme: 'light', lite: false, width: 1440, height: 900, mobile: false });
             await capture(client, `${base}-dark-390.png`, url, { theme: 'dark', lite: false, width: 390, height: 844, mobile: true });
-            if (pageName === 'index.html' || pageName === 'ntools.html') {
+            if (pageName === 'ntools.html') {
                 await capture(client, `${base}-lite-1440.png`, url, { theme: 'dark', lite: true, width: 1440, height: 900, mobile: false });
             }
             report.shots.push(path.join(SHOT_DIR, `${base}-light-1440.png`));
@@ -254,28 +250,7 @@ async function checkGeneric(client, pageName) {
     checks.push({ name: 'NC 命名空间', pass: !!result.nc, detail: result.nc || 'missing' });
     checks.push({ name: '页面标题', pass: !!result.title, detail: result.title });
     checks.push({ name: '主题已应用', pass: !!result.theme, detail: result.theme + '/' + result.lite });
-    if (pageName === 'index.html') {
-        checks.push({ name: 'viewport 允许缩放', pass: result.viewport.indexOf('user-scalable=no') === -1, detail: result.viewport });
-    }
     return { block: pageName, checks: checks };
-}
-
-async function checkRedirect(client) {
-    const result = await evaluate(client, `(function(){
-        return {
-            href: location.href,
-            title: document.title,
-            hasToolsApp: !!document.getElementById('tools-app'),
-            hasChat: !!document.getElementById('page-nchat')
-        };
-    })()`);
-    return {
-        block: 'index(redirect)',
-        checks: [
-            { name: '旧入口自动跳转', pass: /ntools\.html#nchat/.test(result.href), detail: result.href.slice(-40) },
-            { name: '跳转到 nTools 聊天', pass: result.hasToolsApp && result.hasChat && result.title.indexOf('nTools') > -1, detail: result.title }
-        ]
-    };
 }
 
 async function checkNtools(client) {
@@ -381,34 +356,13 @@ async function checkNtools(client) {
     return { block: 'ntools', checks: checks };
 }
 
-async function checkIndex(client) {
-    const ids = ['app-title', 'chat-container', 'user-input', 'send-btn', 'settings-panel', 'main-menu', 'config-select', 'toggle-settings-btn'];
-    const result = await evaluate(client, `(function(){
-        var ids = ${JSON.stringify(ids)};
-        var missing = ids.filter(function(id){ return !document.getElementById(id); });
-        return {
-            missing: missing,
-            messages: document.querySelectorAll('.message').length,
-            hasCssVars: !!getComputedStyle(document.documentElement).getPropertyValue('--nc-accent').trim()
-        };
-    })()`);
-    return {
-        block: 'index',
-        checks: [
-            { name: '聊天页关键 DOM', pass: result.missing.length === 0, detail: result.missing.length ? 'missing: ' + result.missing.join(',') : 'ok' },
-            { name: '欢迎消息渲染', pass: result.messages >= 1, detail: 'messages=' + result.messages },
-            { name: '设计令牌生效', pass: result.hasCssVars, detail: String(result.hasCssVars) }
-        ]
-    };
-}
-
 async function checkCompat(client) {
     const result = await evaluate(client, `(function(){
         var text = document.body.textContent || '';
         return { len: text.length, hasChrome: text.indexOf('Chromium') > -1 || text.indexOf('Chrome') > -1, tables: document.querySelectorAll('table, .compat-row, .nc-card').length };
     })()`);
     return {
-        block: 'compat-check',
+        block: 'checks/compat-check',
         checks: [
             { name: '自检内容渲染', pass: result.len > 200, detail: 'text=' + result.len },
             { name: '包含内核信息', pass: result.hasChrome, detail: String(result.hasChrome) }
@@ -424,7 +378,7 @@ async function checkTests(client) {
         return { textLen: text.length, fail: fail, passText: text.indexOf('通过') > -1 };
     })()`);
     return {
-        block: 'tests',
+        block: 'checks/tests',
         checks: [
             { name: '测试页渲染', pass: result.textLen > 100, detail: 'text=' + result.textLen },
             { name: '无红色失败项', pass: result.fail === 0, detail: 'fail=' + result.fail }

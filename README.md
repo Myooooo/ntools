@@ -1,8 +1,8 @@
-# nTools · v4.2
+# nTools · v4.3
 
 > 本地优先的 AI 效率工作台：nChat 原生聊天 + 待办（Todo AI 识别）+ 二维码 / Markdown / 图片工具。
 > 纯静态 HTML，双击即用，无需服务器、无需安装、无需构建链；数据只留在本机浏览器。
-> v4.2 采用 **Precision Workbench** 设计方向：石墨/纸面、发丝分隔、仪器蓝强调、铜色时间语义；标准模式保留完整材质与动效，**Light（Lite）模式是它的性能减法**。
+> v4.3 采用 **Precision Workbench** 设计方向：石墨/纸面、发丝分隔、仪器蓝强调、铜色时间语义；标准模式保留完整材质与动效，**Light（Lite）模式是它的性能减法**。
 > 目标环境：国企内网 / 信创 ARM / 麒麟 Linux / 奇安信可信浏览器（Chromium 102 基线）。
 >
 > **仓库**：[github.com/Myooooo/ntools](https://github.com/Myooooo/ntools)
@@ -19,7 +19,7 @@
 
 ### 一个入口，原生聊天
 
-- 打开 `ntools.html` 即可使用全部功能；旧 `index.html` 自动跳转到 `#nchat`（书签兼容）。
+- 打开 `ntools.html` 即可使用全部功能（唯一入口）；旧 `index.html` 已移除。
 - **nChat 已原生嵌入**为 nTools 的一个标签页（无 iframe），与工具集共享同一套设计语言与本地数据。
 - 聊天支持：流式输出、思考过程折叠、停止生成保留内容、图片多模态（最多 5 张）、Token 统计、复制/重新生成/编辑/删除、导出 Markdown、备份/恢复、按端点独立会话。
 
@@ -78,7 +78,7 @@
 ## 🚀 快速开始
 
 1. 下载整个文件夹（保持目录结构），建议解压后使用。
-2. **首次部署先打开 `compat-check.html`**，确认内核 / 存储 / 剪贴板 / 网络能力。
+2. **首次部署先打开 `checks/compat-check.html`**，或使用左下角「⋮ → 兼容性自检」；确认内核 / 存储 / 剪贴板 / 网络能力。
 3. 双击 `ntools.html`：
    - 打开「设置 → 模型端点」，新增或编辑端点（Base URL / API Key / Model ID）并保存；
    - 可选：在「设置 → Todo AI」调整识别提示词与参数；
@@ -107,9 +107,9 @@
 ```
 ntools/
 ├─ ntools.html                # 唯一主应用（5 个工具 tab，含原生 nChat）
-├─ index.html                 # 旧入口 → 自动跳转 ntools.html#nchat
-├─ compat-check.html          # 兼容性自检（首次部署先跑）
-├─ tests.html                 # 纯函数回归断言（双击即跑）
+├─ checks/
+│  ├─ compat-check.html       # 兼容性自检（首次部署先跑）
+│  └─ tests.html              # 纯函数回归断言（双击即跑）
 ├─ css/
 │  ├─ tokens.css              # 设计令牌（颜色/字体/间距/动效/主题/Lite）
 │  ├─ base.css                # reset、排版、滚动条、焦点可见性
@@ -136,6 +136,7 @@ ntools/
 │  ├─ v4-design-report.md     # v4 设计改造与验收报告
 │  ├─ v4.1-release-report.md  # v4.1 交付报告
 │  ├─ v42-release-report.md   # v4.2 界面细节与时间线语义修正
+│  ├─ v43-release-report.md   # v4.3 品牌图标/行内细节/自检入口收纳
 │  ├─ design-direction-v4.md  # 设计方向/令牌/动效/Light 定义
 │  ├─ design-break-audit.md   # 最坏数据/移动端原生审计
 │  ├─ animation-audit-v4.1.md # v4.1 全站动效审计与修复记录
@@ -149,12 +150,11 @@ ntools/
 │  ├─ verify.js               # CDP 页面验收（报错/DOM/迁移/原生聊天/设置面板 + 截图）
 │  ├─ e2e.js                  # 回归交互（待办/聊天流式/安全/性能）
 │  ├─ e2e-features.js         # 功能 E2E（端点/系统提示词/Todo AI/快捷时间）
-│  ├─ e2e-timeline.js         # 全景时间线 E2E（40 断言 + 截图）
-│  ├─ e2e-v41.js              # v4.1 交互/置顶/循环/热区/侧栏/设置弹窗 E2E
+│  ├─ e2e-timeline.js         # 全景时间线 E2E（58 断言 + 截图）
+│  ├─ e2e-v41.js              # 交互/置顶/循环/热区/侧栏/设置弹窗/时间线 E2E
 │  ├─ break-ui.js             # 最坏数据 + 响应式 + 移动端原生审计
 │  ├─ design-shots.sh         # v4 设计截图归档（标准/浅色/Lite × 桌面/移动）
-│  ├─ run-tests.js            # 无头运行 tests.html
-│  ├─ screenshot.sh / shots-v3.sh  # 批量截图
+│  ├─ run-tests.js            # 无头运行 checks/tests.html
 │  └─ check.sh                # 一键全量验收
 └─ img/                       # README 截图
 ```
@@ -193,23 +193,23 @@ ntools/
 bash tools/check.sh
 
 # 分项
-node tools/verify.js          # 页面级（捕获报错 + DOM/迁移/原生聊天/设置面板 + 截图）
+node tools/verify.js          # 页面级（ntools + checks 两页；DOM/迁移/原生聊天/设置面板 + 截图）
 node tools/e2e.js             # 回归交互（待办/聊天流式/安全/性能）
 node tools/e2e-features.js    # 功能回归（多端点/系统提示词/Todo AI/快捷时间）
 node tools/e2e-timeline.js    # 全景时间线（mount/框选/点击/响应式/500 条）
 node tools/e2e-v41.js         # v4.1 交互（菜单/设置弹窗/侧栏/置顶/循环/热区）
-node tools/run-tests.js       # tests.html 断言（无头）
-open tests.html               # 或双击运行
+node tools/run-tests.js       # checks/tests.html 断言（无头）
+open checks/tests.html        # 或双击运行
 ```
 
-- 最近验收结果：`bash tools/check.sh` **7/7 全绿**（verify 4 页、回归 E2E、功能 E2E 53 项、时间线 E2E 58 项、v4.1/v4.2 E2E、纯函数 81 项，全部 PASS / 0 FAIL）；`break-ui` 32 组最坏数据 0 问题、移动端原生 12/12 PASS。
-- 截图输出：`/tmp/nc-shots/v42/final/`（v4.2 明细/时间线/侧栏）、`/tmp/nc-shots/v4/timeline/`（时间线矩阵）、`/tmp/nc-shots/v4/break/`（最坏数据）、`/tmp/nc-shots/`（基础三页）。
+- 最近验收结果：`bash tools/check.sh` **7/7 全绿**（verify 3 页、回归 E2E、功能 E2E 53 项、时间线 E2E 58 项、v4.1/v4.2/v4.3 E2E、纯函数 81 项，全部 PASS / 0 FAIL）；`break-ui` 32 组最坏数据 0 问题、移动端原生 12/12 PASS。
+- 截图输出：`/tmp/nc-shots/v43/`（v4.3 品牌/行内/自检入口）、`/tmp/nc-shots/v42/final/`（v4.2 明细/时间线/侧栏）、`/tmp/nc-shots/v4/timeline/`、`/tmp/nc-shots/v4/break/`。
 
 ## ❓ 常见问题
 
 | 现象 | 排查 |
 |---|---|
-| 页面空白 / 按钮无反应 | 打开 `compat-check.html`；确认 js/css 目录完整；`chrome://version` 记录内核 |
+| 页面空白 / 按钮无反应 | 打开 `checks/compat-check.html`；确认 js/css 目录完整；`chrome://version` 记录内核 |
 | 聊天或 Todo AI 报网络失败 | 多半是 CORS：网关放行 `Origin: null` + OPTIONS，见上文 |
 | 401 / 模型不存在 | 检查 Base URL、API Key、Model ID；设置面板「测试连接」可直接验证 |
 | AI 识别结果不准 / 时间为空 | 调整「设置 → Todo AI」提示词；确认端点模型支持中文 JSON 输出 |
@@ -220,7 +220,16 @@ open tests.html               # 或双击运行
 
 ## 🗒️ 版本变更
 
-### v4.2（当前）
+### v4.3（当前）
+
+- 品牌图标与 favicon 改为工具箱（toolbox）；左上角 nTools mark 同步更新。
+- Todo 行内标签为右侧操作按钮预留 92px 并截断，不再重叠；循环图标移到标题左侧（置顶图标右侧）。
+- 详情右下角「完成」改为「保存」（flush 编辑 + 已保存提示，不关闭抽屉）；完成状态由左上角勾选框负责。
+- 清理旧入口与脚本：删除 `index.html`、`tools/screenshot.sh`、`tools/shots-v3.sh`；`tests.html` / `compat-check.html` 收纳到 `checks/`；工具链路径同步。
+- 左下角「⋮」菜单与「关于 nTools」弹窗新增「兼容性自检」「回归测试」入口；设置→关于入口同步新路径。
+- 验收：`check.sh` 7/7；verify 3 页；纯函数 81/81。
+
+### v4.2
 
 - Todo 行内元素垂直居中、详情右上关闭叉、示例数据新增每日/每月循环任务。
 - 全景时间线：任务条改为创建→到期的真实时长条、移除无日期任务、范围控件对齐、左侧视图/清单/搜索/状态筛选联动、默认范围数据化（含创建时间）、切换按钮位置稳定且带 180ms 淡入。

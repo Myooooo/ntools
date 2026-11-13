@@ -2,7 +2,7 @@
 
 > 适用：nTools / nChat v2（纯静态、无构建链、经典脚本 IIFE）。目标环境：**奇安信可信浏览器（Chromium 102 基线）/ 麒麟 Linux / 信创 ARM / 内网 `file://` 双击运行**。
 > 完整论证、证据与来源索引见 `docs/refactor-and-optimization-plan.md` 第 2 章（目标环境）与第 11 章（待现场验证清单）；本文件是给开发、实施、验收人员用的压缩版。
-> 部署前**先双击运行 `compat-check.html`**，并把"复制报告"内容记入验收单。
+> 部署前**先双击运行 `checks/compat-check.html`**，并把"复制报告"内容记入验收单。
 
 ## 1. 目标环境与硬约束
 
@@ -60,7 +60,7 @@
 | Todo AI 识别 | `NC.todoAi` → `NC.ai`；结果只填创建表单，**不自动创建** | 需至少 1 个可用端点；识别失败不写数据 |
 | 快捷时间 `NC.todoTime` | 纯本地时间计算，读 `NC.store.llm.getWorkEndTime()` | 无网络/无新 API；下班时间默认 17:30，可改（影响下班前/明天前/周五前/月底前） |
 
-> 自动化验收：`tools/e2e-features.js`（设置面板 / 原生聊天 / Todo AI / 快捷时间，mock fetch 不联网）+ `tools/shots-v3.sh`（v3 功能截图）。
+> 自动化验收：`tools/e2e-features.js`（设置面板 / 原生聊天 / Todo AI / 快捷时间，mock fetch 不联网）+ `tools/design-shots.sh`（标准/浅色/Lite × 桌面/移动设计截图）。
 
 ## 3. 奇安信可信浏览器内核
 
@@ -77,7 +77,7 @@
 - **已查证**：时间线来自奇安信官方新闻/公众号；麒麟/统信商店曾上架 110、132；申威平台官方表述"Chromium 90 以上"。
 - **未查证/推断**：国企实际安装的"专业版/标准版/企业版"与先锋版内核**无公开对照表**，正式版通常滞后。因此**不能由公开资料推定现场版本**，必须现场读取 `chrome://version`。
 - **支持目标**：下限 83、完整功能推荐 92、最可能现场 97/102/110；132 需回归验证。
-- 内核 <92 时 `compat-check.html` 会显示"降级"并提示 polyfill 已生效；<84 时 flex gap 检测为降级。
+- 内核 <92 时 `checks/compat-check.html` 会显示"降级"并提示 polyfill 已生效；<84 时 flex gap 检测为降级。
 
 ## 4. `file://` 限制与对策
 
@@ -92,16 +92,16 @@
 | 页面改由 nginx **https** 托管 | 页面为安全上下文；但 API 若是 `http://` 会被混合内容拦截；`http://内网IP` 托管则页面非安全上下文 | 统一 https 或同源反代；`http` 内网 IP 部署会失去 clipboard/crypto.subtle |
 | 剪贴板 | `file://` 是安全上下文，用户手势下 `writeText` 可用；`http://内网IP` 不可用；BDLP 策略可禁复制；iframe 内需 Permissions-Policy 委派 | `clipboard.writeText → execCommand 兜底 → 弹窗手动复制`；自检页"测试复制"实测 |
 | 通知 | `file://` 下 `requestPermission()` 实测 `denied`；无 Service Worker/后台 | 只做页内提醒（toast + 标题 + 角标），明示"关闭页面后不提醒" |
-| iframe / 原生嵌入 | **v3 起 nChat 原生嵌入 `ntools.html#page-nchat`（无 iframe）**，消除 file:// iframe 跨源限制；`index.html` 改为跳转页；`compat-check.html` 内部仍有 iframe 自检探测 | 工具页不再依赖 iframe；旧版本仍按 v2 结论（可显示、父页不可控） |
+| iframe / 原生嵌入 | **v3 起 nChat 原生嵌入 `ntools.html#page-nchat`（无 iframe）**，消除 file:// iframe 跨源限制；`index.html` 已移除（单入口）；`checks/compat-check.html` 内部仍有 iframe 自检探测 | 工具页不再依赖 iframe；旧版本仍按 v2 结论（可显示、父页不可控） |
 | Blob 下载 | 可用（实测 `blob:null` + `a[download]` 落盘）；同步 `revokeObjectURL` 可能取消下载；企业下载策略可能弹窗/拦截 | `NC.util.downloadBlob`：append → click → 延迟吊销；导出失败提供文本框手动复制 |
-| 资源缓存 | `file://` 无 HTTP 缓存，覆盖文件即生效；nginx 托管需 `Cache-Control: no-cache` | 发布包带版本号；js/css 用 `?v=`；禁止强缓存 `index.html`；不引入 SW |
+| 资源缓存 | `file://` 无 HTTP 缓存，覆盖文件即生效；nginx 托管需 `Cache-Control: no-cache` | 发布包带版本号；js/css 用 `?v=`；禁止强缓存 HTML；不引入 SW |
 | 国密 SSL（SM2） | 若内网 API 走国密证书，普通 Chrome/Edge 测试机可能连不通，仅奇安信可通过 | 验收必须用奇安信实机；开发机与目标机分工验证 |
 | IE 内核 / ActiveX | 信创 ARM Linux 端只有 Chromium/Blink，**没有 IE 双核** | 不引入 ActiveX/IE 专用写法 |
 
 ## 5. 部署形态
 
-1. **首选（必须保证）**：U 盘/共享盘拷贝文件夹 → 双击 `ntools.html`（v3 统一入口；`index.html` 仅做跳转页兼容旧链接）。`file://` 下 localStorage 全机共享，**换目录/升级覆盖不丢数据**（实测），v3 升级会自动迁移旧的 `nchat-settings`。
-2. **备选（需现场验证）**：内网 nginx 纯静态托管（无后端逻辑）。好处：消除 Origin/CORS、iframe、缓存的大部分限制；注意安全上下文与混合内容（见 §4）。若启用 CSP，`script-src 'self'` 即可（本项目无内联脚本/内联事件；`compat-check.html` 含内联脚本，如需纳管可单独排除或加 hash）。
+1. **首选（必须保证）**：U 盘/共享盘拷贝文件夹 → 双击 `ntools.html`（单入口；自检页在 `checks/`）。`file://` 下 localStorage 全机共享，**换目录/升级覆盖不丢数据**（实测），v3 升级会自动迁移旧的 `nchat-settings`。
+2. **备选（需现场验证）**：内网 nginx 纯静态托管（无后端逻辑）。好处：消除 Origin/CORS、iframe、缓存的大部分限制；注意安全上下文与混合内容（见 §4）。若启用 CSP，`script-src 'self'` 即可（本项目无内联脚本/内联事件；`checks/compat-check.html` 含内联脚本，如需纳管可单独排除或加 hash）。
 3. **不建议**：Electron/Tauri 桌面壳（引入构建链与运维成本，超出"纯 HTML 小程序"定位）。
 
 ## 6. 麒麟 Linux + ARM 实操
@@ -130,7 +130,7 @@
 
 > 审计证据与截图见 `docs/design-break-audit.md` §5；headless 只能验证代码/计算样式，**sticky hover、软键盘遮挡、safe-area 实机观感需真机复核**。
 
-## 7. 自检页使用（`compat-check.html`）
+## 7. 自检页使用（`checks/compat-check.html` / `checks/tests.html`）
 
 1. 双击打开（或托管访问）；等待"检测中"全部完成。
 2. 看**汇总**：通过 / 降级 / 不可用计数；「阻塞项」非空即不可部署；「推荐模式」给出是否默认 Lite。
@@ -142,14 +142,14 @@
 8. 页面 `?embed=1` 是被 iframe 探测用的精简模式；正常使用不要加参数。
 9. **ES Module 说明**：项目统一经典脚本；`file://` 下本地 ES Module 会被 CORS 阻止（已查证）。为保持控制台零噪声，本页**首屏不做 import 探测**，该项以信息态说明设计即可；如需人工验证，见 §4 表格。
 
-> 配套：`tests.html` 是纯函数回归断言页（60 项，覆盖 `core.util` / `storage` / `schema.todo` / `schema.chat` / `sse` / `api`），双击即跑、缺模块自动跳过；**每次发版前必跑**，通过时标题显示「TESTS PASS」。
+> 配套：`checks/tests.html` 是纯函数回归断言页（81 项，覆盖 `core.util` / `storage` / `schema.todo` / `schema.chat` / `sse` / `api`），双击即跑、缺模块自动跳过；**每次发版前必跑**，通过时标题显示「TESTS PASS」。
 
 ## 8. 现场验收清单（压缩版，逐项打勾）
 
 | # | 项目 | 方法 | 通过标准 |
 |---|---|---|---|
 | V1 | 内核版本 | `chrome://version` + 自检页 | 记录内核号；<92 时确认自检页 Markdown 正常（polyfill 生效） |
-| V2 | 双击运行 | 文件管理器双击 `ntools.html`（或 `index.html` 跳转） | 正常打开、无白屏、控制台无红色报错 |
+| V2 | 双击运行 | 文件管理器双击 `ntools.html` | 正常打开、无白屏、控制台无红色报错 |
 | V3 | 存储持久 | 保存配置/对话 → 刷新 → 重启浏览器再读 | 数据仍在；自检页 marker 显示"上次运行" |
 | V4 | 存储被禁降级 | 观察自检页存储项；只看不写 | 显示"内存模式"时不白屏，导出可用 |
 | V5 | API CORS | 自检页填 `/health` 测试；发一条消息 | HTTP 有响应（401/403 也算 CORS 通过）；流式逐字出现 |
@@ -170,10 +170,10 @@
 | V20 | 原生聊天行为 | 发送消息、停止生成、切换端点后各发一条 | 流式逐字；停止保留内容；会话/系统提示词按端点隔离；payload 含当前端点 system 消息 |
 | V21 | Todo AI | 配置可用端点后，待办页「AI 识别」粘贴邮件 → 识别 | 填充标题/详情/截止/优先级/标签；**不自动创建**；编辑后手动创建成功 |
 | V22 | 快捷时间 | 创建面板点 6 个 chips；设置改下班时间后重测「下班前/明天前/周五前/月底前」 | 填入时间符合规则；改下班时间后重新计算生效 |
-| V23 | v3 自动化 | `node tools/e2e-features.js`；`tools/shots-v3.sh` | E2E 全绿且无 console.error；截图输出 `/tmp/nc-shots-v3/` |
+| V23 | v3 自动化 | `node tools/e2e-features.js`；`tools/design-shots.sh` | E2E 全绿且无 console.error；截图输出 `/tmp/nc-shots/v4/design/` |
 | V24 | 移动端原生 | 390 宽移动视口跑 `node tools/break-ui.js`；真机打开一次 | 无横向溢出；输入 ≥16px；hover 无粘滞；状态栏颜色/安全区正常 |
 
-> 未验证项不得对外宣称"已支持"；验收结果回填本表与 `compat-check.html` 报告。
+> 未验证项不得对外宣称"已支持"；验收结果回填本表与 `checks/compat-check.html` 报告。
 
 ## 9. 已知限制与责任边界
 

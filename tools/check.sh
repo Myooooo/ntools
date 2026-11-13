@@ -17,7 +17,7 @@ done
 [ "$fail" -eq 0 ] && echo "  全部通过"
 
 echo
-echo "== 2/7 页面级验收（verify.js） =="
+echo "== 2/7 页面级验收（verify.js：ntools + checks/compat-check + checks/tests） =="
 node tools/verify.js || fail=1
 
 echo
@@ -37,7 +37,7 @@ echo "== 6/7 v4.1 交互 / Todo 新功能 E2E（e2e-v41.js） =="
 node tools/e2e-v41.js || fail=1
 
 echo
-echo "== 7/7 纯函数回归（tests.html 无头运行） =="
+echo "== 7/7 纯函数回归（checks/tests.html 无头运行） =="
 node tools/run-tests.js || fail=1
 
 echo

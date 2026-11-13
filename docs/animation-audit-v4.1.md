@@ -1,6 +1,6 @@
 # v4.1 全站动效审计与聊天域补齐
 
-> 对象：`ntools.html` 工作台（入口/侧栏/tab/待办/聊天/设置/工具叶）、共享 `NC.ui` 弹层、`index.html` 跳转页。
+> 对象：`ntools.html` 工作台（入口/侧栏/tab/待办/聊天/设置/工具叶）、共享 `NC.ui` 弹层。
 > 依据：`animate`（频率门槛 / ease-out / 退出更快 / 只动 transform·opacity）、`choreograph`（一个容器一次入场 / 高频不 stagger / Lead→Support 关系）、`emil-design-eng`（禁用 `transition: all`、`scale(0)`、`ease-in`）、`animation-performance`（合成层优先、避免 width/height/box-shadow 动画、backdrop blur 成本）。
 > 环境：Chromium 102 / 麒麟 ARM / `file://`；标准模式 vs Light(Lite)；所有值来自 `css/tokens.css`。
 > 本文件只做审计与聊天域改动记录；标 **Lead** / **A** 的条目不在本审计员写域，未改动。
@@ -69,7 +69,6 @@ Lite / `prefers-reduced-motion: reduce` 由 `tokens.css` 把全部 dur 置 0、�
 ## 4. 逐区明细
 
 ### 4.1 入口 / 应用壳
-- `index.html` 跳转页：无动画，符合“入口只做一次、不要表演”。
 - `base.css:379-383`：`.tools-app` 一次性 `nc-shell-in` 260ms（opacity+4px），且仅在 `prefers-reduced-motion: no-preference` 且非 Lite 时生效 → 合理。
 - 主题切换：token 直接切换，无颜色过渡（`base.css` 无 `transition` on theme vars）→ 即时、无闪，符合 ARM 性能；不作为缺口。
 
@@ -172,7 +171,7 @@ Lite / `prefers-reduced-motion: reduce` 由 `tokens.css` 把全部 dur 置 0、�
 ## 8. 验证
 
 - `node --check js/*.js`：全部通过。
-- `node tools/verify.js ntools.html` / `index.html`：全 PASS。
+- `node tools/verify.js`（ntools + checks/compat-check + checks/tests）：全 PASS。
 - `node tools/e2e-features.js`：53/53 PASS，0 console.error。
 - 自建 v4.1 动效 QA（CDP，`/tmp/app-auditor-v41-qa.js`）：19/19 PASS —— 欢迎两拍、新消息 140ms、思考展开/收起过渡、统计 origin/时长、菜单连点不叠放+退出延迟、提示词 sheet 进出、图片预览进出、回底显隐、发送↔停止交叉、Lite/reduced 关位移、自定义弹层单实例、无 console.error。
 - 截图（`/tmp/nc-shots/v4/`）：`v41-app-welcome-dark-1440.png`、`v41-app-chat-dark-1440.png`、`v41-app-reasoning-open-dark-1440.png`、`v41-app-stats-dark-1440.png`、`v41-app-menu-dark-1440.png`、`v41-app-prompt-sheet-dark-1440.png`、`v41-app-preview-dark-1440.png`、`v41-app-jump-dark-1440.png`、`v41-app-welcome-lite-dark-1440.png`、`v41-app-welcome-light-1440.png`、`v41-app-chat-light-1440.png`、`v41-app-chat-dark-390.png`。

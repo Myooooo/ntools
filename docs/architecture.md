@@ -1,16 +1,16 @@
-# nTools v4.2 架构说明
+# nTools v4.3 架构说明
 
 > 运行形态：纯静态、`file://` 双击可用、无构建链、无后端；经典 `<script>` + IIFE 命名空间（`window.NC`）。
 > 目标内核：奇安信可信浏览器 Chromium 102 / 麒麟 Linux ARM。
-> 入口：`ntools.html`（主应用，含原生 nChat）；`index.html` 仅做旧书签跳转。
+> 入口：`ntools.html`（单入口主应用，含原生 nChat）；自检页统一在 `checks/`（`checks/compat-check.html`、`checks/tests.html`）。
 > 设计层：Precision Workbench；标准模式完整效果，Light（Lite）为同 token 的性能减法（见 docs/design-direction-v4.md）。
 
 ## 1. 分层
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
-│ 入口页：ntools.html（主应用） / compat-check.html / tests.html       │
-│          index.html（→ ntools.html#nchat 跳转）                     │
+│ 入口页：ntools.html（主应用）                                        │
+│ 自检页：checks/compat-check.html / checks/tests.html                 │
 └───────────────┬────────────────────────────────────────────────────┘
                 │ 组合根：ntools-app.js + chat-embed.js（只装配，不写业务）
                 ▼
@@ -52,7 +52,6 @@
 | 8 | `qr.js` → `markdown.js` → `image.js` | 工具叶子模块 |
 | 9 | `ntools-app.js` | 主组合根，最后加载 |
 
-`index.html` 不加载任何业务脚本，仅 `location.replace('ntools.html#nchat')` 并提供手动链接。
 
 ## 3. 存储键
 
@@ -134,7 +133,7 @@ todo-time.computeQuickDue(kind, now, workEnd)
 
 ## 7. 验证
 
-- `tests.html`：81 项纯函数断言（core/storage/schema/sse/api/llm-store/todo-time/ai）；
+- `checks/tests.html`：81 项纯函数断言（core/storage/schema/sse/api/llm-store/todo-time/ai）；
 - `tools/verify.js`：页面级验收（含原生聊天无 iframe、设置面板、v1→v2 迁移、截图）；
 - `tools/e2e.js`：回归交互（待办/聊天流式/停止/安全/500 条性能）；
 - `tools/e2e-features.js`：功能回归（多端点 CRUD、系统提示词、端点会话隔离、Todo AI、快捷时间）；

@@ -32,7 +32,7 @@
 | `js/chat-embed.js` / `message-view.js` / `composer.js` | 菜单退出/重入守卫、欢迎两拍、思考展开、灯箱/图片预览/回底等动效 |
 | `css/components.css` / `chat.css` / `settings.css` / `tools.css` | 菜单退出、设置弹窗、热区/置顶/循环/时间线、动效层 |
 | `css/rail.css` / `timeline.css` / `interaction.css` | 新增：可收起侧栏 / 时间线 / 交互动效收口 |
-| `ntools.html` / `index.html` | 侧栏按钮、时间线资源、viewport/theme-color、版本 v4.1 |
+| `ntools.html` | 侧栏按钮、时间线资源、viewport/theme-color、版本 v4.1 |
 | `tools/e2e-v41.js` / `e2e-timeline.js` | 新增 E2E（17 / 40 断言） |
 | `docs/animation-audit-v4.1.md`、`docs/timeline-view.md` | 新增审计与设计说明 |
 
@@ -44,7 +44,7 @@
 | `node tools/e2e-timeline.js` | 40/40 PASS，页面 console.error 0；mock 500 条数据 |
 | `node tools/e2e-v41.js` | 17/17 PASS：菜单单例、设置弹窗几何居中、侧栏收起/持久化、新建按钮/快捷键提示、置顶排序/分组、循环推进、热区分档、时间线横/纵/卸载 |
 | `node tools/break-ui.js` | 32 组最坏数据/宽度/200% 缩放：0 破坏项；移动端原生 12/12 PASS（hover 门控 77/77） |
-| 纯函数 | tests.html 81/81 |
+| 纯函数 | checks/tests.html 81/81 |
 | 截图 | `/tmp/nc-shots/v41/final/`（列表/时间线/设置/侧栏/移动端）、`/tmp/nc-shots/v4/timeline/`（时间线 8 张）、`/tmp/nc-shots/v4/break/`（25 张最坏数据） |
 
 ## 4. 已知限制
