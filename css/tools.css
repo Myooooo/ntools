@@ -1504,9 +1504,24 @@ input[type="range"]::-webkit-slider-thumb {
     flex: 0 0 auto;
 }
 
-/* 标签区最多占标题行一半，避免长标题被多标签挤成省略号 */
-.todo-item__tags {
-    max-width: 52%;
+/* 行级右侧标签栏：贴着操作按钮左侧，与按钮同一垂直中线；无标签 hidden 不占位 */
+.todo-item > .todo-item__tags {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 46%;
+    overflow: hidden;
+}
+
+.todo-item > .todo-item__tags[hidden] {
+    display: none;
+}
+
+.todo-item.is-editing > .todo-item__tags {
+    display: none;
 }
 
 .todo-item__tag {
@@ -3068,6 +3083,10 @@ html[data-lite="true"] .todo-scroll {
         margin-left: auto;
     }
 
+    .todo-item > .todo-item__tags {
+        max-width: 34%;
+    }
+
     .todo-item__actions .nc-btn[data-act="edit"] {
         display: none;
     }
@@ -3687,14 +3706,16 @@ html[data-lite="true"] .todo-mainpane.is-mode-entering .todo-timeline {
     opacity: 1;
 }
 
-.todo-item.is-trash .todo-item__actions .nc-btn[data-act="restore"]:hover {
-    color: var(--nc-success);
-    background: var(--nc-success-soft);
-}
+@media (hover: hover) and (pointer: fine) {
+    .todo-item.is-trash .todo-item__actions .nc-btn[data-act="restore"]:hover {
+        color: var(--nc-success);
+        background: var(--nc-success-soft);
+    }
 
-.todo-item.is-trash .todo-item__actions .nc-btn[data-act="purge"]:hover {
-    color: var(--nc-danger);
-    background: var(--nc-danger-soft);
+    .todo-item.is-trash .todo-item__actions .nc-btn[data-act="purge"]:hover {
+        color: var(--nc-danger);
+        background: var(--nc-danger-soft);
+    }
 }
 
 /* 页头「清空回收站」：危险按钮，仅回收站视图且有任务时显示 */

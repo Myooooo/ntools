@@ -31,3 +31,82 @@
         transform: none !important;
     }
 }
+
+/* ==========================================================================
+ * v4.5 设计复检：可达性与结构细节
+ * ========================================================================== */
+
+/* 详情操作条在长内容滚动时保持可达（保存/删除/置顶不用滚到底） */
+.detail-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    margin-top: 12px;
+    padding: 10px 0 4px;
+    background: var(--nc-elevated);
+    box-shadow: 0 -1px 0 var(--nc-border-faint);
+}
+
+@media (max-width: 900px) {
+    .detail-foot {
+        padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* 侧栏底部工具区与导航之间加一条发丝分隔（收起态保持极简） */
+@media (min-width: 901px) {
+    .tools-app:not(.is-rail-collapsed) .tools-rail__foot {
+        border-top: 1px solid var(--nc-border-faint);
+    }
+}
+
+/* 详情关闭按钮：明确的点击热区与按压反馈 */
+.detail-close {
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease), transform var(--nc-dur-press) var(--nc-ease-out);
+}
+
+.detail-close:active {
+    transform: scale(0.94);
+}
+
+/* 模式切换段控件与标题基线微调 */
+.todo-mode-seg {
+    align-self: center;
+}
+
+/* v4.5 设计 QA 收口：页头操作区与标题基线一致（MD/Todo/图片等） */
+.tools-head {
+    align-items: center;
+}
+
+/* 设置端点行：桌面把操作收进行内覆盖层，消除 41px 空白带；移动端保持常显布局 */
+@media (min-width: 901px) {
+    .sp-profile {
+        position: relative;
+    }
+
+    .sp-profile__main {
+        padding-right: 104px;
+    }
+
+    .sp-profile__actions {
+        position: absolute;
+        right: 6px;
+        bottom: 6px;
+        padding: 0;
+        gap: 2px;
+    }
+}
+
+/* v4.5 设计 QA：QR 工作台收拢，避免 1440 下两列间距过大与下方空置 */
+@media (min-width: 901px) {
+    .tool-layout--qr {
+        max-width: 920px;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 28px;
+    }
+
+    .qr-form {
+        padding-left: 24px;
+    }
+}

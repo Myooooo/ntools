@@ -690,7 +690,7 @@ html[data-theme="light"] .nc-select {
 .nc-toasts {
     position: fixed;
     left: 50%;
-    bottom: 24px;
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
     z-index: var(--nc-z-toast);
     display: flex;
@@ -1285,7 +1285,7 @@ html[data-theme="light"] .nc-select {
 .nc-modal__foot { padding: 16px 22px 20px; }
 
 .nc-toasts {
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
     gap: 6px;
 }
 

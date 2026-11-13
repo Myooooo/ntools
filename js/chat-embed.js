@@ -38,6 +38,8 @@
     var menuOpen = false;
     var menuHideTimer = null;
     var guide = null;
+    var switchToastFromChat = false;
+    var switchingTimer = null;
 
     /* ------------------------------------------------------------------ *
      * 初始化
@@ -83,6 +85,14 @@
         updateGuide();
         controller.renderConversation(WELCOME);
         updateMeta();
+        // 首次从旧 nChat 配置自动合并端点后，给用户一次可见确认（仅当次加载）
+        var loadInfo = store.getLoadInfo ? store.getLoadInfo() : null;
+        if (loadInfo && loadInfo.migratedFrom === 'nchat-settings-merge' && loadInfo.legacyProfiles > 0) {
+            ui.toast('已从旧 nChat 配置合并 ' + loadInfo.legacyProfiles + ' 个端点', {
+                type: 'success',
+                duration: 4200
+            });
+        }
         initialized = true;
         return true;
     }
@@ -97,6 +107,18 @@
         el.menuBtn = document.getElementById('chat-menu-btn');
         el.menu = document.getElementById('chat-menu');
         el.jump = document.getElementById('jump-bottom-btn');
+        if (!document.getElementById('chat-embed-live')) {
+            el.live = util.e('div', {
+                id: 'chat-embed-live',
+                class: 'nc-sr-only',
+                role: 'status',
+                'aria-live': 'polite',
+                'aria-atomic': 'true'
+            });
+            el.app.appendChild(el.live);
+        } else {
+            el.live = document.getElementById('chat-embed-live');
+        }
     }
 
     function initMessages() {
@@ -180,10 +202,40 @@
         }
         if (el.profileDot) {
             el.profileDot.classList.remove('is-ready', 'is-warn', 'is-off');
-            if (!profile) el.profileDot.classList.add('is-off');
-            else if (profile.apiKey && profile.baseUrl && profile.modelId) el.profileDot.classList.add('is-ready');
-            else el.profileDot.classList.add('is-warn');
+            if (!profile) {
+                el.profileDot.classList.add('is-off');
+                el.profileDot.title = '未配置端点';
+            } else if (profile.apiKey && profile.baseUrl && profile.modelId) {
+                el.profileDot.classList.add('is-ready');
+                el.profileDot.title = '端点已就绪';
+            } else {
+                el.profileDot.classList.add('is-warn');
+                el.profileDot.title = '端点缺少 API Key 或 Base URL';
+            }
         }
+        if (el.profileSelect) {
+            el.profileSelect.title = profile
+                ? '当前端点：' + (profile.name || '未命名') + '（点击切换）'
+                : '还没有可用端点';
+        }
+    }
+
+    function announce(text) {
+        if (!el.live) return;
+        el.live.textContent = '';
+        (global.requestAnimationFrame || function (fn) { return setTimeout(fn, 16); })(function () {
+            if (el.live) el.live.textContent = text;
+        });
+    }
+
+    function flashSwitching() {
+        if (!el.toolbar) return;
+        if (switchingTimer) clearTimeout(switchingTimer);
+        el.toolbar.classList.add('is-switching');
+        switchingTimer = setTimeout(function () {
+            switchingTimer = null;
+            if (el.toolbar) el.toolbar.classList.remove('is-switching');
+        }, 240);
     }
 
     function buildGuide() {
@@ -230,7 +282,10 @@
         if (el.profileSelect) {
             el.profileSelect.addEventListener('change', function () {
                 var id = el.profileSelect.value;
-                if (!store.selectProfile(id)) renderProfiles();
+                switchToastFromChat = true;
+                var ok = store.selectProfile(id);
+                switchToastFromChat = false;
+                if (!ok) renderProfiles();
             });
         }
         if (el.systemPromptBtn) {
@@ -321,6 +376,58 @@
     /* ------------------------------------------------------------------ *
      * 端点切换 / llm 事件
      * ------------------------------------------------------------------ */
+    var pendingSwitch = null;
+    var pendingSwitchTimer = null;
+
+    function applyProfileSwitch(profileId, wantToast) {
+        if (!profileId) return;
+        currentProfileId = profileId;
+        flashSwitching();
+        clearStagedImages();
+        conversation.switchConfig(currentProfileId);
+        controller.renderConversation(WELCOME);
+        renderProfiles();
+        updateGuide();
+        var profile = store.getProfile(currentProfileId);
+        if (profile) {
+            announce('已切换到端点：' + profile.name);
+            // 聊天页自己切换时给 toast；设置面板切换已有自己的 toast，避免双提示
+            if (wantToast) {
+                ui.toast('已切换端点：' + profile.name, { type: 'info', duration: 1600 });
+            }
+        }
+        if (composer && typeof composer.focus === 'function') composer.focus();
+    }
+
+    function waitForIdleThenSwitch() {
+        if (pendingSwitchTimer) clearTimeout(pendingSwitchTimer);
+        var deadline = Date.now() + 3000;
+        (function tick() {
+            if (!pendingSwitch) return;
+            var streaming = controller && typeof controller.isStreaming === 'function' && controller.isStreaming();
+            if (!streaming) {
+                var target = pendingSwitch;
+                pendingSwitch = null;
+                pendingSwitchTimer = null;
+                if (target.id && target.id !== currentProfileId) {
+                    applyProfileSwitch(target.id, target.toast);
+                } else {
+                    renderProfiles();
+                    updateGuide();
+                }
+                return;
+            }
+            if (Date.now() > deadline) {
+                pendingSwitch = null;
+                pendingSwitchTimer = null;
+                renderProfiles();
+                updateGuide();
+                return;
+            }
+            pendingSwitchTimer = setTimeout(tick, 100);
+        })();
+    }
+
     function bindLlmEvents() {
         events.on('config:switched', function (payload) {
             if (!payload || !payload.configId) return;
@@ -329,13 +436,17 @@
                 updateGuide();
                 return;
             }
-            currentProfileId = payload.configId;
-            clearStagedImages();
-            conversation.switchConfig(currentProfileId);
-            controller.renderConversation(WELCOME);
-            renderProfiles();
-            updateGuide();
-            if (composer && typeof composer.focus === 'function') composer.focus();
+            var wantToast = switchToastFromChat;
+            // 流式生成中切换端点：先停止旧流，等 finalize 写入旧会话后再切，
+            // 避免助手回复被写进新端点的会话。
+            if (controller && typeof controller.isStreaming === 'function' && controller.isStreaming()) {
+                pendingSwitch = { id: payload.configId, toast: wantToast };
+                if (typeof controller.stop === 'function') controller.stop();
+                if (wantToast) ui.toast('正在停止当前生成并切换端点…', { type: 'info', duration: 1600 });
+                waitForIdleThenSwitch();
+                return;
+            }
+            applyProfileSwitch(payload.configId, wantToast);
         });
         events.on('llm:changed', function () {
             renderProfiles();

@@ -149,7 +149,12 @@
         var head = util.e('div', { class: 'sp-section-head' });
         var info = util.e('div', {});
         info.appendChild(util.e('h2', { class: 'sp-section-title', text: '模型端点' }));
-        info.appendChild(util.e('p', { class: 'sp-section-desc', text: '所有端点保存在本机；聊天与 Todo AI 共用。' }));
+        var currentProfile = doc.profiles.filter(function (item) { return item.id === doc.currentProfileId; })[0];
+        info.appendChild(util.e('p', {
+            class: 'sp-section-desc',
+            text: '所有端点保存在本机；聊天与 Todo AI 共用。共 ' + doc.profiles.length + ' 个端点' +
+                (currentProfile ? '，当前使用「' + currentProfile.name + '」' : '') + '。'
+        }));
         head.appendChild(info);
         var actions = util.e('div', { class: 'sp-section-actions' });
         actions.appendChild(button('新增端点', {
@@ -184,6 +189,9 @@
             var meta = util.e('span', { class: 'sp-profile__meta' });
             meta.appendChild(util.e('span', { class: 'sp-profile__meta-item', text: profile.modelId || '未填模型' }));
             meta.appendChild(util.e('span', { class: 'sp-profile__meta-item', text: profile.baseUrl || '未填地址' }));
+            var metaItems = meta.querySelectorAll('.sp-profile__meta-item');
+            if (metaItems[0]) metaItems[0].setAttribute('title', profile.modelId || '未填模型');
+            if (metaItems[1]) metaItems[1].setAttribute('title', profile.baseUrl || '未填地址');
             if (!profile.apiKey) {
                 meta.appendChild(util.e('span', { class: 'sp-profile__meta-item is-warn', text: '未填写密钥' }));
             }
@@ -243,6 +251,17 @@
             ghost: true, small: true, icon: 'upload',
             onClick: function () { importProfiles(); }
         }));
+        if (typeof store().importLegacy === 'function') {
+            footer.appendChild(button('从旧 nChat 导入', {
+                ghost: true, small: true, icon: 'refresh',
+                onClick: function () {
+                    var result = store().importLegacy();
+                    toast((result && result.message) || '没有可导入的旧 nChat 配置',
+                        result && result.ok && (result.imported || result.updated) ? 'success' : 'info');
+                    if (result && (result.imported || result.updated)) renderSection('profiles');
+                }
+            }));
+        }
         container.appendChild(footer);
     }
 

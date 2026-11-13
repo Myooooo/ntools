@@ -65,7 +65,7 @@
 | `ntools_md` | Markdown 工具草稿 | |
 | `nchat-theme` / `nchat-lite-mode` | `light`/`dark`、`'true'`/`'false'` | |
 
-旧 `nchat-settings` 在 `llm-store.init()` 时迁移为 profiles（保留旧 config id，兼容旧会话），旧键保留可回滚。
+旧 `nchat-settings` 在 `llm-store.init()` 时迁移为 profiles（保留旧 config id，兼容旧会话）；若 `ntools.llm.v1` 已存在则一次性合并（`legacyMerged` 防重复/删除复活），旧键保留可回滚。
 
 ## 4. 事件
 

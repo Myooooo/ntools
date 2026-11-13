@@ -37,13 +37,13 @@
     transition: opacity var(--nc-dur-fast) var(--nc-ease), background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
 }
 
-.tools-rail__toggle:focus-visible,
-.tools-app.is-rail-collapsed .tools-rail__toggle {
+.tools-rail__toggle:focus-visible {
     opacity: 1;
 }
 
 @media (hover: hover) and (pointer: fine) {
-    .tools-rail:hover .tools-rail__toggle {
+    /* 展开态悬停整条导轨才显示右上角收起按钮；收起态只由 logo 区域触发 */
+    .tools-app:not(.is-rail-collapsed) .tools-rail:hover .tools-rail__toggle {
         opacity: 1;
     }
 
@@ -198,6 +198,24 @@ html[data-lite="true"] .tools-nav__item {
     .tools-nav__label,
     .tools-nav__item,
     .tools-rail__toggle .nc-icon {
+        transition: none;
+    }
+}
+
+/* v4.5：展开态给收起按钮一个低对比度提示，避免完全不可发现；收起态仍只在 logo 悬浮时出现 */
+@media (min-width: 901px) {
+    .tools-app:not(.is-rail-collapsed) .tools-rail__toggle {
+        opacity: 0.42;
+    }
+
+    .tools-app:not(.is-rail-collapsed) .tools-rail:hover .tools-rail__toggle,
+    .tools-app:not(.is-rail-collapsed) .tools-rail__toggle:focus-visible {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tools-app:not(.is-rail-collapsed) .tools-rail__toggle {
         transition: none;
     }
 }

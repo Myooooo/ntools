@@ -138,7 +138,7 @@
         var text = getValue();
         var chars = text.length;
         var lines = text ? text.split(/\r\n|\r|\n/).length : 0;
-        els.stats.textContent = chars + ' 字符 · ' + lines + ' 行';
+        els.stats.textContent = chars + ' 字符　' + lines + ' 行';
     }
 
     /* ------------------------------------------------------------------ *

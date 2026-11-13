@@ -45,6 +45,8 @@
                 topP: 0.9
             },
             workEndTime: '17:30',
+            legacyMerged: false,
+            legacyMergedAt: null,
             updatedAt: Date.now()
         };
     }
@@ -172,14 +174,156 @@
             doc.todoAi.profileId = null;
         }
         doc.workEndTime = validTime(src.workEndTime) ? src.workEndTime : '17:30';
+        // 旧 nChat 配置一次性合并标记：normalize 必须保留，避免每次启动重复导入，
+        // 也避免用户手动删除旧端点后又被复活。
+        doc.legacyMerged = src.legacyMerged === true;
+        doc.legacyMergedAt = util.isFiniteNum(src.legacyMergedAt) ? src.legacyMergedAt : null;
         doc.updatedAt = util.isFiniteNum(src.updatedAt) ? src.updatedAt : Date.now();
         return doc;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 旧 nChat 配置（nchat-settings）一次性合并
+     * 兼容两种旧形状：{currentId, configs:[...]} 与单对象 {apiUrl,...}。
+     * 字段映射：apiUrl→baseUrl、systemPrompt→chatSystemPrompt、top_p→topP。
+     * 去重：优先 id；其次 baseUrl+modelId（若现有的是“默认端点”占位则采纳旧 id，
+     * 以保留旧会话的 session key）。合并只补空字段，不覆盖用户新配置。
+     * ------------------------------------------------------------------ */
+    function normalizeLegacyConfigs(raw) {
+        if (!raw || typeof raw !== 'object') return { configs: [], currentId: null };
+        if (Array.isArray(raw)) return { configs: raw, currentId: null };
+        var list = Array.isArray(raw.configs) ? raw.configs : null;
+        if (!list) {
+            // 更旧的单对象格式（没有 configs 包裹）
+            if (raw.apiUrl || raw.baseUrl || raw.apiKey || raw.modelId || raw.systemPrompt) {
+                list = [raw];
+            } else {
+                list = [];
+            }
+        }
+        return {
+            configs: list.slice(0, 30),
+            currentId: typeof raw.currentId === 'string' ? raw.currentId : null
+        };
+    }
+
+    function profilePairKey(profile) {
+        return String(profile.baseUrl || '') + '\u0000' + String(profile.modelId || '');
+    }
+
+    function isPristineDefaultProfile(profile) {
+        return !!profile &&
+            profile.name === '默认端点' &&
+            !profile.apiKey &&
+            !profile.chatSystemPrompt &&
+            profile.baseUrl === 'https://api.openai.com/v1' &&
+            profile.modelId === 'gpt-4o';
+    }
+
+    /** 只补空字段，不覆盖用户现有配置；force=true 用于“默认占位采纳旧配置”。 */
+    function mergeProfileFields(target, source, force) {
+        if (!target || !source) return;
+        if (source.apiKey && (force || !target.apiKey)) target.apiKey = source.apiKey;
+        if (source.chatSystemPrompt && (force || !target.chatSystemPrompt)) target.chatSystemPrompt = source.chatSystemPrompt;
+        if (source.modelId && (force || !target.modelId)) target.modelId = source.modelId;
+        if (source.baseUrl && (force || !target.baseUrl)) target.baseUrl = source.baseUrl;
+        if (source.name && (force || !target.name || target.name === '新端点' || target.name === '默认端点')) {
+            target.name = source.name;
+        }
+        if (force) {
+            if (util.isFiniteNum(source.temperature)) target.temperature = clampNum(source.temperature, target.temperature, 0, 2);
+            if (util.isFiniteNum(source.topP)) target.topP = clampNum(source.topP, target.topP, 0, 2);
+        }
+        target.updatedAt = Date.now();
+    }
+
+    /**
+     * 把 legacy 配置合并进 doc（就地修改）。返回 {added,updated,skipped,currentMapped}。
+     */
+    function mergeLegacyIntoState(doc, legacyRaw) {
+        var parsed = normalizeLegacyConfigs(legacyRaw);
+        var result = { added: 0, updated: 0, skipped: 0, currentMapped: null };
+        if (!parsed.configs.length) return result;
+
+        var byId = Object.create(null);
+        var byPair = Object.create(null);
+        doc.profiles.forEach(function (profile) {
+            byId[profile.id] = profile;
+            byPair[profilePairKey(profile)] = profile;
+        });
+
+        var currentRaw = null;
+        var mappedByIndex = [];
+        parsed.configs.forEach(function (raw, index) {
+            if (!raw || typeof raw !== 'object') { mappedByIndex.push(null); return; }
+            if (parsed.currentId && raw.id === parsed.currentId) currentRaw = raw;
+            var candidate = normalizeProfile(raw, doc.profiles.length + index);
+            if (!raw.name) {
+                candidate.name = parsed.configs.length === 1
+                    ? 'nChat 旧端点'
+                    : 'nChat 端点 ' + (index + 1);
+            }
+            var existing = byId[candidate.id];
+            if (existing) {
+                mergeProfileFields(existing, candidate);
+                mappedByIndex.push(existing);
+                result.updated += 1;
+                return;
+            }
+            var pair = profilePairKey(candidate);
+            var match = byPair[pair];
+            if (match) {
+                if (isPristineDefaultProfile(match) && match.id !== candidate.id) {
+                    // 默认占位端点：采纳旧 id 与旧数据，让旧 nchat-conversation 会话可继续读取
+                    var oldId = match.id;
+                    mergeProfileFields(match, candidate, true);
+                    match.id = candidate.id;
+                    match.createdAt = candidate.createdAt;
+                    delete byId[oldId];
+                    byId[match.id] = match;
+                    if (doc.currentProfileId === oldId) doc.currentProfileId = match.id;
+                } else {
+                    mergeProfileFields(match, candidate);
+                }
+                mappedByIndex.push(match);
+                result.updated += 1;
+                return;
+            }
+            if (doc.profiles.length >= 30) { mappedByIndex.push(null); result.skipped += 1; return; }
+            doc.profiles.push(candidate);
+            byId[candidate.id] = candidate;
+            byPair[pair] = candidate;
+            mappedByIndex.push(candidate);
+            result.added += 1;
+        });
+
+        // currentId：优先按 id，其次按当前项对应的 baseUrl+modelId 找到合并后的 profile；
+        // 单配置旧格式没有 currentId 时，默认把唯一合并项设为当前。
+        var mapped = null;
+        if (parsed.currentId) {
+            if (byId[parsed.currentId]) {
+                mapped = byId[parsed.currentId];
+            } else if (currentRaw) {
+                var currentCandidate = normalizeProfile(currentRaw, 0);
+                mapped = byPair[profilePairKey(currentCandidate)] || null;
+            }
+        } else if (parsed.configs.length === 1) {
+            mapped = mappedByIndex[0] || null;
+        }
+        if (mapped) {
+            doc.currentProfileId = mapped.id;
+            result.currentMapped = mapped.id;
+        }
+        if (doc.todoAi && doc.todoAi.profileId && !doc.profiles.some(function (p) { return p.id === doc.todoAi.profileId; })) {
+            doc.todoAi.profileId = null;
+        }
+        return result;
     }
 
     var state = defaults();
     var listeners = [];
     var initialized = false;
-    var loadInfo = { migratedFrom: null, profiles: 0 };
+    var loadInfo = { migratedFrom: null, profiles: 0, legacyMerged: false, legacyProfiles: 0 };
 
     function snapshot() {
         return util.parseJSON(JSON.stringify(state), normalizeDoc({}));
@@ -220,13 +364,41 @@
         var saved = storage.get(KEY, null);
         if (saved && typeof saved === 'object') {
             state = normalizeDoc(saved);
-            loadInfo = { migratedFrom: null, profiles: state.profiles.length };
+            loadInfo = {
+                migratedFrom: null,
+                profiles: state.profiles.length,
+                legacyMerged: !!state.legacyMerged
+            };
+            // KEY 已存在（例如已自动生成默认端点）时，仍需一次性读取旧 nchat-settings，
+            // 否则用户会“看不到旧 nChat 端点”。legacyMerged 标记保证只合并一次。
+            if (!state.legacyMerged) {
+                var pendingLegacy = storage.get(LEGACY_KEY, null);
+                if (pendingLegacy) {
+                    var merged = mergeLegacyIntoState(state, pendingLegacy);
+                    state.legacyMerged = true;
+                    state.legacyMergedAt = Date.now();
+                    loadInfo = {
+                        migratedFrom: 'nchat-settings-merge',
+                        profiles: state.profiles.length,
+                        legacyMerged: true,
+                        legacyProfiles: merged.added + merged.updated
+                    };
+                    persist();
+                }
+            }
         } else {
             var legacy = storage.get(LEGACY_KEY, null);
             if (legacy) {
                 state = normalizeDoc(legacy);
                 state.todoAi = normalizeTodoAi(null);
-                loadInfo = { migratedFrom: 'nchat-settings', profiles: state.profiles.length };
+                state.legacyMerged = true;
+                state.legacyMergedAt = Date.now();
+                loadInfo = {
+                    migratedFrom: 'nchat-settings',
+                    profiles: state.profiles.length,
+                    legacyMerged: true,
+                    legacyProfiles: state.profiles.length
+                };
                 persist();
             } else {
                 state = defaults();
@@ -388,6 +560,7 @@
             currentProfileId: state.currentProfileId,
             todoAi: getTodoAi(),
             workEndTime: state.workEndTime,
+            legacyMerged: state.legacyMerged === true,
             keysIncluded: includeKeys
         };
     }
@@ -413,10 +586,14 @@
             });
             if (incoming.todoAi) state.todoAi = normalizeTodoAi(incoming.todoAi);
             if (data.workEndTime && validTime(data.workEndTime)) state.workEndTime = data.workEndTime;
+            state.legacyMerged = true;
+            state.legacyMergedAt = state.legacyMergedAt || Date.now();
             commit('import-merge');
             return { ok: true, imported: imported, rejected: 0, message: '已合并 ' + imported + ' 个端点' };
         }
         state = incoming;
+        state.legacyMerged = true;
+        state.legacyMergedAt = Date.now();
         if (!findProfile(state.currentProfileId)) state.currentProfileId = state.profiles[0].id;
         commit('import-replace');
         return { ok: true, imported: state.profiles.length, rejected: 0, message: '已导入 ' + state.profiles.length + ' 个端点' };
@@ -425,8 +602,35 @@
     function reset() {
         state = defaults();
         state.currentProfileId = state.profiles[0].id;
+        // 用户显式重置 = 不再需要旧 nChat 端点，标记避免下次启动又把 legacy 合并回来
+        state.legacyMerged = true;
+        state.legacyMergedAt = Date.now();
         commit('reset');
         return true;
+    }
+
+    /**
+     * 显式“从旧 nChat 重新导入”入口（设置面板/调试可用）。
+     * 启动时已自动合并过；此方法允许用户主动再合并一次（重复项按规则去重）。
+     */
+    function importLegacy() {
+        ensure();
+        var legacy = storage.get(LEGACY_KEY, null);
+        if (!legacy) {
+            return { ok: false, imported: 0, updated: 0, skipped: 0, message: '没有可导入的旧 nChat 配置' };
+        }
+        var merged = mergeLegacyIntoState(state, legacy);
+        state.legacyMerged = true;
+        state.legacyMergedAt = Date.now();
+        commit('legacy-import');
+        return {
+            ok: true,
+            imported: merged.added,
+            updated: merged.updated,
+            skipped: merged.skipped,
+            currentProfileId: state.currentProfileId,
+            message: '已合并 ' + (merged.added + merged.updated) + ' 个旧 nChat 端点'
+        };
     }
 
     NC.store = NC.store || {};
@@ -452,8 +656,10 @@
         setWorkEndTime: setWorkEndTime,
         exportAll: exportAll,
         importAll: importAll,
+        importLegacy: importLegacy,
         reset: reset,
         subscribe: subscribe,
-        getLoadInfo: function () { return loadInfo; }
+        getLoadInfo: function () { return loadInfo; },
+        getLegacyMerged: function () { ensure(); return state.legacyMerged === true; }
     };
 })(window);

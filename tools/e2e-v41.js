@@ -12,6 +12,7 @@
  *  - 三天内到期热区渐变（24h/48h/72h/更远；完成项不染色）
  *  - 列表/全景模式切换（时间线 mount/unmount、横向模式、切换按钮位置稳定）
  *  - v4.2：行元素垂直居中、详情右上关闭叉、demo 循环任务、收起侧栏 logo 悬浮展开
+ *  - v4.5：标签右栏贴按钮左缘（选中/悬浮）、关闭叉/保存后详情真正收起（selectedId=null）
  *
  * 用法：node tools/e2e-v41.js
  * 退出码：0 全部通过；1 有失败。
@@ -257,6 +258,53 @@ async function main() {
         const rowCentered = rowAlign && rowAlign.align === 'center' && ['chk','due','body','act'].every(function(key){ return rowAlign[key] === null || Math.abs(rowAlign[key]) <= 1; });
         assert('Todo 行内元素垂直居中', rowCentered, JSON.stringify(rowAlign));
 
+        /* v4.5：标签在行级右侧栏，右缘贴操作按钮左缘（选中态） */
+        const tagsGeo = await evaluate(`(async function(){
+            var s = NC.store.todo;
+            var t = s.addTask({ title: 'E2E 标签几何', due: Date.now() + 2 * 3600000, tags: ['标签一', '标签二', '标签三', '标签四'] });
+            s.selectTask(t.id);
+            await new Promise(function (r) { setTimeout(r, 90); });
+            var row = document.querySelector('.todo-item[data-id="' + t.id + '"]');
+            var tags = row.querySelector('.todo-item__tags');
+            var acts = row.querySelector('.todo-item__actions');
+            var tr = tags.getBoundingClientRect();
+            var ar = acts.getBoundingClientRect();
+            var tl = row.querySelector('.todo-item__titleline');
+            return { id: t.id, gap: Math.round(ar.left - tr.right),
+                     dy: Math.round(Math.abs((tr.top + tr.bottom) / 2 - (ar.top + ar.bottom) / 2)),
+                     tagsHidden: tags.hidden,
+                     titleHasTags: !!tl.querySelector('.todo-item__tags'),
+                     order: Array.prototype.map.call(tl.children, function (el) {
+                         return el.classList.contains('todo-item__pin') ? 'pin' : el.classList.contains('todo-item__repeat') ? 'repeat' : el.classList.contains('todo-item__title') ? 'title' : 'other';
+                     }).join('>'),
+                     rowRect: { x: Math.round(row.getBoundingClientRect().left), y: Math.round(row.getBoundingClientRect().top) } };
+        })()`);
+        assert('标签右栏贴按钮左缘（选中）', tagsGeo && tagsGeo.gap >= 7 && tagsGeo.gap <= 11 && tagsGeo.dy <= 1 &&
+            !tagsGeo.titleHasTags && tagsGeo.order === 'pin>repeat>title', JSON.stringify(tagsGeo));
+
+        /* v4.5：悬浮态（未选中）同样中线对齐、按钮可见 */
+        await evaluate(`(function(){ NC.store.todo.clearSelection(); return true; })()`);
+        await sleep(180);
+        const hoverTarget = await evaluate(`(function(){
+            var row = document.querySelector('.todo-item');
+            var r = row.getBoundingClientRect();
+            return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+        })()`);
+        await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: hoverTarget.x, y: hoverTarget.y });
+        await sleep(220);
+        const tagsHover = await evaluate(`(function(){
+            var row = document.querySelector('.todo-item:hover') || document.querySelector('.todo-item');
+            var tags = row.querySelector('.todo-item__tags');
+            var acts = row.querySelector('.todo-item__actions');
+            if (!tags || !acts) return null;
+            var tr = tags.getBoundingClientRect();
+            var ar = acts.getBoundingClientRect();
+            return { gap: Math.round(ar.left - tr.right),
+                     dy: Math.round(Math.abs((tr.top + tr.bottom) / 2 - (ar.top + ar.bottom) / 2)),
+                     opacity: getComputedStyle(acts).opacity };
+        })()`);
+        assert('标签右栏贴按钮左缘（悬浮）', tagsHover && tagsHover.gap >= 7 && tagsHover.gap <= 11 && tagsHover.dy <= 1 && parseFloat(tagsHover.opacity) === 1, JSON.stringify(tagsHover));
+
         const demoLoops = await evaluate(`(function(){
             var tasks=NC.store.todo.getDoc().tasks;
             var loops=tasks.filter(function(t){ return t.recurrence && !t.deletedAt; });
@@ -276,7 +324,35 @@ async function main() {
         assert('详情右上角关闭叉可见', detailClose && detailClose.display !== 'none' && detailClose.topRight, JSON.stringify(detailClose));
         await evaluate(`(function(){ var c=document.querySelector('.detail-close'); if (c) c.click(); return true; })()`);
         await sleep(450);
-        assert('点击关闭叉收起详情', (await evaluate("NC.store.todo.getUi().drawerOpen")) === false);
+        const closeState = await evaluate(`(function(){
+            var d=document.querySelector('.todo-detail'); var ui=NC.store.todo.getUi();
+            return { selectedId: ui.selectedId, drawerOpen: ui.drawerOpen, detailHidden: !d || d.offsetParent === null,
+                     shell: (document.querySelector('.todo-shell')||{}).className };
+        })()`);
+        assert('关闭叉后详情真正收起（selectedId=null + 不可见）',
+            closeState.selectedId === null && closeState.drawerOpen === false && closeState.detailHidden && /is-detail-hidden/.test(closeState.shell || ''),
+            JSON.stringify(closeState));
+
+        /* v4.5：保存按钮 = 保存并关闭详情（编辑落库 + selectedId=null + 不可见） */
+        const saveClose = await evaluate(`(async function(){
+            var s=NC.store.todo;
+            var t=s.getDoc().tasks.filter(function(x){ return !x.deletedAt; })[0];
+            s.selectTask(t.id);
+            await new Promise(function (r) { setTimeout(r, 90); });
+            var root=document.getElementById('todo-detail-inner');
+            var title=root.querySelector('[data-field="title"]');
+            title.value = title.value + '（保存关闭测试）';
+            title.dispatchEvent(new Event('input', { bubbles: true }));
+            root.querySelector('[data-act="detail-save"]').click();
+            await new Promise(function (r) { setTimeout(r, 180); });
+            var d=document.querySelector('.todo-detail'); var ui=s.getUi();
+            return { title: s.getTask(t.id).title, selectedId: ui.selectedId, drawerOpen: ui.drawerOpen,
+                     detailHidden: !d || d.offsetParent === null,
+                     toasts: Array.prototype.map.call(document.querySelectorAll('.nc-toast__text'), function(n){ return n.textContent; }).join('|') };
+        })()`);
+        assert('保存后详情关闭且编辑已落库',
+            /保存关闭测试/.test(saveClose.title || '') && saveClose.selectedId === null && saveClose.drawerOpen === false &&
+            saveClose.detailHidden && /已保存/.test(saveClose.toasts || ''), JSON.stringify(saveClose));
 
         /* ---------------- 6. 循环任务 ---------------- */
         const recurResult = await evaluate(`(function(){

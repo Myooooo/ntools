@@ -1206,9 +1206,8 @@
         titleline.appendChild(repeatMark);
         var title = node('span', 'todo-item__title');
         titleline.appendChild(title);
-        var tags = node('span', 'todo-item__titleline-tags');
-        tags.className = 'todo-item__tags';
-        titleline.appendChild(tags);
+        /* 标签移到行级右侧栏（贴着操作按钮左侧，垂直居中），标题行只保留 pin→repeat→title */
+        var tags = node('span', 'todo-item__tags');
 
         var meta = node('span', 'todo-item__meta');
         var due = node('span', 'todo-item__due');
@@ -1262,6 +1261,7 @@
 
         li.appendChild(check);
         li.appendChild(body);
+        li.appendChild(tags);
         li.appendChild(acts);
         li.__task = task;
         updateTaskNode(li, task, ui, doc);
@@ -1311,8 +1311,9 @@
         var title = li.querySelector('.todo-item__title');
         if (title && title.textContent !== task.title) title.textContent = task.title;
 
-        /* 标签 */
+        /* 标签：行级右侧栏；无标签 hidden 不占位 */
         var tagsWrap = li.querySelector('.todo-item__tags');
+        if (tagsWrap) tagsWrap.hidden = task.tags.length === 0;
         var tagSig = task.tags.join('\u0001');
         if (tagsWrap && li.__tagSig !== tagSig) {
             li.__tagSig = tagSig;
@@ -2195,7 +2196,9 @@
         if (!btn) return;
         var act = btn.getAttribute('data-act');
         if (act === 'detail-close') {
-            store.closeDrawer();
+            /* 先提交未落库编辑，再清空选中：桌面检查器列收起、移动抽屉关闭 */
+            flushDetailEdits();
+            store.clearSelection();
             return;
         }
         if (!id) return;
@@ -2241,22 +2244,15 @@
     }
 
     /**
-     * 保存详情：先提交 debounce 中的标题/备注/标签编辑，再显示「已保存」。
-     * 不关闭抽屉、不改变完成状态（完成由左上角 checkbox 负责）。
+     * 保存详情并关闭：先提交 debounce 中的编辑，再清空选中/关闭详情。
+     * 不改变完成状态（完成由左上角 checkbox 负责）。
      */
     function saveDetailWithFeedback(id) {
         var task = store.getTask(id);
         if (!task) return;
         flushDetailEdits();
-        var savedEl = els.detailInner ? els.detailInner.querySelector('[data-detail-saved]') : null;
-        if (savedEl) {
-            savedEl.textContent = '已保存';
-            savedEl.classList.add('is-saved');
-            global.setTimeout(function () {
-                if (savedEl) savedEl.classList.remove('is-saved');
-            }, 1800);
-        }
-        ui.toast('已保存', { type: 'success', duration: 1600 });
+        store.clearSelection();
+        ui.toast('已保存并关闭', { type: 'success', duration: 1800 });
     }
 
     function syncDetailColumn(ui) {

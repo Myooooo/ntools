@@ -98,10 +98,14 @@
         try { saved = global.localStorage.getItem(RAIL_KEY) === '1'; } catch (err) { saved = false; }
         apply(saved);
 
-        btn.addEventListener('click', function () {
+        btn.addEventListener('click', function (event) {
             var next = !app.classList.contains('is-rail-collapsed');
             apply(next);
             try { global.localStorage.setItem(RAIL_KEY, next ? '1' : '0'); } catch (err) { /* ignore */ }
+            /* 鼠标点击后释放焦点：否则收起态按钮会一直以“聚焦/悬浮”浮在 logo 上 */
+            if (event && event.detail > 0) {
+                btn.blur();
+            }
         });
     }
 
@@ -355,7 +359,7 @@
         var features = (NC.compat && NC.compat.features) || {};
         var counts = NC.store && NC.store.todo ? NC.store.todo.counts(true) : null;
         var rows = [
-            ['版本', 'nTools ' + (NC.version || '4.3.0')],
+            ['版本', 'nTools ' + (NC.version || '4.5.0')],
             ['运行方式', (features.fileProtocol ? '本地文件 file://' : (features.protocol || '未知协议')) + ' · 无后端'],
             ['内核', 'Chromium ' + (features.chromeVersion || '未知')],
             ['存储', features.storage ? 'localStorage 可用' : '不可用（内存模式）'],

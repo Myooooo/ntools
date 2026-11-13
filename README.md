@@ -1,8 +1,8 @@
-# nTools · v4.4
+# nTools · v4.5
 
 > 本地优先的 AI 效率工作台：nChat 原生聊天 + 待办（Todo AI 识别）+ 二维码 / Markdown / 图片工具。
 > 纯静态 HTML，双击即用，无需服务器、无需安装、无需构建链；数据只留在本机浏览器。
-> v4.4 采用 **Precision Workbench** 设计方向：石墨/纸面、发丝分隔、仪器蓝强调、铜色时间语义；标准模式保留完整材质与动效，**Light（Lite）模式是它的性能减法**。
+> v4.5 采用 **Precision Workbench** 设计方向：石墨/纸面、发丝分隔、仪器蓝强调、铜色时间语义；标准模式保留完整材质与动效，**Light（Lite）模式是它的性能减法**。
 > 目标环境：国企内网 / 信创 ARM / 麒麟 Linux / 奇安信可信浏览器（Chromium 102 基线）。
 >
 > **仓库**：[github.com/Myooooo/ntools](https://github.com/Myooooo/ntools)
@@ -68,8 +68,9 @@
 ### 设计与性能
 
 - **标准模式**：石墨/纸面配色 + 仪器蓝强调 + 铜色时间语义；发丝线代替卡片阴影；196px 工具导轨、记录式待办 ledger、访谈式聊天记录；小面积玻璃材质、环境光、有目的的入场/退场动效（仅 transform/opacity）。
-- **可收起侧栏**：点击导轨右上角收起后仅显示各功能图标，底部只保留设置按钮；状态持久化。
+- **可收起侧栏**：点击导轨右上角收起后仅显示各功能图标，logo 居中，悬浮 logo 变为展开按钮；底部只保留设置按钮；状态持久化。
 - **动效审计**：基于 emilkowalski `animate` / `choreograph` 原则逐面校准——高频表面不动画、进入 ease-out / 退出更快、弹层 origin-aware、菜单可中断不叠放、设置窗口缩放淡入、时间线一次性揭示。
+- **v4.5 设计复检**：按 frontend-design / apple-design / emil-design-eng 重检工具栏层级、端点列表、详情面板与侧栏——标签改为行级右栏贴按钮左缘、详情操作条粘性可达、侧栏收起/展开反馈、设置端点列表发丝分隔与显式旧配置导入。
 - **Light（Lite）性能模式**：建立在标准模式之上，**去掉高级动效与页面特效**（ambient/玻璃/阴影/渐变/位移动画全部关闭），保留布局、字阶、颜色语义与即时反馈；适合低配 ARM/软渲染/长时间办公。
 - 深色 / 浅色主题均基于同一套 `--nc-*` 令牌；系统「减少动效」自动降级。
 - 性能：聊天 tab 懒加载（首次切到 nChat 才初始化）；待办 keyed diff + 分钟对齐 ticker；500 条任务导入/渲染/搜索在 40ms 级。
@@ -138,8 +139,10 @@ ntools/
 │  ├─ design-break-audit.md   # 最坏数据/移动端原生审计
 │  ├─ animation-audit-v4.1.md # 全站动效审计与修复记录
 │  ├─ timeline-view.md        # 全景时间线调研/API/交互与限制
+│  ├─ design-review-v4.5.md   # v4.5 聊天/设置设计复检
+│  ├─ design-qa-v4.5.md       # v4.5 全页面设计 QA 报告
 │  ├─ v4-design-report.md     # v4 设计改造与验收报告
-│  └─ v44-release-report.md   # v4.4 到期染色/回收站/仓库清理交付报告
+│  └─ v45-release-report.md   # v4.5 设计复检/交互修复/端点兼容交付报告
 ├─ tools/
 │  ├─ verify.js               # CDP 页面验收（报错/DOM/迁移/原生聊天/设置面板 + 截图）
 │  ├─ e2e.js                  # 回归交互（待办/聊天流式/安全/性能）
@@ -161,7 +164,7 @@ ntools/
   - `nchat-conversation.v2`：按端点隔离的聊天会话；
   - `ntools.todo.v2`：待办文档（含回收站、导入隔离区）；
   - `nchat-theme` / `nchat-lite-mode`：主题与 Light（Lite）性能模式。
-- 旧版 `nchat-settings` / `nchat-conversation` 会在首次启动时自动迁移，原键保留用于回滚。
+- 旧版 `nchat-settings` / `nchat-conversation` 会在首次启动时自动迁移，原键保留用于回滚；即使 `ntools.llm.v1` 已存在，也会一次性合并旧 nChat 端点（保留旧 id 以兼容旧会话），设置 → 模型端点可手动「从旧 nChat 导入」。
 - 导出端点配置默认**不含 API Key**；勾选含密钥需二次确认。
 - 升级/迁移前自动备份；`file://` 下本地页面共享同一存储域（Chromium 行为），共用电脑建议用后清理。
 
@@ -197,7 +200,7 @@ open checks/tests.html        # 或双击运行
 ```
 
 - 最近验收结果：`bash tools/check.sh` **7/7 全绿**（verify 3 页、回归 E2E、功能 E2E 53 项、时间线 E2E 58 项、交互/回收站 E2E、纯函数 81 项，全部 PASS / 0 FAIL）；`break-ui` 32 组最坏数据 0 问题、移动端原生 12/12 PASS。
-- 截图输出：`/tmp/nc-shots/v44/`（v4.4 染色/回收站）、`/tmp/nc-shots/v4/timeline/`、`/tmp/nc-shots/v4/break/`。
+- 截图输出：`/tmp/nc-shots/v45/qa/`（v4.5 全页面设计 QA）、`/tmp/nc-shots/v45/final/`（v4.5 关键状态）。
 
 ## ❓ 常见问题
 
@@ -214,7 +217,14 @@ open checks/tests.html        # 或双击运行
 
 ## 🗒️ 版本变更
 
-### v4.4（当前）
+### v4.5（当前）
+
+- 设计复检：侧栏收起后 logo 居中且悬浮变展开按钮；Todo 标签改为行级右栏、贴操作按钮左缘并对齐中线；详情操作条粘性可达；设置端点列表发丝分隔/对比度/端点计数/显式「从旧 nChat 导入」；聊天工具栏层级与端点元信息强化。
+- 详情交互：关闭叉真正收起（清空选中，桌面列/移动抽屉同步）；「保存」= 保存并关闭。
+- nChat 端点兼容：`ntools.llm.v1` 已存在时也会合并旧 `nchat-settings`（两种旧形状、字段归一、去重、保留旧 id/currentId、只导入一次、不复活）。
+- 版本 v4.5.0；`check.sh` 7/7；新增 `design-review-v4.5` / `design-qa-v4.5`。
+
+### v4.4
 
 - 到期染色改为日历天语义：后天黄、明天橙、**当天红**、逾期深红；超过 3 个日历天不染色。
 - 回收站行操作改为「恢复 / 彻底删除」，页头新增「清空回收站」按钮（确认 + 撤销）。

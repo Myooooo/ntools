@@ -1835,3 +1835,107 @@ html[data-lite="true"] .chat-reasoning__summary::before {
         opacity var(--nc-dur-fast) var(--nc-ease-out),
         transform var(--nc-dur-fast) var(--nc-ease-out);
 }
+
+/* ==========================================================================
+ * v4.5 聊天工具栏 / 端点信息 / 表单细节
+ * 目标：把“当前端点”变成工具栏的主信息，模型与地址作为第二层级；
+ *       切换有即时反馈；小字号 meta 在浅色下也满足可读性。
+ * ========================================================================== */
+
+/* 1) 端点选择：当前端点是工具栏的主信息 */
+#chat-profile-select {
+    color: var(--nc-text);
+    font-weight: 600;
+}
+
+#chat-profile-select:focus-visible {
+    border-color: var(--nc-accent);
+    box-shadow: 0 0 0 3px var(--nc-accent-faint);
+    outline: none;
+}
+
+/* 2) 端点元信息：模型（等宽、主） + 主机（次、发丝分隔） */
+.chat-meta__model {
+    color: var(--nc-text-2);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-fs-2xs);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}
+
+.chat-meta__host {
+    color: var(--nc-text-2);
+    padding-left: var(--nc-space-2);
+    border-left: 1px solid var(--nc-border);
+    font-size: var(--nc-fs-2xs);
+}
+
+/* 3) 状态点：稍大、带语义 title（由 chat-embed 维护），不抢焦点 */
+.chat-profile-dot {
+    width: 7px;
+    height: 7px;
+    cursor: default;
+}
+
+/* 4) 工具栏右侧操作区：与端点区用一条发丝线分层 */
+.chat-toolbar__actions {
+    padding-left: var(--nc-space-2);
+    border-left: 1px solid var(--nc-border-faint);
+}
+
+/* 5) 端点切换反馈：短暂压低端点信息，随后恢复（Lite/reduced 即时） */
+.chat-toolbar.is-switching #chat-profile-select,
+.chat-toolbar.is-switching .chat-profile-meta {
+    opacity: 0.55;
+    transition: opacity var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+.chat-toolbar #chat-profile-select,
+.chat-toolbar .chat-profile-meta {
+    transition: opacity var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+/* 6) 输入区：placeholder 提升一档对比度（浅色下 text-3 偏淡） */
+.chat-input::placeholder {
+    color: var(--nc-text-2);
+    opacity: 0.82;
+}
+
+/* 7) 系统提示词 sheet：头部与正文用发丝线分层，说明文字提高可读性 */
+.chat-prompt-sheet__head {
+    padding-bottom: var(--nc-space-3);
+    margin-bottom: var(--nc-space-3);
+    border-bottom: 1px solid var(--nc-border);
+}
+
+.chat-prompt-sheet__sub {
+    color: var(--nc-text-2);
+}
+
+/* 8) 欢迎态说明文字：浅色下提高到 text-2 */
+.chat-welcome__hint {
+    color: var(--nc-text-2);
+}
+
+/* 9) 移动端：隐藏操作区分隔线，端点区保持紧凑 */
+@media (max-width: 768px) {
+    .chat-toolbar__actions {
+        padding-left: 0;
+        border-left: 0;
+    }
+}
+
+/* 10) Lite / reduced-motion：切换反馈不做透明度过渡 */
+html[data-lite="true"] .chat-toolbar.is-switching #chat-profile-select,
+html[data-lite="true"] .chat-toolbar.is-switching .chat-profile-meta,
+html[data-lite="true"] .chat-toolbar #chat-profile-select,
+html[data-lite="true"] .chat-toolbar .chat-profile-meta {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chat-toolbar.is-switching #chat-profile-select,
+    .chat-toolbar.is-switching .chat-profile-meta {
+        transition: none;
+    }
+}

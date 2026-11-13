@@ -1171,3 +1171,49 @@
         transition: none;
     }
 }
+
+/* ==========================================================================
+ * v4.5 端点列表可读性收口（B 设计复检建议）
+ * ========================================================================== */
+.sp-profile__main {
+    min-height: 58px;
+}
+
+.sp-profile__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 3px 8px;
+    color: var(--nc-text-2);
+    white-space: normal;
+    overflow: hidden;
+}
+
+.sp-profile__meta-item {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sp-profile__meta-item + .sp-profile__meta-item {
+    position: relative;
+    padding-left: 9px;
+}
+
+.sp-profile__meta-item + .sp-profile__meta-item::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 1px;
+    height: 10px;
+    border-radius: 0;
+    background: var(--nc-border-strong);
+    transform: translateY(-50%);
+}
+
+.sp-profile__meta-item.is-warn {
+    color: var(--nc-warning);
+}
