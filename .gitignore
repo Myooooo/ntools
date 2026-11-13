@@ -26,3 +26,7 @@ Thumbs.db
 
 # Uploads
 backend/uploads/
+
+# Development-only (not shipped in the repository)
+docs/
+tools/
