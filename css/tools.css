@@ -1374,7 +1374,7 @@ input[type="range"]::-webkit-slider-thumb {
 .todo-item {
     position: relative;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 10px;
     min-height: 57px;
     padding: 11px 54px 11px 6px;
@@ -1441,7 +1441,7 @@ input[type="range"]::-webkit-slider-thumb {
 .todo-item__check {
     width: 15px;
     height: 15px;
-    margin: 2px 0 0;
+    margin: 0;
     flex: 0 0 auto;
     accent-color: var(--nc-accent);
     cursor: pointer;
@@ -1526,7 +1526,8 @@ input[type="range"]::-webkit-slider-thumb {
 .todo-item__due {
     position: absolute;
     left: 31px;
-    top: 11px;
+    top: 50%;
+    transform: translateY(-50%);
     display: flex;
     flex-direction: column;
     gap: 1px;
@@ -1858,10 +1859,19 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .detail-close {
-    display: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: 0 0 auto;
+    align-self: flex-start;
     width: 28px;
     height: 28px;
+    margin: -2px -2px 0 2px;
+    border: 1px solid var(--nc-border-faint);
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-text-3);
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease), border-color var(--nc-dur-fast) var(--nc-ease);
 }
 
 .detail-section {
@@ -2410,6 +2420,12 @@ input[type="range"]::-webkit-slider-thumb {
     .detail-title:hover {
         border-color: var(--nc-border);
     }
+
+    .detail-close:hover {
+        color: var(--nc-text);
+        background: var(--nc-surface-2);
+        border-color: var(--nc-border);
+    }
 }
 
 /* ==========================================================================
@@ -2480,7 +2496,7 @@ html[data-theme="light"] .tools-app .nc-select {
 .tools-app input.todo-item__check {
     width: 15px;
     height: 15px;
-    margin: 2px 0 0;
+    margin: 0;
 }
 
 .tools-app input.detail-check {
@@ -2987,6 +3003,8 @@ html[data-lite="true"] .todo-scroll {
 
     .todo-item__due {
         position: static;
+        top: auto;
+        transform: none;
         flex-direction: row;
         gap: 4px;
         width: auto;
@@ -3295,7 +3313,31 @@ html[data-lite="true"] .tools-nav__item {
 /* ---- 15.2 页头「列表 / 全景」切换 ---- */
 .todo-mode-seg {
     flex: 0 0 auto;
-    margin-right: 2px;
+    margin: 0;
+}
+
+/* 标题行：标题 + 模式切换（左缘固定，不随 mainpane 宽度变化）；副标题独占一行 */
+.todo-mainpane .tools-head__text {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 14px;
+    row-gap: 3px;
+    min-width: 0;
+}
+
+.todo-mainpane .tools-head__text > .tools-title {
+    flex: 0 0 auto;
+}
+
+.todo-mainpane .tools-head__text > .todo-mode-seg {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.todo-mainpane .tools-head__text > .tools-subtitle {
+    flex: 1 0 100%;
+    margin-top: 0;
 }
 
 .todo-mode-seg .nc-seg__btn {
@@ -3354,8 +3396,15 @@ html[data-lite="true"] .tools-nav__item {
 }
 
 /* ---- 15.4 三天内到期整行热区渐变 ---- */
-.todo-item > * {
+/* 热区浮层在上，正文/复选框/时间槽/操作按钮在上层；不覆盖绝对定位 */
+.todo-item__check,
+.todo-item__body {
     position: relative;
+    z-index: 1;
+}
+
+.todo-item__due,
+.todo-item__actions {
     z-index: 1;
 }
 
@@ -3553,17 +3602,21 @@ html[data-lite="true"] .todo-timeline {
     display: none;
 }
 
-/* 全景模式只保留「列表 / 全景」切换：隐藏新建/搜索/排序/更多/AI 等列表控件 */
+/* 全景模式只保留「列表 / 全景」切换：其他列表控件保留布局占位但不可见/不可点 */
 .todo-mainpane.is-timeline .tools-head__actions > *:not(.todo-mode-seg) {
-    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
 }
 
-.todo-mainpane.is-timeline .tools-head__actions {
-    gap: 0;
+/* 模式切换：新视图内容 180ms opacity + 4px（--nc-enter-y 在页面层为 4px） */
+.todo-mainpane.is-mode-entering .todo-scroll,
+.todo-mainpane.is-mode-entering .todo-timeline {
+    animation: nc-rise-in var(--nc-dur-page) var(--nc-ease-out) both;
 }
 
-.todo-mainpane.is-timeline .tools-head {
-    align-items: center;
+html[data-lite="true"] .todo-mainpane.is-mode-entering .todo-scroll,
+html[data-lite="true"] .todo-mainpane.is-mode-entering .todo-timeline {
+    animation: none;
 }
 
 @media (max-width: 1100px) {

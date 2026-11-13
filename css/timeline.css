@@ -100,12 +100,12 @@ html:not([data-lite="true"]) .tl-head {
 .tl-stat--warning .tl-stat__value { color: var(--nc-warning); }
 .tl-stat--muted .tl-stat__value { color: var(--nc-text-2); }
 
-/* 控件 */
+/* 控件：横向/纵向统一基线（输入 180×32、预设组与开关同高、间距一致） */
 .tl-controls {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: var(--nc-space-3);
+    gap: 10px;
     margin-top: var(--nc-space-3);
 }
 
@@ -113,7 +113,7 @@ html:not([data-lite="true"]) .tl-head {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
-    gap: var(--nc-space-2);
+    gap: 8px;
 }
 
 .tl-field {
@@ -127,10 +127,11 @@ html:not([data-lite="true"]) .tl-head {
     font-size: var(--nc-fs-2xs);
     color: var(--nc-text-3);
     letter-spacing: 0.02em;
+    line-height: 1.2;
 }
 
 .tl-field__input {
-    width: 178px;
+    width: 180px;
     height: 32px;
     padding: 0 8px;
     font-size: var(--nc-fs-sm);
@@ -139,14 +140,21 @@ html:not([data-lite="true"]) .tl-head {
 
 .tl-presets {
     display: inline-flex;
-    gap: 4px;
-    padding: 3px;
+    align-items: center;
+    gap: 2px;
+    height: 32px;
+    padding: 2px;
     border: 1px solid var(--nc-border);
     border-radius: var(--nc-radius-md);
     background: var(--nc-surface-2);
 }
 
 .tl-preset {
+    height: 26px;
+    padding: 0 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border-radius: var(--nc-radius-sm);
 }
 
@@ -159,14 +167,29 @@ html:not([data-lite="true"]) .tl-head {
 .tl-extra {
     display: inline-flex;
     align-items: center;
-    gap: var(--nc-space-2);
+    gap: 10px;
+    height: 32px;
     margin-left: auto;
+}
+
+.tl-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
 }
 
 .tl-switch .tl-switch__text {
     font-size: var(--nc-fs-xs);
     color: var(--nc-text-2);
     white-space: nowrap;
+}
+
+.tl-extra .nc-btn {
+    height: 32px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
 }
 
 /* 图例 */
@@ -197,6 +220,7 @@ html:not([data-lite="true"]) .tl-head {
 .tl-legend__item.is-overdue { color: var(--nc-danger); }
 .tl-legend__item.is-down { color: var(--nc-text-3); }
 .tl-legend__item--range { color: var(--nc-text-3); }
+.tl-legend__item--duration { color: var(--nc-text-3); }
 
 /* 状态提示 */
 .tl-status {
@@ -234,7 +258,7 @@ html:not([data-lite="true"]) .tl-head {
     min-width: 0;
     height: 100%;
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--nc-scrollbar) transparent;
     overscroll-behavior-x: contain;
@@ -283,10 +307,6 @@ html:not([data-lite="true"]) .tl-axis {
     bottom: 0;
     border-left: 1px solid var(--nc-border-faint);
     pointer-events: none;
-}
-
-.tl-dayband.is-alt {
-    background: var(--nc-border-faint);
 }
 
 .tl-dayband.is-today {
@@ -435,7 +455,7 @@ html:not([data-lite="true"]) .tl-axis {
 .tl-now::after {
     content: attr(data-time);
     position: absolute;
-    bottom: 4px;
+    top: -18px;
     left: 6px;
     padding: 1px 5px;
     border-radius: var(--nc-radius-xs);
@@ -446,7 +466,7 @@ html:not([data-lite="true"]) .tl-axis {
     white-space: nowrap;
 }
 
-/* ---------- 任务 chips ---------- */
+/* ---------- 时长条（创建 → 到期） ---------- */
 .tl-chips {
     position: absolute;
     inset: 0;
@@ -456,9 +476,9 @@ html:not([data-lite="true"]) .tl-axis {
 .tl-task {
     position: absolute;
     z-index: 1;
-    width: 170px;
+    min-width: 44px;
     height: 36px;
-    padding: 4px 8px 4px 9px;
+    padding: 3px 8px 3px 8px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -482,29 +502,106 @@ html:not([data-lite="true"]) .tl-axis {
 .tl-task.is-prio-high { border-left-color: var(--nc-priority-high); }
 .tl-task.is-prio-urgent { border-left-color: var(--nc-priority-urgent); }
 
-.tl-task__top {
+/* 时间超出当前范围：边缘标记溢出 */
+.tl-task.is-clip-start {
+    border-left-style: dashed;
+    border-left-color: var(--nc-warning);
+}
+
+.tl-task.is-clip-end::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 2px;
+    background: var(--nc-warning);
+    opacity: 0.75;
+}
+
+.tl-bar__top {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 4px;
     min-width: 0;
 }
 
-.tl-task__time {
-    font-family: var(--nc-font-mono);
-    font-size: var(--nc-fs-2xs);
-    font-variant-numeric: tabular-nums;
-    color: var(--nc-warning);
+.tl-bar__title {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: calc(100% - 40px);
+    font-size: var(--nc-fs-xs);
+    line-height: 1.25;
+    color: var(--nc-text);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.tl-task__flags {
+.tl-bar__flags {
+    flex: 0 0 auto;
+    margin-left: 2px;
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    flex: 0 0 auto;
 }
 
+.tl-bar__meta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    font-size: 10px;
+    line-height: 1.2;
+    color: var(--nc-text-3);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.tl-bar__start,
+.tl-bar__due {
+    font-family: var(--nc-font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.tl-bar__start { color: var(--nc-text-2); }
+.tl-bar__arrow { color: var(--nc-text-3); }
+.tl-bar__due { color: var(--nc-warning); font-weight: 600; }
+
+.tl-bar__dur {
+    margin-left: 2px;
+    color: var(--nc-text-3);
+}
+
+.tl-bar__dur::before {
+    content: "·";
+    margin-right: 4px;
+    color: var(--nc-text-3);
+}
+
+/* 窄条 / 极短条：按宽度降级信息（右端锚定 due） */
+.tl-bar.is-narrow .tl-bar__start,
+.tl-bar.is-narrow .tl-bar__arrow {
+    display: none;
+}
+
+.tl-bar.is-tiny .tl-bar__top,
+.tl-bar.is-tiny .tl-bar__start,
+.tl-bar.is-tiny .tl-bar__arrow,
+.tl-bar.is-tiny .tl-bar__dur {
+    display: none;
+}
+
+.tl-bar.is-tiny {
+    justify-content: center;
+    padding: 0 6px;
+}
+
+.tl-bar.is-tiny .tl-bar__due {
+    font-size: 10.5px;
+}
+
+/* 状态 / 标识（沿用原语义色） */
 .tl-task__flag {
     display: inline-flex;
     align-items: center;
@@ -524,56 +621,6 @@ html:not([data-lite="true"]) .tl-axis {
 .tl-task__flag.is-repeat { color: var(--nc-accent-2); }
 .tl-task__flag.is-overdue { color: var(--nc-danger); }
 
-.tl-task__title {
-    font-size: var(--nc-fs-xs);
-    line-height: 1.3;
-    color: var(--nc-text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.tl-task__meta {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-    font-size: 10px;
-    color: var(--nc-text-3);
-}
-
-.tl-task__prio {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--nc-priority-normal);
-    flex: 0 0 auto;
-}
-
-.tl-task__prio[data-priority="low"] { background: var(--nc-priority-low); }
-.tl-task__prio[data-priority="high"] { background: var(--nc-priority-high); }
-.tl-task__prio[data-priority="urgent"] { background: var(--nc-priority-urgent); }
-
-.tl-task__status {
-    white-space: nowrap;
-}
-
-.tl-task__tag {
-    max-width: 56px;
-    padding: 0 4px;
-    border-radius: var(--nc-radius-xs);
-    background: var(--nc-surface-3);
-    color: var(--nc-text-2);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.tl-task__tag-more {
-    color: var(--nc-text-3);
-    white-space: nowrap;
-}
-
 .tl-task.is-pinned {
     border-color: var(--nc-warning-soft);
     box-shadow: inset 0 0 0 1px var(--nc-warning-soft);
@@ -584,29 +631,13 @@ html:not([data-lite="true"]) .tl-axis {
 }
 
 .tl-task.is-overdue,
-.tl-task.is-overdue .tl-task__time {
+.tl-task.is-overdue .tl-bar__due {
     color: var(--nc-danger);
 }
 
-/* 逾期且早于范围的任务：固定在左缘，避免被范围过滤掉 */
 .tl-task.is-edge-overdue {
     border-left-color: var(--nc-danger);
     background: var(--nc-danger-soft);
-}
-
-.tl-task.is-edge-overdue .tl-task__title {
-    color: var(--nc-text);
-}
-
-.tl-task__edge {
-    flex: 0 0 auto;
-    padding: 0 4px;
-    border-radius: var(--nc-radius-xs);
-    background: var(--nc-danger-soft);
-    color: var(--nc-danger);
-    font-size: 9.5px;
-    line-height: 1.4;
-    white-space: nowrap;
 }
 
 .tl-task.is-done,
@@ -614,11 +645,11 @@ html:not([data-lite="true"]) .tl-axis {
     opacity: 0.52;
 }
 
-.tl-task.is-done .tl-task__title {
+.tl-task.is-done .tl-bar__title {
     text-decoration: line-through;
 }
 
-.tl-task.is-canceled .tl-task__title {
+.tl-task.is-canceled .tl-bar__title {
     text-decoration: line-through dotted;
 }
 
@@ -642,73 +673,9 @@ html:not([data-lite="true"]) .tl-axis {
         background: var(--nc-surface-2);
     }
 
-    .tl-nodue__chip:hover {
-        background: var(--nc-surface-hover);
-        border-color: var(--nc-border-strong);
-    }
-
     .tl-preset:hover {
         background: var(--nc-surface-hover);
     }
-}
-
-/* ---------- 无日期区 ---------- */
-.tl-nodue {
-    flex: 0 0 auto;
-    padding: var(--nc-space-2) var(--nc-space-4);
-    border-top: 1px solid var(--nc-border);
-    background: var(--nc-bg-soft);
-}
-
-.tl-nodue__head {
-    display: flex;
-    align-items: baseline;
-    gap: var(--nc-space-2);
-    margin-bottom: 6px;
-}
-
-.tl-nodue__title {
-    font-size: var(--nc-fs-xs);
-    color: var(--nc-text-2);
-    font-weight: 600;
-}
-
-.tl-nodue__count {
-    font-size: var(--nc-fs-2xs);
-    color: var(--nc-text-3);
-    font-variant-numeric: tabular-nums;
-}
-
-.tl-nodue__chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-
-.tl-nodue__chip {
-    max-width: 220px;
-    padding: 3px 9px;
-    border: 1px solid var(--nc-border);
-    border-radius: var(--nc-radius-pill);
-    background: var(--nc-surface-2);
-    color: var(--nc-text-2);
-    font-size: var(--nc-fs-xs);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    cursor: pointer;
-    transition: background-color var(--nc-dur-fast) var(--nc-ease), border-color var(--nc-dur-fast) var(--nc-ease);
-}
-
-.tl-nodue__chip.is-pinned {
-    border-color: var(--nc-warning-soft);
-    color: var(--nc-warning);
-}
-
-.tl-nodue__more {
-    align-self: center;
-    font-size: var(--nc-fs-2xs);
-    color: var(--nc-text-3);
 }
 
 /* ---------- 空状态 / 提示 ---------- */
@@ -924,10 +891,25 @@ html:not([data-lite="true"]) .tl-agenda__head {
 .tl-agenda__prio[data-priority="urgent"] { background: var(--nc-priority-urgent); }
 .tl-agenda__prio[data-priority="low"] { background: var(--nc-priority-low); }
 
-.tl-agenda__title {
+.tl-agenda__body {
     flex: 1 1 auto;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.tl-agenda__title {
     font-size: var(--nc-fs-base);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tl-agenda__range {
+    font-size: var(--nc-fs-2xs);
+    color: var(--nc-text-3);
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1025,7 +1007,6 @@ html[data-lite="true"] .tl-agenda__head {
 }
 
 html[data-lite="true"] .tl-task,
-html[data-lite="true"] .tl-nodue__chip,
 html[data-lite="true"] .tl-preset,
 html[data-lite="true"] .tl-agenda__row {
     transition: none;
@@ -1051,16 +1032,21 @@ html[data-lite="true"] .tl-note {
 }
 
 .tl--vertical .tl-controls {
+    display: grid;
+    grid-template-columns: 1fr;
     align-items: stretch;
-    gap: var(--nc-space-2);
+    gap: 10px;
 }
 
 .tl--vertical .tl-range-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
     width: 100%;
 }
 
 .tl--vertical .tl-field {
-    flex: 1 1 140px;
+    width: 100%;
 }
 
 .tl--vertical .tl-field__input {
@@ -1069,18 +1055,25 @@ html[data-lite="true"] .tl-note {
 }
 
 .tl--vertical .tl-presets {
-    flex: 1 1 100%;
+    width: 100%;
+    height: 36px;
     justify-content: space-between;
 }
 
 .tl--vertical .tl-preset {
     flex: 1 1 auto;
+    height: 30px;
 }
 
 .tl--vertical .tl-extra {
-    flex: 1 1 100%;
-    justify-content: space-between;
+    width: 100%;
+    height: 36px;
     margin-left: 0;
+    justify-content: space-between;
+}
+
+.tl--vertical .tl-extra .nc-btn {
+    height: 36px;
 }
 
 .tl--vertical .tl-legend {
@@ -1099,7 +1092,6 @@ html[data-lite="true"] .tl-note {
 
     .tl-task:active,
     .tl-agenda__row:active,
-    .tl-nodue__chip:active,
     .tl-preset:active {
         background: var(--nc-surface-3);
     }
@@ -1113,8 +1105,7 @@ html[data-lite="true"] .tl-note {
 
 @media (max-width: 560px) {
     .tl--vertical .tl-range-group {
-        flex-direction: column;
-        align-items: stretch;
+        grid-template-columns: 1fr;
     }
 
     .tl--vertical .tl-field {

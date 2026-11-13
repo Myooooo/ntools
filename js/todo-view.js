@@ -42,6 +42,7 @@
     var composerRecurrence = null;
     var timelineMounted = false;
     var timelineTried = false;
+    var modeEnterTimer = null;
 
     var SORT_LABELS = { smart: '智能排序', due: '按截止时间', created: '按创建时间', manual: '手动排序' };
     var VIEW_LABELS = { all: '全部任务', today: '今天', overdue: '逾期', done: '已完成', trash: '回收站' };
@@ -427,8 +428,10 @@
             els.modeSeg = document.getElementById('todo-mode-seg');
             return;
         }
+        /* seg 挂在 .tools-head__text（主区左缘固定），不随 mainpane 宽度变化 */
+        var headText = els.page.querySelector('.tools-head__text');
         var actionsWrap = els.page.querySelector('.tools-head__actions');
-        if (!actionsWrap) return;
+        if (!headText && !actionsWrap) return;
         var seg = node('div', 'nc-seg todo-mode-seg');
         seg.id = 'todo-mode-seg';
         seg.setAttribute('role', 'group');
@@ -443,32 +446,66 @@
             btn.addEventListener('click', function () { setMode(item.mode); });
             seg.appendChild(btn);
         });
-        var sortBtn = document.getElementById('todo-sort-btn');
-        if (sortBtn && sortBtn.parentNode === actionsWrap) actionsWrap.insertBefore(seg, sortBtn);
-        else actionsWrap.appendChild(seg);
+        if (headText) {
+            var subtitle = headText.querySelector('.tools-subtitle');
+            if (subtitle && subtitle.parentNode === headText) headText.insertBefore(seg, subtitle);
+            else headText.appendChild(seg);
+        } else {
+            actionsWrap.insertBefore(seg, actionsWrap.firstChild);
+        }
         els.modeSeg = seg;
     }
 
-    function setMode(mode) {
-        if (mode !== 'list' && mode !== 'timeline') return false;
-        if (mode === 'timeline') {
-            /* 切换前先提交未落库的详情编辑并关闭检查器，避免数据丢失 */
-            flushDetailEdits();
-            if (store.getUi().drawerOpen) store.closeDrawer();
-        }
-        if (actions.setMode) return !!actions.setMode(mode);
-        store.updateSettings({ viewMode: mode });
+    function canAnimateMode() {
+        if (NC.theme && typeof NC.theme.isLite === 'function' && NC.theme.isLite()) return false;
+        if (util.prefersReducedMotion && util.prefersReducedMotion()) return false;
         return true;
     }
 
-    function syncModeSeg(doc, ui) {
+    /** 新视图内容淡入 + 4px 上移（标准模式；Lite/reduced 即时）。 */
+    function playModeEnter() {
+        if (!els.mainpane || !canAnimateMode()) return;
+        els.mainpane.classList.add('is-mode-entering');
+        if (modeEnterTimer) global.clearTimeout(modeEnterTimer);
+        modeEnterTimer = global.setTimeout(function () {
+            modeEnterTimer = null;
+            if (els.mainpane) els.mainpane.classList.remove('is-mode-entering');
+        }, 260);
+    }
+
+    function setSegActive(mode) {
         if (!els.modeSeg) return;
-        var mode = doc.settings.viewMode === 'timeline' ? 'timeline' : 'list';
         Array.prototype.forEach.call(els.modeSeg.querySelectorAll('[data-mode]'), function (btn) {
             var active = btn.getAttribute('data-mode') === mode;
             toggleClass(btn, 'is-active', active);
             attr(btn, 'aria-pressed', active ? 'true' : 'false');
         });
+    }
+
+    /**
+     * 切换列表/全景。状态同步提交（seg active / mount 立即生效），
+     * 新视图内容再做 180ms 淡入（等效交叉淡入，避免延迟导致状态不一致）。
+     * @param {'list'|'timeline'} mode
+     * @param {{animate?:boolean}} [options]
+     */
+    function setMode(mode, options) {
+        if (mode !== 'list' && mode !== 'timeline') return false;
+        var opts = options || {};
+        if (store.getDoc().settings.viewMode === mode) return true;
+        if (mode === 'timeline') {
+            /* 切换前先提交未落库的详情编辑并关闭检查器，避免数据丢失 */
+            flushDetailEdits();
+            if (store.getUi().drawerOpen) store.closeDrawer();
+        }
+        setSegActive(mode);
+        store.updateSettings({ viewMode: mode });
+        if (opts.animate !== false) playModeEnter();
+        return true;
+    }
+
+    function syncModeSeg(doc) {
+        if (!els.modeSeg) return;
+        setSegActive(doc.settings.viewMode === 'timeline' ? 'timeline' : 'list');
     }
 
     /* ---- 全景模式容器与 mount/unmount 编排（时间线内部由 NC.timeline 渲染） ---- */

@@ -151,6 +151,7 @@
      */
     function setMode(mode) {
         if (mode !== 'list' && mode !== 'timeline') return false;
+        if (view && typeof view.setMode === 'function') return !!view.setMode(mode);
         store.updateSettings({ viewMode: mode });
         return true;
     }
@@ -836,6 +837,20 @@
                 notes: '',
                 status: 'open', priority: 'normal', due: null, tags: [],
                 createdAt: now - day, updatedAt: now - day, deletedAt: now - 4 * hour
+            },
+            {
+                id: 'demo-11', listId: 'list_work', title: '每日站会同步',
+                notes: '每天 09:30 同步进度与阻塞项，站会控制在 10 分钟内。',
+                status: 'open', priority: 'normal', due: today + day + 9.5 * hour, tags: ['站会'],
+                recurrence: { freq: 'daily', interval: 1, byWeekday: [], until: null, count: null, lastMaterializedAt: null, lastCompletedAt: null },
+                createdAt: now - 2 * day, updatedAt: now - hour
+            },
+            {
+                id: 'demo-12', listId: 'list_life', title: '每月账单核对',
+                notes: '核对水电、话费与订阅扣款，有异常及时标记。',
+                status: 'open', priority: 'low', due: today + 3 * day + 20 * hour, tags: ['例行'],
+                recurrence: { freq: 'monthly', interval: 1, byWeekday: [], until: null, count: null, lastMaterializedAt: null, lastCompletedAt: null },
+                createdAt: now - 5 * day, updatedAt: now - 6 * hour
             }
         ];
         return {

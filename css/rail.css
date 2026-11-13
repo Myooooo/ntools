@@ -93,14 +93,49 @@
     }
 
     .tools-app.is-rail-collapsed .tools-rail__brand {
+        position: relative;
         justify-content: center;
         padding: 0;
     }
 
+    /* 收起后：logo 居中；悬浮时 logo 让位给“展开”按钮，点击展开 */
+    .tools-app.is-rail-collapsed .tools-brand__mark {
+        pointer-events: none;
+        transition:
+            opacity var(--nc-dur-fast) var(--nc-ease),
+            transform var(--nc-dur) var(--nc-ease-out);
+    }
+
     .tools-app.is-rail-collapsed .tools-rail__toggle {
-        position: static;
-        transform: none;
-        margin-left: auto;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        margin: 0;
+        width: 30px;
+        height: 30px;
+        transform: translate(-50%, -50%) scale(0.82);
+        opacity: 0;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    .tools-app.is-rail-collapsed .tools-rail__brand:hover .tools-brand__mark,
+    .tools-app.is-rail-collapsed .tools-rail__brand:focus-within .tools-brand__mark {
+        opacity: 0;
+        transform: scale(0.82);
+    }
+
+    .tools-app.is-rail-collapsed .tools-rail__brand:hover .tools-rail__toggle,
+    .tools-app.is-rail-collapsed .tools-rail__brand:focus-within .tools-rail__toggle {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+        pointer-events: auto;
+        color: var(--nc-text);
+        background: var(--nc-surface-2);
+    }
+
+    .tools-app.is-rail-collapsed .tools-rail__toggle .nc-icon {
+        transform: rotate(180deg);
     }
 
     .tools-app.is-rail-collapsed .tools-nav {

@@ -9,7 +9,7 @@
  *  4. 默认未来 7 天范围；起止输入、预设（未来 3 天/本周/本月/重置）
  *  5. 刻度区指针拖拽框选（实时高亮 + 松开生效）与双击重置
  *  6. 任务点击 → NC.store.todo.selectTask（选中态 + 详情抽屉）
- *  7. 范围外计数 / 无日期区 / 显示已完成开关 / 暂停渲染计数
+ *  7. 范围外计数 / 无日期任务完全不显示 / 显示已完成开关与 settings 同步
  *  8. 截图：标准/浅色/Lite × 1440/390 → /tmp/nc-shots/v4/timeline/
  *  9. 全程无 console.error / 未捕获异常
  *
@@ -161,86 +161,132 @@ function buildMockDoc(now) {
     let seq = 0;
     const push = (patch) => {
         seq += 1;
-        base.tasks.push(Object.assign({
+        const defaultDue = patch && typeof patch.due === 'number' ? patch.due : null;
+        const defaults = {
             id: 'tl-' + seq,
             listId: 'list_default',
             title: '时间线任务 ' + seq,
             notes: '',
             status: 'open',
             priority: 'normal',
-            due: null,
+            due: defaultDue,
             dueAllDay: false,
             tags: [],
             subtasks: [],
             recurrence: null,
             reminder: null,
             order: seq * 1024,
-            createdAt: now,
+            // 默认给 2 小时时长（createdAt → due）
+            createdAt: defaultDue != null ? defaultDue - 2 * HOUR : now,
             updatedAt: now,
             completedAt: null,
             deletedAt: null,
             source: 'e2e-timeline'
-        }, patch));
+        };
+        base.tasks.push(Object.assign(defaults, patch, { createdAt: patch && patch.createdAt != null ? patch.createdAt : defaults.createdAt }));
         return base.tasks[base.tasks.length - 1];
     };
 
-    // 范围内：置顶 + 高优先级 + 多标签 + 长标题（59 字）
+    // ① 置顶 + 高优先级 + 多标签 + 长标题；创建于 10 天前 → 左端溢出，到期在范围内
     push({
         id: 'tl-pin', title: '与华东区域三家供应商确认第四季度交付排期，并同步采购、法务、财务三个部门的审批节点与应急预案（含备选供应商与到货缓冲）',
-        pinned: true, priority: 'urgent', due: round(now + 2 * HOUR), tags: ['采购', '法务', '财务', '交付', '供应商', '审批', '例会', '季度'],
+        pinned: true, priority: 'urgent', due: round(now + 2 * HOUR), createdAt: now - 10 * DAY,
+        tags: ['采购', '法务', '财务', '交付', '供应商', '审批', '例会', '季度'],
         listId: 'list_work'
     });
-    // 循环任务
+    // ② 循环任务：创建于 1 天前
     push({
         id: 'tl-repeat', title: '每周合规巡检复盘', status: 'open', priority: 'high', due: round(now + 6 * HOUR),
+        createdAt: round(now + 6 * HOUR) - 4 * HOUR,
         recurrence: { freq: 'weekly', interval: 1, byWeekday: [(new Date(now).getDay() + 1) % 7], until: null, count: null, lastMaterializedAt: now },
         tags: ['合规']
     });
-    // 逾期（open）
-    push({ id: 'tl-overdue', title: '处理逾期安全巡检整改', priority: 'urgent', due: round(now - 2 * HOUR) });
-    // 已完成 / 已取消（范围内，弱化）
-    push({ id: 'tl-done', title: '提交上周周报', status: 'done', completedAt: now - HOUR, due: round(now + 4 * HOUR) });
-    push({ id: 'tl-canceled', title: '取消的供应商拜访', status: 'canceled', due: round(now + 26 * HOUR) });
-    // 未来 7 天其余任务（每隔两小时一条，共 20 条）
+    // ③ 逾期（创建/到期都早于范围 → 固定左缘）
+    push({ id: 'tl-overdue', title: '处理逾期安全巡检整改', priority: 'urgent', due: round(now - 2 * HOUR), createdAt: now - 2 * DAY });
+    // ④ 已完成 / 已取消（范围内，弱化）
+    push({ id: 'tl-done', title: '提交上周周报', status: 'done', completedAt: now - HOUR, due: round(now + 4 * HOUR), createdAt: round(now + 4 * HOUR) - 3 * HOUR });
+    push({ id: 'tl-canceled', title: '取消的供应商拜访', status: 'canceled', due: round(now + 26 * HOUR), createdAt: round(now + 26 * HOUR) - 5 * HOUR });
+    // ⑤ 时长条专用任务（用于宽度比例断言）
+    push({ id: 'tl-dur-long', title: '时长条·八天任务', due: round(now + 4 * DAY), createdAt: now - 4 * DAY, priority: 'high' });
+    push({ id: 'tl-dur-mid', title: '时长条·四天任务', due: round(now + 2 * DAY), createdAt: now - 2 * DAY });
+    push({ id: 'tl-dur-short', title: '时长条·四十分钟任务', due: round(now + 1 * DAY), createdAt: round(now + 1 * DAY) - 40 * 60000 });
+    // ⑥ 右端溢出：创建于范围内，到期远晚于范围
+    push({ id: 'tl-clip-end', title: '跨范围长任务（右端裁剪）', due: round(now + 10 * DAY), createdAt: now + 1 * DAY });
+    // ⑦ 左侧清单/搜索筛选专用任务
+    push({ id: 'tl-filter-work', title: 'E2E 专属筛选任务', listId: 'list_work', due: round(now + 3 * HOUR), createdAt: round(now + 3 * HOUR) - 2 * HOUR });
+    // ⑧ 未来 7 天其余任务（20 条，时长 1–5 小时不等）
     for (let i = 0; i < 20; i += 1) {
+        const due = round(now + (1.2 + i * 0.27) * DAY);
         push({
             title: '时间线样例任务 ' + (i + 1),
-            due: round(now + (3 + i * 3) * HOUR),
+            due: due,
+            createdAt: due - (24 + i * 9.6) * HOUR,
             priority: i % 4 === 0 ? 'high' : (i % 5 === 0 ? 'low' : 'normal'),
             tags: i % 3 === 0 ? ['工作'] : [],
             listId: i % 2 ? 'list_work' : 'list_default'
         });
     }
-    // 无日期任务（3 条）
-    for (let i = 0; i < 3; i += 1) push({ title: '无日期任务 ' + (i + 1), due: null });
-    // 范围外：过去/未来较远（用于范围外计数）
-    push({ id: 'tl-out-past', title: '上季度归档复盘', due: round(now - 40 * DAY) });
-    push({ id: 'tl-out-future', title: '下季度供应商招标', due: round(now + 20 * DAY) });
-    push({ id: 'tl-out-future2', title: '年度审计准备', due: round(now + 60 * DAY) });
-    // 500 条总量：其余为远期任务（范围外，不进入时间线）
+    // ⑧b 超老逾期：due 早于默认范围起点（now-45d 上限）→ 固定左缘
+    push({ id: 'tl-edge-old', title: '超期很久的旧整改项', due: round(now - 60 * DAY), createdAt: now - 61 * DAY, priority: 'high' });
+    // ⑨ 无日期任务（3 条）：时间线必须完全不显示
+    for (let i = 0; i < 3; i += 1) push({ title: '无日期任务 ' + (i + 1), due: null, createdAt: now - DAY });
+    // ⑩ 范围外：过去/未来较远（用于范围外计数）
+    push({ id: 'tl-out-past', title: '上季度归档复盘', due: round(now - 40 * DAY), createdAt: now - 41 * DAY });
+    push({ id: 'tl-out-future', title: '下季度供应商招标', due: round(now + 20 * DAY), createdAt: now + 20 * DAY - 2 * HOUR });
+    push({ id: 'tl-out-future2', title: '年度审计准备', due: round(now + 60 * DAY), createdAt: now + 60 * DAY - 2 * HOUR });
+    // ⑪ 500 条总量：其余为远期任务（范围外，不进入时间线）
     while (base.tasks.length < 500) {
-        push({
-            title: '远期任务 ' + (base.tasks.length + 1),
-            due: round(now + (90 + (base.tasks.length % 240)) * DAY),
-            listId: 'list_default'
-        });
+        const due = round(now + (90 + (base.tasks.length % 240)) * DAY);
+        push({ title: '远期任务 ' + (base.tasks.length + 1), due: due, createdAt: due - 2 * HOUR, listId: 'list_default' });
     }
     return base;
 }
 
+/** 与模块 dataDefaultRange() 同口径（默认视图 all / 无搜索 / 无清单过滤） */
+function dataRangeNode(doc, now) {
+    const HOUR = 3600000;
+    const DAY = 86400000;
+    const tasks = doc.tasks.filter((task) => !task.deletedAt && typeof task.due === 'number');
+    if (!tasks.length) return { start: now, end: now + 7 * DAY };
+    const forward = now + 7 * DAY;
+    let earliest = Infinity;
+    let latestDue = forward;
+    tasks.forEach((task) => {
+        const start = Math.min(typeof task.createdAt === 'number' ? task.createdAt : task.due, task.due);
+        if (start < earliest) earliest = start;
+        if (start <= forward && task.due > latestDue) latestDue = task.due;
+    });
+    let start = Math.floor(Math.min(earliest, now) / HOUR) * HOUR;
+    start = Math.max(start, now - 45 * DAY);
+    let end = Math.max(latestDue, forward, start + 7 * DAY);
+    end = Math.min(end, start + 60 * DAY);
+    return { start, end };
+}
+
+/** 与模块 collect() 同口径：默认 view=all / 无搜索 / 无清单过滤 / showCompleted=true */
 function expectedCounts(doc, now) {
-    const range = { start: now, end: now + 7 * DAY };
-    const withDue = doc.tasks.filter((task) => typeof task.due === 'number');
-    const inRange = withDue.filter((task) => task.due >= range.start && task.due <= range.end);
-    const edge = withDue.filter((task) => task.due < range.start && task.status === 'open').slice(0, 12);
+    const range = dataRangeNode(doc, now);
+    const withDue = doc.tasks.filter((task) => !task.deletedAt && typeof task.due === 'number');
+    const inRange = [];
+    const edge = [];
+    withDue.forEach((task) => {
+        const start = Math.min(typeof task.createdAt === 'number' ? task.createdAt : task.due, task.due);
+        if (task.due < range.start) {
+            if (task.status === 'open') edge.push(task);
+            return;
+        }
+        if (start > range.end) return;
+        inRange.push(task);
+    });
+    const edgeSorted = edge.sort((a, b) => a.due - b.due).slice(0, 12);
     return {
+        range,
         total: doc.tasks.length,
         withDue: withDue.length,
         inRange: inRange.length,
-        edgeOverdue: edge.length,
-        visible: inRange.length + edge.length,
-        outRange: withDue.length - inRange.length - edge.length,
-        noDue: doc.tasks.filter((task) => task.due == null && task.status === 'open').length
+        edgeOverdue: edgeSorted.length,
+        visible: inRange.length + edgeSorted.length,
+        outRange: withDue.length - inRange.length - edgeSorted.length
     };
 }
 
@@ -398,22 +444,33 @@ async function main() {
                 hasBrush: !!document.querySelector('.tl-brush-layer'),
                 startInput: (document.querySelector('.tl-field__input') || {}).value || null,
                 chips: document.querySelectorAll('.tl-task').length,
-                noDueChips: document.querySelectorAll('.tl-nodue__chip').length,
-                noDueText: (document.querySelector('.tl-nodue') || {}).textContent || '',
+                noDueBlocks: document.querySelectorAll('.tl-nodue').length,
+                noDueChips: document.querySelectorAll('[data-id^="tl-nodue"], .tl-nodue__chip').length,
                 statsText: (document.querySelector('.tl-stats') || {}).textContent || '',
                 nowHidden: (document.querySelector('.tl-now') || {}).hidden,
                 counts: state.counts
             };
         })()`);
         report.assert('横向模式（1440 容器）', shape.mode === 'h' && shape.rootMode === 'h', JSON.stringify(shape));
-        report.assert('默认范围约未来 7 天', shape.range && Math.abs((shape.range.end - shape.range.start) - 7 * DAY) < 60000,
-            JSON.stringify(shape.range));
+        report.assert('默认范围数据化（覆盖最早 createdAt / ≥7 天 / 不早于 now-45d）',
+            !!shape.range &&
+            Math.abs(shape.range.start - expected.range.start) <= 120000 &&
+            Math.abs(shape.range.end - expected.range.end) <= 120000 &&
+            shape.range.start <= now - 9 * DAY &&
+            shape.range.start >= now - 45 * DAY - HOUR &&
+            shape.range.end >= now + 7 * DAY &&
+            shape.range.end - shape.range.start >= 7 * DAY,
+            JSON.stringify({ actual: shape.range, expected: expected.range }));
         report.assert('刻度区/框选层存在', shape.hasAxis && shape.hasBrush);
-        report.assert('范围内任务渲染', shape.chips === Math.min(expected.visible, 220) && shape.chips === shape.counts.visible,
-            JSON.stringify({ chips: shape.chips, expected: expected.visible, stateVisible: shape.counts.visible }));
+        report.assert('范围内任务渲染',
+            shape.chips === Math.min(expected.visible, 220) && shape.chips === shape.counts.visible && shape.chips === shape.counts.rendered,
+            JSON.stringify({ chips: shape.chips, rendered: shape.counts.rendered, visible: shape.counts.visible, expected: expected.visible, hiddenOverlap: shape.counts.hiddenOverlap }));
         report.assert('顶部输入与范围同步', !!shape.startInput, shape.startInput);
         report.assert('范围外计数已显示', shape.statsText.indexOf(String(expected.outRange)) > -1, shape.statsText.slice(0, 120));
-        report.assert('无日期区显示', shape.noDueChips >= 3 && shape.noDueText.indexOf('无日期') > -1, JSON.stringify({ chips: shape.noDueChips, text: shape.noDueText.slice(0, 80) }));
+        report.assert('不再显示无日期区/无日期计数',
+            shape.noDueBlocks === 0 && shape.noDueChips === 0 && shape.statsText.indexOf('无日期') === -1 &&
+            !(shape.counts && 'noDue' in shape.counts),
+            JSON.stringify({ blocks: shape.noDueBlocks, chips: shape.noDueChips, stats: shape.statsText.slice(0, 120), counts: shape.counts }));
         report.assert('“现在”指示线可见', shape.nowHidden === false);
 
         const badges = await evaluate(client, `(function(){
@@ -431,6 +488,115 @@ async function main() {
         report.assert('循环标识', badges.recurring >= 1, JSON.stringify(badges));
         report.assert('逾期标识（范围左缘固定）', badges.overdue >= 1 && badges.edge >= 1, JSON.stringify(badges));
         report.assert('已完成/取消弱化', badges.done >= 1 && badges.canceled >= 1, JSON.stringify(badges));
+
+        // ---------- 时长条：createdAt → due 的宽度/裁剪/最小宽度 ----------
+        const bars = await evaluate(client, `(function(){
+            var canvas = document.querySelector('.tl-canvas');
+            var cr = canvas.getBoundingClientRect();
+            var result = {};
+            document.querySelectorAll('.tl-task').forEach(function(chip){
+                var r = chip.getBoundingClientRect();
+                result[chip.getAttribute('data-id')] = {
+                    left: r.left, right: r.right, width: r.width,
+                    duration: Number(chip.getAttribute('data-duration')),
+                    due: Number(chip.getAttribute('data-due')),
+                    start: Number(chip.getAttribute('data-start')),
+                    clipStart: chip.getAttribute('data-clip-start') === 'true',
+                    clipEnd: chip.getAttribute('data-clip-end') === 'true',
+                    short: chip.getAttribute('data-short') === 'true',
+                    text: chip.textContent.slice(0, 20)
+                };
+            });
+            return { bars: result, canvas: { left: cr.left, right: cr.right, width: cr.width }, range: NC.timeline.getState().range };
+        })()`);
+        const longBar = bars.bars['tl-dur-long'];
+        const midBar = bars.bars['tl-dur-mid'];
+        const shortBar = bars.bars['tl-dur-short'];
+        const pinBar = bars.bars['tl-pin'];
+        const clipEndBar = bars.bars['tl-clip-end'];
+        report.assert('时长条数据齐全', !!(longBar && midBar && shortBar && pinBar && clipEndBar),
+            Object.keys(bars.bars).slice(0, 12).join(','));
+        if (longBar && midBar && shortBar) {
+            report.assert('不同时长宽度不同且大于最小宽度',
+                longBar.width > midBar.width + 20 && midBar.width > 44 && longBar.width > 44,
+                JSON.stringify({ long: Math.round(longBar.width), mid: Math.round(midBar.width), short: Math.round(shortBar.width) }));
+            const ratio = longBar.width / Math.max(1, midBar.width);
+            // 裁剪到范围后的可见时长（与模块渲染宽度口径一致）
+            const clipDuration = (bar) => {
+                const start = Math.max(bar.start, bars.range.start);
+                const end = Math.min(bar.due, bars.range.end);
+                return Math.max(1, end - start);
+            };
+            const durationRatio = clipDuration(longBar) / clipDuration(midBar);
+            report.assert('宽度与（裁剪后）创建→到期时长成比例',
+                Math.abs(ratio - durationRatio) / durationRatio < 0.25,
+                JSON.stringify({ ratio: ratio.toFixed(2), durationRatio: durationRatio.toFixed(2) }));
+            const expectedRight = bars.canvas.left + ((shortBar.due - bars.range.start) / (bars.range.end - bars.range.start)) * bars.canvas.width;
+            report.assert('极短任务有最小可视宽度（44–60px，右端锚定 due）',
+                shortBar.width >= 43 && shortBar.width <= 60 && shortBar.short === true &&
+                Math.abs(shortBar.right - expectedRight) <= 5,
+                JSON.stringify({ width: Math.round(shortBar.width), short: shortBar.short, right: Math.round(shortBar.right), expectedRight: Math.round(expectedRight) }));
+        }
+        report.assert('默认范围下时长条完整显示（无裁剪标记）',
+            !!pinBar && !!longBar && !!midBar &&
+            pinBar.clipStart === false && pinBar.clipEnd === false &&
+            longBar.clipStart === false && longBar.clipEnd === false &&
+            midBar.clipStart === false && midBar.clipEnd === false,
+            JSON.stringify({ pin: pinBar && [pinBar.clipStart, pinBar.clipEnd], long: longBar && [longBar.clipStart, longBar.clipEnd], mid: midBar && [midBar.clipStart, midBar.clipEnd] }));
+        // 手动缩小范围 → 裁剪标记（默认数据化范围下条完整，不应有裁剪）
+        await evaluate(client, `(function(){ NC.timeline.setRange(Date.now() - 1 * 86400000, Date.now() + 2 * 86400000); return true; })()`);
+        await sleep(700);
+        const clippedBars = await evaluate(client, `(function(){
+            var canvas = document.querySelector('.tl-canvas').getBoundingClientRect();
+            function info(id){
+                var el = document.querySelector('.tl-task[data-id="' + id + '"]');
+                if (!el) return null;
+                var r = el.getBoundingClientRect();
+                return {
+                    clipStart: el.getAttribute('data-clip-start') === 'true',
+                    clipEnd: el.getAttribute('data-clip-end') === 'true',
+                    left: r.left, right: r.right
+                };
+            }
+            return { canvas: { left: canvas.left, right: canvas.right }, pin: info('tl-pin'), clipEnd: info('tl-clip-end') };
+        })()`);
+        report.assert('手动缩小范围后：createdAt 早于起点 → 左端裁剪标记',
+            !!clippedBars.pin && clippedBars.pin.clipStart === true &&
+            Math.abs(clippedBars.pin.left - clippedBars.canvas.left) <= 3,
+            JSON.stringify(clippedBars.pin && { clipStart: clippedBars.pin.clipStart, left: Math.round(clippedBars.pin.left), canvasLeft: Math.round(clippedBars.canvas.left) }));
+        report.assert('手动缩小范围后：due 晚于终点 → 右端裁剪标记',
+            !!clippedBars.clipEnd && clippedBars.clipEnd.clipEnd === true &&
+            Math.abs(clippedBars.clipEnd.right - clippedBars.canvas.right) <= 4,
+            JSON.stringify(clippedBars.clipEnd && { clipEnd: clippedBars.clipEnd.clipEnd, right: Math.round(clippedBars.clipEnd.right), canvasRight: Math.round(clippedBars.canvas.right) }));
+        await evaluate(client, `(function(){ NC.timeline.presetRange('reset'); return true; })()`);
+        await sleep(700);
+
+        // ---------- 范围控件对齐（横向） ----------
+        const alignH = await evaluate(client, `(function(){
+            function rect(sel){ var el = document.querySelector(sel); if (!el) return null; var r = el.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height }; }
+            return {
+                start: rect('.tl-field__input'),
+                end: rect(document.querySelectorAll('.tl-field__input').length > 1 ? '.tl-field__input:nth-of-type(1)' : '.tl-field__input'),
+                inputs: Array.prototype.map.call(document.querySelectorAll('.tl-field__input'), function(el){ var r = el.getBoundingClientRect(); return { left: r.left, top: r.top, bottom: r.bottom, width: r.width, height: r.height }; }),
+                labels: Array.prototype.map.call(document.querySelectorAll('.tl-field__label'), function(el){ var r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; }),
+                presets: rect('.tl-presets'),
+                switchRow: rect('.tl-extra'),
+                fitBtn: rect('.tl-extra .nc-btn')
+            };
+        })()`);
+        const inputA = alignH.inputs[0];
+        const inputB = alignH.inputs[1];
+        report.assert('范围输入等宽等高',
+            alignH.inputs.length === 2 && Math.abs(inputA.width - inputB.width) <= 1 && Math.abs(inputA.height - inputB.height) <= 1,
+            JSON.stringify({ a: inputA && { w: inputA.width, h: inputA.height }, b: inputB && { w: inputB.width, h: inputB.height } }));
+        report.assert('输入标签同一基线',
+            alignH.labels.length === 2 && Math.abs(alignH.labels[0].bottom - alignH.labels[1].bottom) <= 1,
+            JSON.stringify(alignH.labels));
+        report.assert('预设/开关/扩展按钮与输入同基线',
+            Math.abs(inputA.bottom - alignH.presets.bottom) <= 2 &&
+            Math.abs(inputA.bottom - alignH.switchRow.bottom) <= 2 &&
+            Math.abs(inputA.bottom - alignH.fitBtn.bottom) <= 2,
+            JSON.stringify({ inputBottom: inputA.bottom, presets: alignH.presets.bottom, extra: alignH.switchRow.bottom, fit: alignH.fitBtn.bottom }));
 
         // ---------- 任务点击 → selectTask ----------
         await evaluate(client, `(function(){
@@ -485,18 +651,79 @@ async function main() {
         await evaluate(client, `(function(){ var btn = document.querySelector('.tl-preset[data-preset="reset"]'); if (btn) btn.click(); return true; })()`);
         await sleep(500);
         const resetRange = JSON.parse(await evaluate(client, 'JSON.stringify(NC.timeline.getState().range)'));
-        report.assert('重置回未来 7 天', Math.abs((resetRange.end - resetRange.start) / DAY - 7) < 0.02,
-            ((resetRange.end - resetRange.start) / DAY).toFixed(2));
+        report.assert('重置恢复数据化默认范围（覆盖 createdAt、≥7 天）',
+            Math.abs(resetRange.start - expected.range.start) <= 120000 &&
+            Math.abs(resetRange.end - expected.range.end) <= 120000 &&
+            resetRange.start <= now - 9 * DAY &&
+            resetRange.end - resetRange.start >= 7 * DAY,
+            JSON.stringify({ actual: resetRange, expected: expected.range }));
+
+        // ---------- 左侧筛选联动：视图 / 清单 / 搜索 ----------
+        const chipsAll = await evaluate(client, "document.querySelectorAll('.tl-task').length");
+        const filterProbe = await evaluate(client, `(function(){
+            NC.store.todo.setView('today');
+            return true;
+        })()`);
+        await sleep(600);
+        const todayFiltered = await evaluate(client, `(function(){
+            var now = Date.now();
+            var sel = NC.store.todo.selectVisible(now).tasks || [];
+            function startOfDay(ts){ var d = new Date(ts); d.setHours(0,0,0,0); return d.getTime(); }
+            var ids = Array.prototype.map.call(document.querySelectorAll('.tl-task'), function(el){ return el.getAttribute('data-id'); });
+            function startOfDay(ts){ var d = new Date(ts); d.setHours(0,0,0,0); return d.getTime(); }
+            var byId = Object.create(null);
+            NC.store.todo.getDoc().tasks.forEach(function(t){ byId[t.id] = t; });
+            var mismatched = ids.filter(function(id){
+                var t = byId[id];
+                return !t || typeof t.due !== 'number' || startOfDay(t.due) !== startOfDay(now);
+            });
+            return { chips: ids.length, mismatched: mismatched.length, view: NC.store.todo.getUi().view };
+        })()`);
+        report.assert('视图筛选「今天」生效',
+            todayFiltered.view === 'today' && todayFiltered.chips >= 1 && todayFiltered.chips <= chipsAll && todayFiltered.mismatched === 0,
+            JSON.stringify({ chips: todayFiltered.chips, mismatched: todayFiltered.mismatched, all: chipsAll }));
+        await evaluate(client, 'NC.store.todo.setView("all"); true;');
+        await sleep(500);
+        await evaluate(client, 'NC.store.todo.setListFilter("list_work"); true;');
+        await sleep(500);
+        const listFiltered = await evaluate(client, `(function(){
+            var ids = Array.prototype.map.call(document.querySelectorAll('.tl-task'), function(el){ return el.getAttribute('data-id'); });
+            var doc = NC.store.todo.getDoc();
+            var byId = Object.create(null);
+            doc.tasks.forEach(function(t){ byId[t.id] = t; });
+            var mismatched = ids.filter(function(id){ return !byId[id] || byId[id].listId !== 'list_work'; });
+            return { chips: ids.length, mismatched: mismatched.length, list: NC.store.todo.getUi().listId };
+        })()`);
+        report.assert('清单筛选生效', listFiltered.list === 'list_work' && listFiltered.chips >= 1 && listFiltered.mismatched === 0,
+            JSON.stringify(listFiltered));
+        await evaluate(client, 'NC.store.todo.setListFilter(null); true;');
+        await sleep(400);
+        await evaluate(client, 'NC.store.todo.setSearch("E2E 专属"); true;');
+        await sleep(500);
+        const searchFiltered = await evaluate(client, `(function(){
+            var ids = Array.prototype.map.call(document.querySelectorAll('.tl-task'), function(el){ return el.getAttribute('data-id'); });
+            return { chips: ids.length, ids: ids, search: NC.store.todo.getUi().search };
+        })()`);
+        report.assert('搜索筛选生效', searchFiltered.search === 'E2E 专属' && searchFiltered.chips === 1 && searchFiltered.ids[0] === 'tl-filter-work',
+            JSON.stringify(searchFiltered));
+        await evaluate(client, 'NC.store.todo.setSearch(""); true;');
+        await sleep(500);
+        report.assert('筛选复位后恢复全量', (await evaluate(client, "document.querySelectorAll('.tl-task').length")) === chipsAll,
+            'all=' + chipsAll);
 
         // ---------- 框选（真实指针拖拽） ----------
+        const resetSpan = await evaluate(client, '(function(){ var r = NC.timeline.getState().range; return r.end - r.start; })()');
         const brushRect = JSON.parse(await evaluate(client, `(function(){
             var layer = document.querySelector('.tl-brush-layer');
             var rect = layer.getBoundingClientRect();
             return JSON.stringify({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
         })()`));
-        const x1 = brushRect.left + brushRect.width * 0.25;
-        const x2 = brushRect.left + brushRect.width * 0.55;
-        const y = brushRect.top + brushRect.height * 0.6;
+        // 长范围时画布可能宽于视口且已滚动到「现在」附近：只在可见区内框选
+        const visibleLeft = Math.max(brushRect.left, 0) + 20;
+        const visibleRight = Math.min(brushRect.left + brushRect.width, 1440) - 20;
+        const x1 = visibleLeft + (visibleRight - visibleLeft) * 0.25;
+        const x2 = visibleLeft + (visibleRight - visibleLeft) * 0.55;
+        const y = Math.max(brushRect.top + brushRect.height * 0.6, 60);
         await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x1, y, button: 'left', clickCount: 1 });
         await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: (x1 + x2) / 2, y, button: 'left', buttons: 1 });
         await sleep(120);
@@ -511,8 +738,8 @@ async function main() {
         await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x2, y, button: 'left', clickCount: 1 });
         await sleep(600);
         const brushedRange = JSON.parse(await evaluate(client, 'JSON.stringify(NC.timeline.getState().range)'));
-        const brushSpan = (brushedRange.end - brushedRange.start) / (7 * DAY);
-        report.assert('框选松开生效（范围变窄）', brushSpan > 0.05 && brushSpan < 0.95, 'span=' + (brushSpan * 7 * 24).toFixed(1) + 'h');
+        const brushFraction = (brushedRange.end - brushedRange.start) / resetSpan;
+        report.assert('框选松开生效（范围变窄）', brushFraction > 0.05 && brushFraction < 0.95, 'fraction=' + brushFraction.toFixed(2));
         const liveHidden = await evaluate(client, "(function(){ var el = document.querySelector('.tl-brush-live'); return !el || el.hidden; })()");
         report.assert('框选完成后高亮隐藏', liveHidden);
 
@@ -523,8 +750,9 @@ async function main() {
         await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: brushRect.left + brushRect.width * 0.5, y, button: 'left', clickCount: 2 });
         await sleep(500);
         const dblRange = JSON.parse(await evaluate(client, 'JSON.stringify(NC.timeline.getState().range)'));
-        report.assert('双击刻度区重置范围', Math.abs((dblRange.end - dblRange.start) / DAY - 7) < 0.02,
-            ((dblRange.end - dblRange.start) / DAY).toFixed(2) + ' 天');
+        report.assert('双击刻度区重置为数据化范围', Math.abs(dblRange.start - expected.range.start) <= 120000 &&
+            Math.abs(dblRange.end - expected.range.end) <= 120000,
+            JSON.stringify(dblRange));
 
         // ---------- 显示已完成开关 ----------
         const doneBefore = await evaluate(client, "document.querySelectorAll('.tl-task.is-done').length");
@@ -581,6 +809,48 @@ async function main() {
         report.assert('纵向按天分组', vertical.groups >= 1 && vertical.rows >= 1, JSON.stringify(vertical));
         report.assert('纵向模式无横向溢出', vertical.docOverflow <= 1, String(vertical.docOverflow));
         report.assert('纵向保留范围控件', vertical.inputsVisible);
+
+        const verticalDetail = await evaluate(client, `(function(){
+            var rows = document.querySelectorAll('.tl-agenda__row');
+            var first = rows[0];
+            var rangeText = first ? (first.querySelector('.tl-agenda__range') || {}).textContent : '';
+            var inputs = Array.prototype.map.call(document.querySelectorAll('.tl-field__input'), function(el){
+                var r = el.getBoundingClientRect();
+                return { left: r.left, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
+            });
+            var container = document.querySelector('.tl-root').getBoundingClientRect();
+            var presets = document.querySelector('.tl-presets');
+            var extra = document.querySelector('.tl-extra');
+            return {
+                rows: rows.length,
+                rangeText: rangeText || '',
+                aria: first ? first.getAttribute('aria-label') : '',
+                inputs: inputs,
+                containerWidth: container.width,
+                presetsWidth: presets ? presets.getBoundingClientRect().width : 0,
+                extraWidth: extra ? extra.getBoundingClientRect().width : 0,
+                docOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                noDueBlocks: document.querySelectorAll('.tl-nodue').length,
+                noDueText: (document.querySelector('.tl-root') || document.body).textContent.indexOf('无日期') > -1
+            };
+        })()`);
+        report.assert('纵向行包含创建→到期区间信息',
+            verticalDetail.rows >= 1 && verticalDetail.rangeText.indexOf('→') > -1 &&
+            /创建 .* → 到期 .*（时长/.test(verticalDetail.aria),
+            JSON.stringify({ range: verticalDetail.rangeText, aria: verticalDetail.aria.slice(0, 80) }));
+        report.assert('纵向无日期任务不出现', verticalDetail.noDueBlocks === 0 && verticalDetail.noDueText === false,
+            JSON.stringify({ blocks: verticalDetail.noDueBlocks, text: verticalDetail.noDueText }));
+        report.assert('纵向范围输入等宽（堆叠整齐）',
+            verticalDetail.inputs.length === 2 &&
+            Math.abs(verticalDetail.inputs[0].width - verticalDetail.inputs[1].width) <= 1 &&
+            verticalDetail.inputs[0].width > verticalDetail.containerWidth * 0.35 &&
+            verticalDetail.inputs[0].top !== verticalDetail.inputs[1].top,
+            JSON.stringify(verticalDetail.inputs));
+        report.assert('纵向预设/开关行等宽铺满且无横向溢出',
+            Math.abs(verticalDetail.presetsWidth - verticalDetail.extraWidth) <= 2 &&
+            verticalDetail.presetsWidth > verticalDetail.containerWidth * 0.6 &&
+            verticalDetail.docOverflow <= 1,
+            JSON.stringify({ presets: Math.round(verticalDetail.presetsWidth), extra: Math.round(verticalDetail.extraWidth), container: Math.round(verticalDetail.containerWidth), overflow: verticalDetail.docOverflow }));
 
         // 纵向任务点击
         await evaluate(client, `(function(){ var row = document.querySelector('.tl-agenda__row'); if (row) row.click(); return true; })()`);

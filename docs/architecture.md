@@ -1,4 +1,4 @@
-# nTools v4.1 架构说明
+# nTools v4.2 架构说明
 
 > 运行形态：纯静态、`file://` 双击可用、无构建链、无后端；经典 `<script>` + IIFE 命名空间（`window.NC`）。
 > 目标内核：奇安信可信浏览器 Chromium 102 / 麒麟 Linux ARM。

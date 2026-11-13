@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * tools/e2e-v41.js — v4.1 交互与 Todo 新功能验收（CDP 无头 Chrome，file://，无网络）
+ * tools/e2e-v41.js — v4.1/v4.2 交互与 Todo 新功能验收（CDP 无头 Chrome，file://，无网络）
  *
  * 覆盖：
  *  - Todo 右上菜单重复点击不叠放（含全局 ui.openMenu 单例）
@@ -10,7 +10,8 @@
  *  - 置顶：排序/分组/持久化
  *  - 循环任务：完成后 due 前移且仍为 open
  *  - 三天内到期热区渐变（24h/48h/72h/更远；完成项不染色）
- *  - 列表/全景模式切换（时间线 mount/unmount、横向模式）
+ *  - 列表/全景模式切换（时间线 mount/unmount、横向模式、切换按钮位置稳定）
+ *  - v4.2：行元素垂直居中、详情右上关闭叉、demo 循环任务、收起侧栏 logo 悬浮展开
  *
  * 用法：node tools/e2e-v41.js
  * 退出码：0 全部通过；1 有失败。
@@ -199,6 +200,20 @@ async function main() {
                      w: Math.round(document.querySelector('.tools-rail').getBoundingClientRect().width) };
         })()`);
         assert('侧边栏状态持久化', railPersist.collapsed && railPersist.w < 100, JSON.stringify(railPersist));
+
+        const brandCenter = await evaluate(`(function(){ var b=document.querySelector('.tools-rail__brand').getBoundingClientRect(); return { x: b.x + b.width/2, y: b.y + b.height/2 }; })()`);
+        await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: brandCenter.x, y: brandCenter.y });
+        await sleep(400);
+        const railHover = await evaluate(`(function(){
+            var toggle=document.getElementById('rail-toggle-btn');
+            var mark=document.querySelector('.tools-brand__mark');
+            var ts=getComputedStyle(toggle); var ms=getComputedStyle(mark);
+            var tr=toggle.getBoundingClientRect();
+            var rail=document.querySelector('.tools-rail').getBoundingClientRect();
+            return { toggleOpacity: ts.opacity, togglePE: ts.pointerEvents, markOpacity: ms.opacity,
+                     centered: Math.abs((tr.x + tr.width/2) - (rail.x + rail.width/2)) <= 2 };
+        })()`);
+        assert('收起后悬浮 logo 显示为展开按钮', railHover.toggleOpacity === '1' && railHover.togglePE === 'auto' && railHover.markOpacity === '0' && railHover.centered, JSON.stringify(railHover));
         await evaluate(`(function(){ document.getElementById('rail-toggle-btn').click(); return true; })()`);
         await sleep(400);
 
@@ -230,6 +245,38 @@ async function main() {
         })()`);
         assert('置顶后排序到置顶组', pinResult.pinned === true && pinResult.firstPinned === true && pinResult.groupPinned === true, JSON.stringify(pinResult));
         assert('置顶分组 / 行标识', pinResult.groupPinned && pinResult.firstRowPinned, JSON.stringify({ g: pinResult.groupPinned, r: pinResult.firstRowPinned }));
+
+        /* ---------------- 5b. v4.2 行对齐 / 详情关闭 / demo 循环 ---------------- */
+        const rowAlign = await evaluate(`(function(){
+            var row=document.querySelector('.todo-item'); if (!row) return null;
+            var r=row.getBoundingClientRect();
+            function offset(sel){ var el=row.querySelector(sel); if (!el) return null; var x=el.getBoundingClientRect(); return Math.round((x.top + x.height/2) - (r.top + r.height/2)); }
+            return { align: getComputedStyle(row).alignItems, rowH: Math.round(r.height),
+                     chk: offset('.todo-item__check'), due: offset('.todo-item__due'), body: offset('.todo-item__body'), act: offset('.todo-item__actions') };
+        })()`);
+        const rowCentered = rowAlign && rowAlign.align === 'center' && ['chk','due','body','act'].every(function(key){ return rowAlign[key] === null || Math.abs(rowAlign[key]) <= 1; });
+        assert('Todo 行内元素垂直居中', rowCentered, JSON.stringify(rowAlign));
+
+        const demoLoops = await evaluate(`(function(){
+            var tasks=NC.store.todo.getDoc().tasks;
+            var loops=tasks.filter(function(t){ return t.recurrence && !t.deletedAt; });
+            return { count: loops.length, titles: loops.map(function(t){ return t.title; }), icons: document.querySelectorAll('.todo-item .todo-item__flag').length };
+        })()`);
+        assert('示例数据包含多个循环任务', demoLoops.count >= 3, JSON.stringify(demoLoops));
+
+        await evaluate(`(function(){ var b=document.querySelector('.todo-item__body'); if (b) b.click(); return true; })()`);
+        await sleep(500);
+        const detailClose = await evaluate(`(function(){
+            var c=document.querySelector('.detail-close'); var panel=document.querySelector('.todo-detail');
+            if (!c || !panel) return null;
+            var cr=c.getBoundingClientRect(); var pr=panel.getBoundingClientRect();
+            return { display: getComputedStyle(c).display, open: NC.store.todo.getUi().drawerOpen,
+                     topRight: cr.right > pr.left + pr.width - 60 && cr.top < pr.top + 80 };
+        })()`);
+        assert('详情右上角关闭叉可见', detailClose && detailClose.display !== 'none' && detailClose.topRight, JSON.stringify(detailClose));
+        await evaluate(`(function(){ var c=document.querySelector('.detail-close'); if (c) c.click(); return true; })()`);
+        await sleep(450);
+        assert('点击关闭叉收起详情', (await evaluate("NC.store.todo.getUi().drawerOpen")) === false);
 
         /* ---------------- 6. 循环任务 ---------------- */
         const recurResult = await evaluate(`(function(){
@@ -279,9 +326,30 @@ async function main() {
         assert('72h 外无热区', !/heat-/.test(heat4.cls || ''), JSON.stringify(heat4));
         assert('完成项不染色', !/heat-/.test(heatDone.cls || ''), JSON.stringify(heatDone));
 
-        /* ---------------- 8. 全景模式 ---------------- */
+        /* ---------------- 8. 全景模式：切换按钮位置四态稳定（详情开/关/全景/切回） ---------------- */
+        const measureSeg = `(function(){
+            var seg=document.getElementById('todo-mode-seg');
+            var r=seg.getBoundingClientRect();
+            var t=document.querySelector('.todo-mainpane .tools-title');
+            var d=document.querySelector('.todo-detail');
+            var tr=t?t.getBoundingClientRect():null;
+            var dr=d?d.getBoundingClientRect():null;
+            return { x:Math.round(r.x), y:Math.round(r.y), w:Math.round(r.width), h:Math.round(r.height),
+                     titleRight:tr?Math.round(tr.right):null, titleBottom:tr?Math.round(tr.bottom):null,
+                     detailLeft:dr?Math.round(dr.left):null, detailVisible: !!(d && d.offsetParent !== null) };
+        })()`;
+        // A) list + 详情关闭（mainpane 全宽）
+        await evaluate(`(function(){ NC.store.todo.clearSelection(); return true; })()`);
+        await sleep(350);
+        const segClosed = await evaluate(measureSeg);
+        // B) list + 详情打开（桌面详情列常驻，mainpane 变窄）
+        await evaluate(`(function(){ var b=document.querySelector('.todo-item__body'); if (b) b.click(); return true; })()`);
+        await sleep(400);
+        const segOpen = await evaluate(measureSeg);
+        // C) timeline（检查器隐藏、mainpane 全宽）
         await evaluate(`(function(){ var b=document.querySelector('#todo-mode-seg [data-mode="timeline"]'); if (b) b.click(); return true; })()`);
         await sleep(1200);
+        const segTimeline = await evaluate(measureSeg);
         const timeline = await evaluate(`(function(){
             var c=document.getElementById('todo-timeline');
             var root=c ? c.querySelector('.tl-root') : null;
@@ -294,8 +362,22 @@ async function main() {
         })()`);
         assert('全景模式挂载时间线', timeline.mode === 'timeline' && timeline.mounted && timeline.visible, JSON.stringify(timeline));
         assert('桌面横向时间轴 + 隐藏检查器', /tl--horizontal/.test(timeline.root || '') && timeline.detailHidden && /is-timeline/.test(timeline.shell || ''), JSON.stringify(timeline));
+        // D) 切回 list（详情仍打开）
         await evaluate(`(function(){ var b=document.querySelector('#todo-mode-seg [data-mode="list"]'); if (b) b.click(); return true; })()`);
         await sleep(600);
+        const segBack = await evaluate(measureSeg);
+        const sameRect = [segClosed, segOpen, segTimeline, segBack].every(function(p){
+            return Math.abs(p.x - segClosed.x) <= 1 && Math.abs(p.y - segClosed.y) <= 1 &&
+                   Math.abs(p.w - segClosed.w) <= 1 && Math.abs(p.h - segClosed.h) <= 1;
+        });
+        const noOverlap = [segClosed, segOpen, segTimeline].every(function(p){
+            var besideTitle = p.titleRight == null || p.x >= p.titleRight - 1;
+            var belowTitle = p.titleBottom == null || p.y >= p.titleBottom - 1;
+            var clearDetail = p.detailLeft == null || !p.detailVisible || (p.x + p.w) <= p.detailLeft;
+            return (besideTitle || belowTitle) && clearDetail;
+        });
+        assert('列表/全景切换按钮位置稳定（详情开/关/全景/切回）', sameRect && noOverlap && segOpen.detailVisible === true,
+            JSON.stringify({ closed: segClosed, open: segOpen, timeline: segTimeline, back: segBack }));
         assert('切回列表卸载时间线', (await evaluate("NC.store.todo.getDoc().settings.viewMode")) === 'list' && (await evaluate("!!(NC.timeline && NC.timeline.isMounted && NC.timeline.isMounted())")) === false);
 
         await evaluate('localStorage.clear(); true;');
@@ -305,7 +387,7 @@ async function main() {
         try { fs.rmSync(dir, { recursive: true, force: true }); } catch (err) { /* ignore */ }
     }
 
-    console.log('\n===== v4.1 E2E 结果 =====');
+    console.log('\n===== v4.1/v4.2 E2E 结果 =====');
     let failed = 0;
     results.forEach((item) => {
         if (!item.pass) failed++;
