@@ -24,7 +24,9 @@
     var state = {
         busy: false,
         composing: false,
-        images: []
+        images: [],
+        enteringId: null,
+        leaving: Object.create(null)
     };
     var el = {};
 
@@ -37,11 +39,24 @@
         return schemaChat && schemaChat.LIMITS ? Math.min(5, schemaChat.LIMITS.images || 5) : MAX_IMAGES;
     }
 
+    function prefersReducedMotionNow() {
+        try {
+            if (document.documentElement.getAttribute('data-lite') === 'true') return true;
+            return !!(global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (err) {
+            return false;
+        }
+    }
+
     function renderPreviews() {
         if (!el.previews) return;
         el.previews.textContent = '';
         state.images.forEach(function (image) {
             var item = util.e('div', { class: 'chat-preview', dataset: { id: image.id } });
+            if (state.enteringId != null && String(image.id) === String(state.enteringId)) {
+                item.classList.add('is-entering');
+                state.enteringId = null;
+            }
             var img = util.e('img', {
                 class: 'chat-preview__img',
                 alt: '待发送图片',
@@ -66,8 +81,26 @@
     }
 
     function removeImage(id) {
-        state.images = state.images.filter(function (image) { return String(image.id) !== String(id); });
-        renderPreviews();
+        var key = String(id);
+        if (state.leaving[key]) return;
+        if (prefersReducedMotionNow()) {
+            state.images = state.images.filter(function (image) { return String(image.id) !== key; });
+            renderPreviews();
+            return;
+        }
+        var node = null;
+        if (el.previews) {
+            Array.prototype.forEach.call(el.previews.children, function (child) {
+                if (!node && child.getAttribute('data-id') === key) node = child;
+            });
+        }
+        state.leaving[key] = true;
+        if (node) node.classList.add('is-leaving');
+        global.setTimeout(function () {
+            delete state.leaving[key];
+            state.images = state.images.filter(function (image) { return String(image.id) !== key; });
+            renderPreviews();
+        }, 130);
     }
 
     function autoGrow() {
@@ -145,14 +178,15 @@
         images.forEach(function (file) {
             chain = chain.then(function () {
                 return compressImage(file).then(function (dataUrl) {
-                    state.images.push({ id: util.uid('img'), dataUrl: dataUrl, name: file.name || 'image' });
+                    var image = { id: util.uid('img'), dataUrl: dataUrl, name: file.name || 'image' };
+                    state.images.push(image);
+                    state.enteringId = image.id;
                     renderPreviews();
                 }).catch(function () {
                     if (typeof options.onError === 'function') options.onError('图片处理失败：' + (file.name || ''));
                 });
             });
         });
-        chain.then(function () { renderPreviews(); });
     }
 
     function setBusy(busy) {

@@ -124,7 +124,7 @@
 | 滚动链 | `overscroll-behavior: none`（html/body）；内部滚动 `contain` | 防下拉刷新劫持 |
 | 触控 | `touch-action: manipulation`；控件 `user-select:none` + `-webkit-touch-callout:none` | 正文保持可选中 |
 | 输入缩放 | `@media (pointer:coarse)` 下输入 16px（todo/chat/md 实测） | 防 iOS 聚焦缩放 |
-| hover 门控 | 全部 `:hover` 包 `@media (hover:hover) and (pointer:fine)`（最终 CSS 77/77 条） | 防触屏 sticky hover |
+| hover 门控 | 全部 `:hover` 包 `@media (hover:hover) and (pointer:fine)`（最终 CSS 84/84 条） | 防触屏 sticky hover |
 | 高度 | 应用壳 `100vh` 回退 + `100dvh` | Chromium 102 忽略 dvh，保留 vh 兜底 |
 | 安全区 | `env(safe-area-inset-*)` 14 处（顶部/底部 chrome、Sheet、toast） | 需 `viewport-fit=cover` 配合 |
 

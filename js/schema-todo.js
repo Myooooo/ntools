@@ -142,7 +142,8 @@
             sort: 'smart',
             showCompleted: true,
             reminderLeadMinutes: 15,
-            compact: false
+            compact: false,
+            viewMode: 'list'
         };
     }
 
@@ -251,7 +252,8 @@
             byWeekday: byWeekday,
             until: toDue(raw.until),
             count: isNum(raw.count) ? clip(raw.count, 1, 1000) : null,
-            lastMaterializedAt: toDue(raw.lastMaterializedAt)
+            lastMaterializedAt: toDue(raw.lastMaterializedAt),
+            lastCompletedAt: toDue(raw.lastCompletedAt)
         };
     }
 
@@ -347,6 +349,7 @@
             notes: notes,
             status: status,
             priority: priority,
+            pinned: raw.pinned === true,
             due: due,
             dueAllDay: raw.dueAllDay === true && due != null,
             tags: normalizeTags(raw.tags, ctx.issues, index),
@@ -372,7 +375,8 @@
             sort: SORTS.indexOf(src.sort) > -1 ? src.sort : 'smart',
             showCompleted: src.showCompleted !== false,
             reminderLeadMinutes: clip(isNum(src.reminderLeadMinutes) ? src.reminderLeadMinutes : 15, 0, 43200),
-            compact: src.compact === true
+            compact: src.compact === true,
+            viewMode: src.viewMode === 'timeline' ? 'timeline' : 'list'
         };
     }
 
@@ -521,6 +525,7 @@
             if (STATUSES.indexOf(task.status) === -1) err(base + '.status', 'status 非法');
             if (PRIORITIES.indexOf(task.priority) === -1) err(base + '.priority', 'priority 非法');
             if (!(task.due == null || isNum(task.due))) err(base + '.due', 'due 必须为数字或 null');
+            if (task.pinned != null && typeof task.pinned !== 'boolean') err(base + '.pinned', 'pinned 必须为布尔');
             if (!Array.isArray(task.tags)) err(base + '.tags', 'tags 必须为数组');
             if (!Array.isArray(task.subtasks)) err(base + '.subtasks', 'subtasks 必须为数组');
             if (!isNum(task.createdAt) || !isNum(task.updatedAt)) err(base + '.updatedAt', '时间戳非法');
@@ -531,6 +536,7 @@
         else {
             if (VIEWS.indexOf(settings.view) === -1) err('$.settings.view', 'view 非法');
             if (SORTS.indexOf(settings.sort) === -1) err('$.settings.sort', 'sort 非法');
+            if (settings.viewMode != null && settings.viewMode !== 'list' && settings.viewMode !== 'timeline') err('$.settings.viewMode', 'viewMode 非法');
             if (!listIds[settings.defaultListId]) err('$.settings.defaultListId', 'defaultListId 引用不存在的清单');
         }
         return { ok: errors.length === 0, errors: errors };
@@ -593,6 +599,7 @@
                 notes: notes,
                 status: completed ? 'done' : 'open',
                 priority: 'normal',
+                pinned: false,
                 due: toDue(item.due),
                 dueAllDay: false,
                 tags: [],
@@ -738,6 +745,60 @@
             }
         };
     }
+
+    /* ------------------------------------------------------------------ *
+     * 循环任务：推进下一次到期（纯函数，便于测试）
+     * daily / weekly：按天/周推进；monthly / yearly：月末、闰年夹取。
+     * 若算出的时间 <= now，继续前移直到未来（上限 1000 次防御）。
+     * @returns {number|null} 下一次到期 epoch ms；无循环/超过 until 时返回 null
+     * ------------------------------------------------------------------ */
+    function advanceRecurrenceOnce(ts, recurrence) {
+        var date = new Date(ts);
+        var interval = isNum(recurrence.interval) ? clip(recurrence.interval, 1, 99) : 1;
+        if (recurrence.freq === 'daily') {
+            date.setDate(date.getDate() + interval);
+            return date.getTime();
+        }
+        if (recurrence.freq === 'weekly') {
+            date.setDate(date.getDate() + 7 * interval);
+            return date.getTime();
+        }
+        if (recurrence.freq === 'monthly') {
+            var day = date.getDate();
+            date.setDate(1);
+            date.setMonth(date.getMonth() + interval);
+            var monthDays = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+            date.setDate(Math.min(day, monthDays));
+            return date.getTime();
+        }
+        if (recurrence.freq === 'yearly') {
+            var dayY = date.getDate();
+            date.setDate(1);
+            date.setFullYear(date.getFullYear() + interval);
+            var yearDays = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+            date.setDate(Math.min(dayY, yearDays));
+            return date.getTime();
+        }
+        return null;
+    }
+
+    function nextRecurrenceDue(recurrence, baseDue, now) {
+        if (!util.isPlainObject(recurrence) || RECURRENCE_FREQ.indexOf(recurrence.freq) === -1) return null;
+        var nowTs = isNum(now) ? now : nowTsDefault();
+        var base = isNum(baseDue) ? baseDue : nowTs;
+        var until = isNum(recurrence.until) ? recurrence.until : null;
+        var next = advanceRecurrenceOnce(base, recurrence);
+        var guard = 0;
+        while (next != null && next <= nowTs && guard < 1000) {
+            next = advanceRecurrenceOnce(next, recurrence);
+            guard++;
+        }
+        if (next == null) return null;
+        if (until != null && next > until) return null;
+        return next;
+    }
+
+    function nowTsDefault() { return Date.now(); }
 
     /* ------------------------------------------------------------------ *
      * 合并：以当前为底，把导入文档并入（id 相同取 updatedAt 新者）
@@ -929,6 +990,8 @@
         isOverdue: isOverdue,
         isToday: isToday,
         timeBucket: timeBucket,
+        nextRecurrenceDue: nextRecurrenceDue,
+        advanceRecurrenceOnce: advanceRecurrenceOnce,
         priorityWeight: priorityWeight,
         docCounts: docCounts
     };

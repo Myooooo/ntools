@@ -36,6 +36,7 @@
 
     var el = {};
     var menuOpen = false;
+    var menuHideTimer = null;
     var guide = null;
 
     /* ------------------------------------------------------------------ *
@@ -266,10 +267,21 @@
         }
     }
 
+    /**
+     * 聊天菜单：#chat-menu 是唯一静态节点，打开期间禁止重复打开；
+     * 关闭时先收起（140ms transition）再 hidden，避免退出被裁切；
+     * 快速重复点击会取消退出定时器，不会出现“叠一层菜单”或卡在中间态。
+     */
     function openMenu() {
-        if (!el.menu) return;
+        if (!el.menu || menuOpen) return;
+        if (menuHideTimer) {
+            clearTimeout(menuHideTimer);
+            menuHideTimer = null;
+        }
         el.menu.hidden = false;
         menuOpen = true;
+        // 从 hidden 切换后强制一次 reflow，让 140ms 过渡从初始态开始
+        void el.menu.offsetWidth;
         el.menu.classList.add('is-open');
         if (el.menuBtn) el.menuBtn.setAttribute('aria-expanded', 'true');
         var first = el.menu.querySelector('.chat-menu__item');
@@ -280,10 +292,30 @@
 
     function closeMenu() {
         if (!el.menu) return;
+        if (el.menuBtn) el.menuBtn.setAttribute('aria-expanded', 'false');
+        if (!menuOpen) {
+            if (menuHideTimer) {
+                clearTimeout(menuHideTimer);
+                menuHideTimer = null;
+                el.menu.hidden = true;
+            }
+            return;
+        }
         menuOpen = false;
         el.menu.classList.remove('is-open');
-        el.menu.hidden = true;
-        if (el.menuBtn) el.menuBtn.setAttribute('aria-expanded', 'false');
+        if (NC.util.prefersReducedMotion && NC.util.prefersReducedMotion()) {
+            el.menu.hidden = true;
+            return;
+        }
+        if (document.documentElement.getAttribute('data-lite') === 'true') {
+            el.menu.hidden = true;
+            return;
+        }
+        if (menuHideTimer) clearTimeout(menuHideTimer);
+        menuHideTimer = setTimeout(function () {
+            menuHideTimer = null;
+            if (!menuOpen) el.menu.hidden = true;
+        }, 160);
     }
 
     /* ------------------------------------------------------------------ *

@@ -1,0 +1,168 @@
+/* ==========================================================================
+ * rail.css — v4.1 可收起侧边栏
+ * 展开：196px 文字导航；收起：68px 仅图标，底部只保留设置按钮。
+ * 标准模式宽度与内容淡出过渡；Light/reduced-motion 即时。
+ * ========================================================================== */
+
+.tools-rail {
+    width: 196px;
+    transition:
+        width var(--nc-dur-panel) var(--nc-ease-drawer),
+        flex-basis var(--nc-dur-panel) var(--nc-ease-drawer),
+        background-color var(--nc-dur) var(--nc-ease);
+    overflow: hidden;
+}
+
+.tools-rail__brand {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+}
+
+.tools-rail__toggle {
+    position: absolute;
+    right: -2px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-3);
+    opacity: 0;
+    transition: opacity var(--nc-dur-fast) var(--nc-ease), background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.tools-rail__toggle:focus-visible,
+.tools-app.is-rail-collapsed .tools-rail__toggle {
+    opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .tools-rail:hover .tools-rail__toggle {
+        opacity: 1;
+    }
+
+    .tools-rail__toggle:hover {
+        color: var(--nc-text);
+        background: var(--nc-surface-2);
+    }
+}
+
+.tools-rail__toggle .nc-icon {
+    transition: transform var(--nc-dur-panel) var(--nc-ease-out);
+}
+
+.tools-app.is-rail-collapsed .tools-rail__toggle .nc-icon {
+    transform: rotate(180deg);
+}
+
+.tools-brand__name,
+.tools-nav__label {
+    transition:
+        opacity var(--nc-dur-fast) var(--nc-ease),
+        transform var(--nc-dur) var(--nc-ease-out);
+}
+
+.tools-nav__item {
+    transition:
+        background-color var(--nc-dur-fast) var(--nc-ease),
+        color var(--nc-dur-fast) var(--nc-ease),
+        padding var(--nc-dur-panel) var(--nc-ease-drawer);
+}
+
+/* ---------- 收起状态（桌面 >= 901px 才生效；移动端仍是顶部栏） ---------- */
+@media (min-width: 901px) {
+    .tools-app.is-rail-collapsed .tools-rail {
+        width: 68px;
+        min-width: 0;
+        flex: 0 0 68px;
+    }
+
+    .tools-app.is-rail-collapsed .tools-brand__name,
+    .tools-app.is-rail-collapsed .tools-nav__label {
+        opacity: 0;
+        transform: translateX(-4px);
+        pointer-events: none;
+        position: absolute;
+        visibility: hidden;
+    }
+
+    .tools-app.is-rail-collapsed .tools-rail__brand {
+        justify-content: center;
+        padding: 0;
+    }
+
+    .tools-app.is-rail-collapsed .tools-rail__toggle {
+        position: static;
+        transform: none;
+        margin-left: auto;
+    }
+
+    .tools-app.is-rail-collapsed .tools-nav {
+        align-items: center;
+    }
+
+    .tools-app.is-rail-collapsed .tools-nav__item {
+        width: 40px;
+        height: 40px;
+        justify-content: center;
+        padding: 0;
+        gap: 0;
+        border-radius: var(--nc-radius-md);
+    }
+
+    .tools-app.is-rail-collapsed .tools-nav__badge {
+        position: absolute;
+        top: 3px;
+        right: 2px;
+        min-width: 15px;
+        height: 15px;
+        padding: 0 4px;
+        font-size: 9px;
+        line-height: 15px;
+    }
+
+    /* 收起后底部只显示设置按钮 */
+    .tools-app.is-rail-collapsed .tools-rail__foot #theme-toggle-btn,
+    .tools-app.is-rail-collapsed .tools-rail__foot #app-menu-btn,
+    .tools-app.is-rail-collapsed .tools-rail__version {
+        display: none;
+    }
+
+    .tools-app.is-rail-collapsed .tools-rail__foot {
+        justify-content: center;
+        padding: 12px 0 14px;
+    }
+}
+
+/* 移动端隐藏收起按钮（侧栏已变为顶部栏） */
+@media (max-width: 900px) {
+    .tools-rail__toggle {
+        display: none;
+    }
+}
+
+/* Light/reduced-motion：不播放宽度与位移过渡 */
+html[data-lite="true"] .tools-rail,
+html[data-lite="true"] .tools-rail__toggle,
+html[data-lite="true"] .tools-brand__name,
+html[data-lite="true"] .tools-nav__label,
+html[data-lite="true"] .tools-nav__item {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tools-rail,
+    .tools-rail__toggle,
+    .tools-brand__name,
+    .tools-nav__label,
+    .tools-nav__item,
+    .tools-rail__toggle .nc-icon {
+        transition: none;
+    }
+}

@@ -37,6 +37,7 @@
 
         initTheme();
         initLlmAndSettings();
+        initRail();
         bindNav();
         bindAppMenu();
         bindBanner();
@@ -73,6 +74,34 @@
                     el.removeAttribute('data-icon');
                 }
             } catch (err) { /* 图标失败不影响功能 */ }
+        });
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 可收起侧边栏（仅桌面；移动端为顶部栏）
+     * ------------------------------------------------------------------ */
+    var RAIL_KEY = 'ntools.rail-collapsed';
+
+    function initRail() {
+        var app = document.getElementById('tools-app');
+        var btn = document.getElementById('rail-toggle-btn');
+        if (!app || !btn) return;
+
+        function apply(collapsed) {
+            app.classList.toggle('is-rail-collapsed', !!collapsed);
+            btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            btn.setAttribute('aria-label', collapsed ? '展开侧边栏' : '收起侧边栏');
+            btn.title = collapsed ? '展开侧边栏' : '收起侧边栏';
+        }
+
+        var saved = false;
+        try { saved = global.localStorage.getItem(RAIL_KEY) === '1'; } catch (err) { saved = false; }
+        apply(saved);
+
+        btn.addEventListener('click', function () {
+            var next = !app.classList.contains('is-rail-collapsed');
+            apply(next);
+            try { global.localStorage.setItem(RAIL_KEY, next ? '1' : '0'); } catch (err) { /* ignore */ }
         });
     }
 

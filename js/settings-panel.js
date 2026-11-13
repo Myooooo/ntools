@@ -631,7 +631,8 @@
     /* ------------------------------------------------------------------ *
      * 渲染与开关
      * ------------------------------------------------------------------ */
-    function renderSection(id) {
+    function renderSection(id, opts) {
+        var silent = !!(opts && opts.silent);
         currentSection = id;
         Array.prototype.forEach.call(navEl.children, function (nav) {
             var active = nav.getAttribute('data-section') === id;
@@ -641,7 +642,7 @@
         });
         bodyEl.textContent = '';
         bodyEl.scrollTop = 0;
-        var wrap = util.e('div', { class: 'sp-content nc-anim-in' });
+        var wrap = util.e('div', { class: 'sp-content' + (silent ? '' : ' nc-anim-in') });
         if (id === 'profiles') renderProfiles(wrap);
         else if (id === 'todo-ai') renderTodoAi(wrap);
         else if (id === 'general') renderGeneral(wrap);
@@ -714,7 +715,7 @@
         sheet.hidden = false;
         requestAnimationFrame(function () { sheet.classList.add('is-open'); });
         open = true;
-        renderSection(sectionId || currentSection || 'profiles');
+        renderSection(sectionId || currentSection || 'profiles', { silent: true });
         releaseTrap = ui.trapFocus(sheet);
         setTimeout(function () {
             if (closeBtn) closeBtn.focus();
@@ -728,7 +729,7 @@
         if (releaseTrap) { releaseTrap(); releaseTrap = null; }
         setTimeout(function () {
             if (!open) sheet.hidden = true;
-        }, 180);
+        }, 240);
         if (previousFocus && previousFocus.focus) {
             try { previousFocus.focus(); } catch (err) { /* ignore */ }
         }

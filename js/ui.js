@@ -109,7 +109,7 @@
             if (releaseTrap) releaseTrap();
             setTimeout(function () {
                 if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-            }, 180);
+            }, 240);
             var index = openStack.indexOf(instance);
             if (index > -1) openStack.splice(index, 1);
             if (previousFocus && previousFocus.focus) {
@@ -351,15 +351,45 @@
 
     /* ------------------------------------------------------------------ *
      * 轻量弹出菜单
+     * 约束：同一时刻只允许一个菜单；重复点击同一触发按钮为开/关；关闭有退出动画。
      * ------------------------------------------------------------------ */
+    var activeMenu = null;
+    var MENU_EXIT_MS = 140;
+
+    function removeClosingMenus() {
+        var nodes = document.querySelectorAll('.nc-menu.is-closing');
+        Array.prototype.forEach.call(nodes, function (node) {
+            if (node.parentNode) node.parentNode.removeChild(node);
+        });
+    }
+
+    function closeActiveMenu() {
+        if (activeMenu) {
+            var instance = activeMenu;
+            activeMenu = null;
+            instance.close();
+        }
+    }
+
     function openMenu(anchor, items, options) {
+        if (!anchor) return { el: null, close: function () {} };
         var opts = options || {};
+
+        // 重复点击同一个触发按钮：关闭，不再叠一层菜单
+        var sameTrigger = activeMenu && activeMenu.anchor === anchor;
+        closeActiveMenu();
+        if (sameTrigger && opts.toggle !== false) {
+            return { el: null, close: function () {} };
+        }
+        removeClosingMenus();
+
         var previousFocus = document.activeElement;
         var menu = document.createElement('div');
         menu.className = 'nc-menu';
         menu.setAttribute('role', 'menu');
         var buttons = [];
         var activeIndex = -1;
+        var closed = false;
 
         (items || []).forEach(function (item) {
             if (item.type === 'divider') {
@@ -405,11 +435,23 @@
             buttons[activeIndex].focus();
         }
 
-        function close() {
-            if (!menu.parentNode) return;
-            menu.parentNode.removeChild(menu);
+        function detachListeners() {
             document.removeEventListener('mousedown', onOutside, true);
             document.removeEventListener('keydown', onKeydown, true);
+            global.removeEventListener('resize', onViewportChange);
+            global.removeEventListener('scroll', onViewportChange, true);
+        }
+
+        function close() {
+            if (closed) return;
+            closed = true;
+            detachListeners();
+            if (activeMenu === instance) activeMenu = null;
+            menu.classList.remove('is-open');
+            menu.classList.add('is-closing');
+            setTimeout(function () {
+                if (menu.parentNode) menu.parentNode.removeChild(menu);
+            }, MENU_EXIT_MS);
             if (previousFocus && previousFocus.focus) {
                 try { previousFocus.focus(); } catch (err) { /* ignore */ }
             }
@@ -426,28 +468,45 @@
             else if (event.key === 'ArrowUp') { event.preventDefault(); setActive(activeIndex - 1); }
         }
 
+        function onViewportChange(event) {
+            // 输入框/页面滚轮造成的滚动不关闭；只处理窗口尺寸变化与滚动容器变化
+            if (event && event.type === 'scroll') {
+                if (menu.contains(event.target)) return;
+            }
+            close();
+        }
+
+        var instance;
         document.body.appendChild(menu);
         var rect = anchor.getBoundingClientRect();
         var menuRect = menu.getBoundingClientRect();
         var left = Math.min(Math.max(8, rect.right - menuRect.width), global.innerWidth - menuRect.width - 8);
         var top = rect.bottom + 6;
+        var flipped = false;
         if (top + menuRect.height > global.innerHeight - 8) {
             top = Math.max(8, rect.top - menuRect.height - 6);
+            flipped = true;
         }
         menu.style.left = left + 'px';
         menu.style.top = top + 'px';
 
         // 来源明确的缩放起点：菜单从触发按钮的方向展开，而不是从中心
-        var flipped = (top !== rect.bottom + 6);
         var originX = (left + menuRect.width / 2) < (rect.left + rect.width / 2) ? 'left' : 'right';
         menu.style.setProperty('--nc-menu-origin', originX + ' ' + (flipped ? 'bottom' : 'top'));
 
+        instance = { el: menu, close: close, anchor: anchor };
+        activeMenu = instance;
+
         setTimeout(function () {
+            if (closed) return;
             document.addEventListener('mousedown', onOutside, true);
             document.addEventListener('keydown', onKeydown, true);
+            global.addEventListener('resize', onViewportChange);
+            global.addEventListener('scroll', onViewportChange, true);
         }, 0);
-        menu.querySelector('.nc-menu__item:not(:disabled)') && menu.querySelector('.nc-menu__item:not(:disabled)').focus();
-        return { el: menu, close: close };
+        var firstItem = menu.querySelector('.nc-menu__item:not(:disabled)');
+        if (firstItem) firstItem.focus();
+        return instance;
     }
 
     /* ------------------------------------------------------------------ *

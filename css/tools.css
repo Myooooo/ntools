@@ -1396,7 +1396,7 @@ input[type="range"]::-webkit-slider-thumb {
     background: var(--nc-accent-faint);
 }
 
-.todo-item.is-selected::before {
+.todo-item.is-selected::after {
     content: "";
     position: absolute;
     left: 0;
@@ -1405,6 +1405,7 @@ input[type="range"]::-webkit-slider-thumb {
     width: 2px;
     border-radius: 1px;
     background: var(--nc-accent);
+    z-index: 2;
 }
 
 .todo-item.is-done {
@@ -2579,7 +2580,7 @@ html[data-lite="true"] .todo-scroll {
 }
 
 @media (max-width: 900px) {
-    .tools-rail {
+    .tools-app .tools-rail {
         flex: 0 0 64px;
         width: 64px;
         align-items: center;
@@ -2696,8 +2697,8 @@ html[data-lite="true"] .todo-scroll {
         flex-direction: column;
     }
 
-    /* 顶栏：品牌 + 工具 + 操作 */
-    .tools-rail {
+    /* 顶栏：品牌 + 工具 + 操作（压过 rail.css 的桌面宽度/折叠规则） */
+    .tools-app .tools-rail {
         flex: 0 0 auto;
         width: 100%;
         flex-direction: row;
@@ -2715,8 +2716,9 @@ html[data-lite="true"] .todo-scroll {
         }
     }
 
-    .tools-rail__brand {
+    .tools-app .tools-rail__brand {
         flex: 1;
+        min-height: 0;
         justify-content: flex-start;
         gap: 8px;
         padding: 0 2px;
@@ -2727,7 +2729,7 @@ html[data-lite="true"] .todo-scroll {
         font-size: var(--nc-fs-base);
     }
 
-    .tools-rail__foot {
+    .tools-app .tools-rail__foot {
         width: auto;
         flex-direction: row;
         gap: 1px;
@@ -3118,7 +3120,7 @@ html[data-lite="true"] .todo-scroll {
         gap: 6px;
     }
 
-    .tools-rail {
+    .tools-app .tools-rail {
         padding: 6px 10px 4px;
     }
 
@@ -3277,5 +3279,302 @@ html[data-lite="true"] .tools-nav__item {
     .tools-rail {
         backdrop-filter: var(--nc-glass-blur);
         -webkit-backdrop-filter: var(--nc-glass-blur);
+    }
+}
+
+
+/* ==========================================================================
+ * 15. v4.1：置顶 / 循环任务 / 三天热区 / 模式切换 / 列表动效 / 底部抽屉
+ * ========================================================================== */
+
+/* ---- 15.1 新建按钮不再提示 N（N 移到列表底部提示条） ---- */
+#todo-add-btn .nc-kbd {
+    display: none !important;
+}
+
+/* ---- 15.2 页头「列表 / 全景」切换 ---- */
+.todo-mode-seg {
+    flex: 0 0 auto;
+    margin-right: 2px;
+}
+
+.todo-mode-seg .nc-seg__btn {
+    height: 27px;
+    padding: 0 9px;
+    font-size: var(--nc-fs-xs);
+}
+
+/* ---- 15.3 置顶 / 循环标识 ---- */
+.todo-item__pin,
+.todo-item__repeat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    color: var(--nc-text-3);
+}
+
+.todo-item__pin[hidden],
+.todo-item__repeat[hidden] {
+    display: none;
+}
+
+.todo-item.is-pinned .todo-item__pin {
+    color: var(--nc-accent);
+}
+
+.todo-item__repeat {
+    color: var(--nc-time);
+}
+
+.todo-item__pin .nc-icon,
+.todo-item__repeat .nc-icon {
+    width: 12px;
+    height: 12px;
+}
+
+/* 置顶分组标题：仪器蓝刻度感 */
+.todo-group[data-group="pinned"] .todo-group__label {
+    color: var(--nc-accent);
+}
+
+.todo-group[data-group="pinned"] .todo-group__line {
+    background: var(--nc-accent-ring);
+    opacity: 0.55;
+}
+
+/* 行内 & 详情置顶按钮激活态 */
+.todo-item__actions .nc-btn.is-active,
+.detail-foot .nc-btn.is-active {
+    color: var(--nc-accent);
+}
+
+.todo-item__actions .nc-btn.is-active {
+    background: var(--nc-accent-faint);
+}
+
+/* ---- 15.4 三天内到期整行热区渐变 ---- */
+.todo-item > * {
+    position: relative;
+    z-index: 1;
+}
+
+.todo-item.heat-1::before,
+.todo-item.heat-2::before,
+.todo-item.heat-3::before,
+.todo-item.heat-overdue::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg, var(--nc-warning-soft) 0%, var(--nc-danger-soft) 58%, transparent 94%);
+    transition: opacity var(--nc-dur) var(--nc-ease);
+}
+
+.todo-item.heat-1::before { opacity: 0.38; }
+.todo-item.heat-2::before { opacity: 0.62; }
+.todo-item.heat-3::before { opacity: 0.86; }
+
+.todo-item.heat-overdue::before {
+    background: linear-gradient(90deg, var(--nc-danger-soft) 0%, rgba(255, 122, 114, 0.15) 56%, transparent 96%);
+    opacity: 1;
+}
+
+/* Lite：保留信息，降低热区不透明度 */
+html[data-lite="true"] .todo-item.heat-1::before { opacity: 0.22; }
+html[data-lite="true"] .todo-item.heat-2::before { opacity: 0.34; }
+html[data-lite="true"] .todo-item.heat-3::before { opacity: 0.46; }
+html[data-lite="true"] .todo-item.heat-overdue::before { opacity: 0.55; }
+
+/* ---- 15.5 列表动效（只做 transform / opacity，Lite 自动关闭） ---- */
+@keyframes todo-complete-flash {
+    0% { opacity: 1; }
+    40% { opacity: 0.55; }
+    100% { opacity: 1; }
+}
+
+@keyframes todo-pin-flash {
+    0% { opacity: 0.55; }
+    100% { opacity: 1; }
+}
+
+.todo-item.is-completing {
+    animation: todo-complete-flash var(--nc-dur-slow) var(--nc-ease-out);
+}
+
+.todo-item.is-repinned {
+    animation: todo-pin-flash var(--nc-dur) var(--nc-ease-out);
+}
+
+.todo-item.is-collapsing {
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity var(--nc-dur-fast) var(--nc-ease), transform var(--nc-dur-fast) var(--nc-ease);
+}
+
+/* 采集区展开：淡入 + 6px 上移（不使用高度动画） */
+.todo-composer__extra {
+    animation: nc-rise-in var(--nc-dur) var(--nc-ease-out) both;
+}
+
+/* ---- 15.6 列表 / 全景模式容器 ---- */
+.todo-mainpane.is-timeline .todo-toolbar,
+.todo-mainpane.is-timeline .todo-composer,
+.todo-mainpane.is-timeline .todo-scroll,
+.todo-mainpane.is-timeline .todo-foot {
+    display: none;
+}
+
+.todo-timeline {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--nc-border-faint);
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-surface);
+    animation: nc-rise-in var(--nc-dur-page) var(--nc-ease-out) both;
+}
+
+.todo-timeline[hidden] {
+    display: none;
+}
+
+.todo-timeline-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-height: 220px;
+    padding: 24px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-base);
+    text-align: center;
+}
+
+html[data-lite="true"] .todo-timeline {
+    animation: none;
+}
+
+/* ---- 15.7 移动端：详情抽屉改为底部上滑 ---- */
+@media (max-width: 768px) {
+    .todo-detail {
+        top: auto;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        height: auto;
+        max-height: 88vh;
+        min-height: 44vh;
+        padding: 0;
+        border: 0;
+        border-top: 1px solid var(--nc-border-strong);
+        border-radius: var(--nc-radius-xl) var(--nc-radius-xl) 0 0;
+        background: var(--nc-elevated);
+        box-shadow: 0 -18px 50px -20px rgba(0, 0, 0, 0.55);
+        transform: translateY(102%);
+        transition: transform var(--nc-dur-panel) var(--nc-ease-drawer);
+    }
+
+    .todo-detail.is-open {
+        transform: translateY(0);
+    }
+
+    .todo-detail::before {
+        content: "";
+        position: absolute;
+        top: 7px;
+        left: 50%;
+        width: 36px;
+        height: 4px;
+        margin-left: -18px;
+        border-radius: var(--nc-radius-pill);
+        background: var(--nc-border-strong);
+        z-index: 3;
+    }
+
+    .todo-detail__inner {
+        padding: 20px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .todo-mode-seg {
+        margin-right: 0;
+    }
+
+    .tools-page .todo-mainpane .tools-head__actions {
+        flex-wrap: wrap;
+        row-gap: 4px;
+    }
+}
+
+/* 320px 及以下：模式切换压缩为紧凑标签，避免头部溢出 */
+@media (max-width: 380px) {
+    .todo-mode-seg .nc-seg__btn {
+        padding: 0 7px;
+    }
+
+    .tools-page .todo-mainpane .tools-head__actions {
+        gap: 4px;
+    }
+}
+
+/* Lite / reduced-motion：列表动效关闭 */
+html[data-lite="true"] .todo-item.is-completing,
+html[data-lite="true"] .todo-item.is-repinned,
+html[data-lite="true"] .todo-item.is-collapsing,
+html[data-lite="true"] .todo-timeline {
+    animation: none;
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .todo-item.is-completing,
+    .todo-item.is-repinned,
+    .todo-item.is-collapsing,
+    .todo-timeline,
+    .todo-composer__extra {
+        animation: none;
+        transition: none;
+    }
+}
+
+/* ==========================================================================
+ * 16. v4.1.1：全景模式布局（隐藏检查器，让时间线容器 ≥900px 触发横向时间轴）
+ * ========================================================================== */
+.todo-shell.is-timeline {
+    grid-template-columns: 176px minmax(0, 1fr);
+}
+
+.todo-shell.is-timeline .todo-detail {
+    display: none;
+}
+
+/* 全景模式只保留「列表 / 全景」切换：隐藏新建/搜索/排序/更多/AI 等列表控件 */
+.todo-mainpane.is-timeline .tools-head__actions > *:not(.todo-mode-seg) {
+    display: none !important;
+}
+
+.todo-mainpane.is-timeline .tools-head__actions {
+    gap: 0;
+}
+
+.todo-mainpane.is-timeline .tools-head {
+    align-items: center;
+}
+
+@media (max-width: 1100px) {
+    .todo-shell.is-timeline {
+        grid-template-columns: 168px minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .todo-shell.is-timeline {
+        display: flex;
+        flex-direction: column;
     }
 }

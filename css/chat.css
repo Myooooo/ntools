@@ -1614,3 +1614,224 @@ html[data-lite="true"] .chat-msg__actions {
         transform: none;
     }
 }
+
+/* ==========================================================================
+ * v4.1 动效补齐（claude/animate + choreograph 决策）
+ * 原则：只动 transform/opacity；入场 ease-out、退出更快；高频面不做位移；
+ *       Lite / reduced-motion 由 tokens + 本节覆盖关闭位移与动画。
+ * ========================================================================== */
+
+/* 1) 记录滚动：流式自动跟随需要即时定位，不用 smooth（避免追帧） */
+.chat-main {
+    scroll-behavior: auto;
+    overscroll-behavior: contain;
+}
+
+/* 2) 消息入场校准：新消息一次 opacity + 4px，140ms；历史渲染不播 */
+.chat-msg.is-entering {
+    animation: chat-msg-enter var(--nc-dur-fast) var(--nc-ease-out) both;
+}
+
+/* 3) 欢迎空态：Lead（标题行）先到，Support（说明 + 建议 + 快捷键）随后，
+ *    容器本身不再叠加第二次入场（one entrance per container）。 */
+.chat-welcome {
+    animation: none;
+}
+
+.chat-welcome__head {
+    animation: chat-welcome-lead var(--nc-dur) var(--nc-ease-out) both;
+}
+
+.chat-welcome__body {
+    animation: chat-welcome-support var(--nc-dur) var(--nc-ease-out) both;
+    animation-delay: 60ms;
+}
+
+@keyframes chat-welcome-lead {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes chat-welcome-support {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* 4) 思考摘要：展开/收起由 message-view 以 max-height/opacity 过渡（tokens 时长）。
+ *    默认不挂 transition，避免流式追加时反复触发；展开内容保持可滚动。 */
+.chat-reasoning__body {
+    overflow-y: auto;
+}
+
+.chat-reasoning__summary::before {
+    transition: transform var(--nc-dur-fast) var(--nc-ease);
+}
+
+/* 5) 统计浮层：从按钮方向展开 + 更快收起 */
+.chat-stats__panel {
+    transform-origin: bottom left;
+}
+
+/* 6) 发送 ↔ 停止：图标交叉淡入淡出 + 轻微缩放，不做布局切换 */
+.chat-send {
+    position: relative;
+}
+
+.chat-send__icon {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.9);
+    transition:
+        opacity var(--nc-dur-fast) var(--nc-ease-out),
+        transform var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+.chat-send__icon--send {
+    display: flex;
+    opacity: 1;
+    transform: none;
+}
+
+.chat-send.is-stop .chat-send__icon--send {
+    display: flex;
+    opacity: 0;
+    transform: scale(0.9);
+}
+
+.chat-send.is-stop .chat-send__icon--stop {
+    display: flex;
+    opacity: 1;
+    transform: none;
+}
+
+/* 7) 图片预览：添加/删除的轻量进出（56px 小面，只用 opacity/scale） */
+.chat-preview {
+    transition:
+        opacity var(--nc-dur-fast) var(--nc-ease-out),
+        transform var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+.chat-preview.is-entering {
+    animation: chat-preview-in var(--nc-dur-fast) var(--nc-ease-out) both;
+}
+
+.chat-preview.is-leaving {
+    opacity: 0;
+    transform: scale(0.96);
+}
+
+@keyframes chat-preview-in {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+/* 8) 回底按钮：出现/消失用 opacity + 4px；hidden 时仍保留布局但不可点/不可读 */
+.chat-jump {
+    transition:
+        opacity var(--nc-dur-fast) var(--nc-ease-out),
+        transform var(--nc-dur-fast) var(--nc-ease-out),
+        visibility var(--nc-dur-fast) var(--nc-ease-out),
+        background-color var(--nc-dur-fast) var(--nc-ease),
+        color var(--nc-dur-fast) var(--nc-ease);
+}
+
+#chat-app .chat-jump[hidden] {
+    display: inline-flex !important;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(4px);
+    pointer-events: none;
+}
+
+/* 9) 系统提示词 sheet：与 settings-view 的 180ms 隐藏定时器对齐（退出不被裁切） */
+.chat-prompt-sheet {
+    transition: opacity var(--nc-dur) var(--nc-ease-out);
+}
+
+.chat-prompt-sheet.is-open {
+    opacity: 1;
+}
+
+.chat-prompt-sheet__panel {
+    transition:
+        opacity var(--nc-dur) var(--nc-ease-out),
+        transform var(--nc-dur) var(--nc-ease-out);
+}
+
+/* 10) 图片灯箱：退出也走过渡（message-view 延迟 hidden） */
+.chat-lightbox {
+    transition: opacity var(--nc-dur) var(--nc-ease-out);
+}
+
+/* 11) Light / reduced-motion：关闭位移与动画，保留即时状态 */
+html[data-lite="true"] .chat-welcome__head,
+html[data-lite="true"] .chat-welcome__body,
+html[data-lite="true"] .chat-preview,
+html[data-lite="true"] .chat-send__icon,
+html[data-lite="true"] .chat-jump {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+}
+
+html[data-lite="true"] .chat-reasoning__summary::before {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    .chat-welcome__head,
+    .chat-welcome__body,
+    .chat-preview.is-entering,
+    .chat-msg.is-entering {
+        animation: none !important;
+    }
+
+    .chat-preview,
+    .chat-send__icon,
+    .chat-jump {
+        transition: none !important;
+        transform: none !important;
+    }
+
+    .chat-reasoning__summary::before {
+        transition: none;
+    }
+}
+
+/* 12) 灯箱退出期间不拦截点击（message-view 延迟 hidden） */
+.chat-lightbox.is-closing {
+    pointer-events: none;
+}
+
+/* 13) 删除消息：与 message-view 的 150ms 移除对齐（公共 .nc-list-leave 为 180ms，会截断） */
+.chat-msg.nc-list-leave {
+    transition:
+        opacity var(--nc-dur-fast) var(--nc-ease-out),
+        transform var(--nc-dur-fast) var(--nc-ease-out);
+}

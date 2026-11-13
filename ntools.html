@@ -14,6 +14,9 @@
     <link rel="stylesheet" href="css/tools.css">
     <link rel="stylesheet" href="css/chat.css">
     <link rel="stylesheet" href="css/settings.css">
+    <link rel="stylesheet" href="css/rail.css">
+    <link rel="stylesheet" href="css/timeline.css">
+    <link rel="stylesheet" href="css/interaction.css">
 
     <!-- 主题引导：CSS 之后、其他脚本之前，阻塞加载，防止主题闪烁 -->
     <script src="js/theme-boot.js"></script>
@@ -49,6 +52,7 @@
     <script defer src="js/todo-store.js"></script>
     <script defer src="js/todo-view.js"></script>
     <script defer src="js/todo-time.js"></script>
+    <script defer src="js/todo-timeline.js"></script>
     <script defer src="js/todo-ai.js"></script>
     <script defer src="js/todo.js"></script>
     <!-- 页面模块：工具叶子（由 platform-compat 提供，未就位时 ntools-app.js 做降级） -->
@@ -67,6 +71,9 @@
         <div class="tools-rail__brand">
             <span class="tools-brand__mark" data-icon="zap" data-icon-size="20"></span>
             <span class="tools-brand__name">nTools</span>
+            <button type="button" class="tools-rail__toggle" id="rail-toggle-btn" aria-label="收起侧边栏" title="收起侧边栏" aria-expanded="true">
+                <span data-icon="chevron-left" data-icon-size="16"></span>
+            </button>
         </div>
 
         <nav class="tools-nav" aria-label="主工具">
@@ -103,7 +110,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" title="版本">v4.0</span>
+            <span class="tools-rail__version" title="版本">v4.1</span>
         </div>
     </aside>
 
@@ -188,7 +195,6 @@
                                 <button type="button" class="nc-btn nc-btn--primary nc-btn--sm" id="todo-add-btn" aria-label="新建任务" title="新建任务（N）">
                                     <span data-icon="plus" data-icon-size="15"></span>
                                     <span class="todo-head-btn__text">新建</span>
-                                    <kbd class="nc-kbd">N</kbd>
                                 </button>
                                 <button type="button" class="nc-btn nc-btn--icon nc-btn--sm" id="todo-menu-btn" aria-label="导入导出与更多操作" aria-haspopup="menu" aria-expanded="false">
                                     <span data-icon="more" data-icon-size="16"></span>

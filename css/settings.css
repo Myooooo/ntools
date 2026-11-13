@@ -1089,3 +1089,85 @@
         animation: none;
     }
 }
+
+/* ==========================================================================
+ * v4.1 设置改为居中弹窗（用户反馈：右侧滑出不直观）
+ * 标准模式：窗口从 0.985 缩放 + 8px 位移淡入；Light/reduced-motion 即时。
+ * ========================================================================== */
+.settings-sheet {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 36px;
+    background: transparent;
+}
+
+.settings-sheet__backdrop {
+    background: var(--nc-overlay);
+    backdrop-filter: var(--nc-glass-blur);
+    -webkit-backdrop-filter: var(--nc-glass-blur);
+}
+
+.settings-sheet__panel {
+    position: relative;
+    width: min(980px, calc(100vw - 72px));
+    height: min(760px, calc(100vh - 72px));
+    max-height: none;
+    border: 1px solid var(--nc-border-strong);
+    border-left: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-2xl);
+    box-shadow: var(--nc-shadow-3);
+    transform: translateY(var(--nc-enter-y)) scale(var(--nc-enter-scale));
+    opacity: 0;
+    transition:
+        opacity var(--nc-dur-panel) var(--nc-ease-out),
+        transform var(--nc-dur-panel) var(--nc-ease-out);
+    overflow: hidden;
+}
+
+.settings-sheet.is-open .settings-sheet__panel {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+
+.settings-sheet__head {
+    border-radius: var(--nc-radius-2xl) var(--nc-radius-2xl) 0 0;
+}
+
+.settings-sheet__layout {
+    grid-template-columns: 208px minmax(0, 1fr);
+}
+
+.settings-sheet__nav {
+    background: var(--nc-surface);
+}
+
+.settings-sheet__main {
+    background: var(--nc-bg-soft);
+}
+
+@media (max-width: 900px) {
+    .settings-sheet {
+        padding: 0;
+    }
+
+    .settings-sheet__panel {
+        width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        border: 0;
+        border-radius: 0;
+    }
+
+    .settings-sheet__head {
+        border-radius: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .settings-sheet__panel {
+        transform: none;
+        opacity: 1;
+        transition: none;
+    }
+}

@@ -51,7 +51,8 @@
             clearAll: clearAll,
             demo: loadDemo,
             help: openHelp,
-            openAi: openAiDialog
+            openAi: openAiDialog,
+            setMode: setMode
         });
         view.setActions({
             exportJson: exportJson,
@@ -61,7 +62,8 @@
             clearAll: clearAll,
             demo: loadDemo,
             help: openHelp,
-            openAi: openAiDialog
+            openAi: openAiDialog,
+            setMode: setMode
         });
 
         wireFileInput();
@@ -108,6 +110,13 @@
         store.subscribe(function () {
             updateChrome();
         });
+        NC.events.on('todo:recurred', function (payload) {
+            if (!payload || !util.isFiniteNum(payload.nextDue)) return;
+            ui.toast('循环任务已完成，下次到期 ' + util.formatDateTime(payload.nextDue), {
+                type: 'success',
+                duration: 4200
+            });
+        });
         document.addEventListener('visibilitychange', function () {
             if (!document.hidden) tick();
             scheduleTick();
@@ -134,6 +143,16 @@
         try {
             if (view && typeof view.refreshQuickDue === 'function') view.refreshQuickDue();
         } catch (err) { /* 快捷时间刷新失败不影响主流程 */ }
+    }
+
+    /**
+     * 切换列表 / 全景模式（持久化到 todo settings.viewMode）。
+     * @param {'list'|'timeline'} mode
+     */
+    function setMode(mode) {
+        if (mode !== 'list' && mode !== 'timeline') return false;
+        store.updateSettings({ viewMode: mode });
+        return true;
     }
 
     /**
@@ -328,6 +347,17 @@
             return;
         }
         if (editable) {
+            return;
+        }
+        if (key === 'p' || key === 'P') {
+            event.preventDefault();
+            var focusedRow = target.closest ? target.closest('.todo-item') : null;
+            var pinId = store.getUi().selectedId || (focusedRow && focusedRow.getAttribute('data-id'));
+            if (!pinId) {
+                ui.toast('请先选择一项任务再置顶', { type: 'info', duration: 1800 });
+                return;
+            }
+            if (view.togglePinWithFeedback) view.togglePinWithFeedback(pinId);
             return;
         }
         if (key === 'n' || key === 'N') {
@@ -649,6 +679,7 @@
             ['Space', '完成 / 取消完成当前任务'],
             ['Enter', '打开当前任务详情'],
             ['E / 双击行', '行内编辑标题'],
+            ['P', '置顶 / 取消置顶当前任务'],
             ['Delete', '删除当前任务（5 秒内可撤销）'],
             ['Esc', '关闭详情抽屉 / 清除搜索'],
             ['Ctrl + Z', '撤销上一步'],
@@ -752,7 +783,7 @@
             {
                 id: 'demo-2', listId: 'list_default', title: '整理 nTools 重构验收清单',
                 notes: '按 dev-contract §5 核对 Todo P0 项：迁移、导入管道、三栏布局、快捷键、提醒。',
-                status: 'open', priority: 'urgent', due: today + 18 * hour, tags: ['重构', '验收'],
+                status: 'open', priority: 'urgent', pinned: true, due: today + 18 * hour, tags: ['重构', '验收'],
                 createdAt: now - 2 * day, updatedAt: now - 2 * hour
             },
             {
@@ -777,7 +808,8 @@
             {
                 id: 'demo-6', listId: 'list_life', title: '整理本周会议纪要',
                 notes: '周五前发到部门群，重点标注待办事项与截止时间。',
-                status: 'open', priority: 'low', due: today + 20 * hour, tags: ['会议'],
+                status: 'open', priority: 'low', pinned: true, due: today + 20 * hour, tags: ['会议'],
+                recurrence: { freq: 'weekly', interval: 1, byWeekday: [], until: null, count: null, lastMaterializedAt: null, lastCompletedAt: null },
                 createdAt: now - 2 * day, updatedAt: now - 5 * hour
             },
             {
@@ -834,6 +866,7 @@
         importFromFile: importJson,
         openHelp: openHelp,
         openAiDialog: openAiDialog,
+        setMode: setMode,
         fillDraft: fillDraft,
         quickDueOptions: quickDueOptions,
         demoDoc: buildDemoDoc,

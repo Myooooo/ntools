@@ -1,0 +1,33 @@
+/* ==========================================================================
+ * interaction.css — v4.1 交互细节收口（Lead 维护，需在 tools/chat/settings 之后加载）
+ * ========================================================================== */
+
+/* Tab 切换属于中高频动作：缩短到 140ms、4px，避免每次整页式入场 */
+@media (prefers-reduced-motion: no-preference) {
+    html:not([data-lite="true"]) .tools-page {
+        --nc-enter-y: 4px;
+    }
+
+    html:not([data-lite="true"]) .tools-page.is-active {
+        animation-duration: 140ms;
+        animation-timing-function: var(--nc-ease-out);
+    }
+}
+
+/* 设置窗口内部滚动条与按钮的按下反馈保持一致 */
+.settings-sheet__body .nc-btn:active {
+    transform: scale(0.97);
+}
+
+/* 侧栏收起时，导航 tooltip 通过 title 提供；焦点仍需可见 */
+.tools-app.is-rail-collapsed .tools-nav__item:focus-visible {
+    outline-offset: 2px;
+}
+
+/* 高对比/减少动效下禁止弹窗缩放 */
+@media (prefers-reduced-motion: reduce) {
+    .settings-sheet__panel,
+    .nc-modal {
+        transform: none !important;
+    }
+}

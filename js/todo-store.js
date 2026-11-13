@@ -414,7 +414,16 @@
         return 0;
     }
 
+    function comparePinned(a, b) {
+        var pa = a.pinned === true ? 1 : 0;
+        var pb = b.pinned === true ? 1 : 0;
+        if (pa !== pb) return pb - pa;
+        return 0;
+    }
+
     function compareSmart(a, b) {
+        var pinned = comparePinned(a, b);
+        if (pinned !== 0) return pinned;
         var ra = statusRank(a);
         var rb = statusRank(b);
         if (ra !== rb) return ra - rb;
@@ -429,6 +438,8 @@
     }
 
     function compareDue(a, b) {
+        var pinned = comparePinned(a, b);
+        if (pinned !== 0) return pinned;
         var da = a.due == null ? Infinity : a.due;
         var db = b.due == null ? Infinity : b.due;
         if (da !== db) return da - db;
@@ -436,10 +447,14 @@
     }
 
     function compareCreated(a, b) {
+        var pinned = comparePinned(a, b);
+        if (pinned !== 0) return pinned;
         return (b.createdAt || 0) - (a.createdAt || 0);
     }
 
     function compareManual(a, b) {
+        var pinned = comparePinned(a, b);
+        if (pinned !== 0) return pinned;
         if (a.order !== b.order) return a.order - b.order;
         return (a.createdAt || 0) - (b.createdAt || 0);
     }
@@ -620,6 +635,8 @@
             status: 'open',
             priority: data.priority || 'normal',
             due: data.due != null ? data.due : null,
+            pinned: data.pinned === true,
+            recurrence: data.recurrence || null,
             listId: data.listId || ctx.defaultListId,
             tags: data.tags || [],
             order: nextOrder(data.listId || ctx.defaultListId),
@@ -646,7 +663,7 @@
         return task;
     }
 
-    var UPDATABLE_FIELDS = ['title', 'notes', 'priority', 'due', 'dueAllDay', 'listId', 'tags', 'status', 'completedAt', 'reminder'];
+    var UPDATABLE_FIELDS = ['title', 'notes', 'priority', 'due', 'dueAllDay', 'listId', 'tags', 'status', 'completedAt', 'reminder', 'pinned', 'recurrence'];
 
     function updateTask(id, patch, options) {
         var opts = options || {};
@@ -708,8 +725,51 @@
     function toggleTask(id) {
         var task = findTask(id);
         if (!task) return false;
-        var nextStatus = task.status === 'done' ? 'open' : 'done';
-        return updateTask(id, { status: nextStatus }, { label: nextStatus === 'done' ? '完成任务' : '取消完成' });
+        /* 取消完成：不前移、不触发循环 */
+        if (task.status === 'done') {
+            return updateTask(id, { status: 'open' }, { label: '取消完成' });
+        }
+        /* 循环任务：同一任务 due 前移到下一周期，status 回到 open（不生成副本） */
+        var recurrence = task.recurrence;
+        if (recurrence && typeof schema.nextRecurrenceDue === 'function') {
+            var now = Date.now();
+            var baseDue = util.isFiniteNum(task.due) ? task.due : now;
+            var nextDue = schema.nextRecurrenceDue(recurrence, baseDue, now);
+            if (nextDue != null) {
+                var nextRecurrence = schema.clone(recurrence) || {};
+                nextRecurrence.lastMaterializedAt = now;
+                nextRecurrence.lastCompletedAt = now;
+                var ok = updateTask(id, {
+                    status: 'open',
+                    due: nextDue,
+                    recurrence: nextRecurrence
+                }, { label: '完成循环任务' });
+                if (ok) {
+                    notify('task:recurred', { id: id, nextDue: nextDue });
+                    events.emit('todo:recurred', {
+                        id: id,
+                        nextDue: nextDue,
+                        freq: nextRecurrence.freq,
+                        title: task.title
+                    });
+                }
+                return ok;
+            }
+            /* until 到期/无下一次：退化为普通完成 */
+        }
+        return updateTask(id, { status: 'done' }, { label: '完成任务' });
+    }
+
+    /**
+     * 置顶 / 取消置顶。
+     * @returns {boolean|null} 新的 pinned 值；任务不存在返回 null
+     */
+    function togglePin(id) {
+        var task = findTask(id);
+        if (!task) return null;
+        var next = !(task.pinned === true);
+        var ok = updateTask(id, { pinned: next }, { label: next ? '置顶任务' : '取消置顶' });
+        return ok ? next : null;
     }
 
     function deleteTask(id) {
@@ -945,6 +1005,7 @@
             settings.reminderLeadMinutes = util.clamp(patch.reminderLeadMinutes, 0, 43200);
         }
         if (typeof patch.compact === 'boolean') settings.compact = patch.compact;
+        if (patch.viewMode === 'list' || patch.viewMode === 'timeline') settings.viewMode = patch.viewMode;
         notify('settings', patch);
         scheduleSave();
     }
@@ -1113,6 +1174,7 @@
         addTask: addTask,
         updateTask: updateTask,
         toggleTask: toggleTask,
+        togglePin: togglePin,
         deleteTask: deleteTask,
         restoreTask: restoreTask,
         purgeTask: purgeTask,

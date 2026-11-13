@@ -32,18 +32,30 @@
         viewSig: ''
     };
     var detailTimers = Object.create(null);
+    var detailPending = Object.create(null);
     var inlineEdit = null;
     var unsubscribe = null;
     var composerTags = [];
     var pendingPasteText = '';
     var draftActive = false;
     var extrasReady = false;
+    var composerRecurrence = null;
+    var timelineMounted = false;
+    var timelineTried = false;
 
     var SORT_LABELS = { smart: '智能排序', due: '按截止时间', created: '按创建时间', manual: '手动排序' };
     var VIEW_LABELS = { all: '全部任务', today: '今天', overdue: '逾期', done: '已完成', trash: '回收站' };
     var BUCKET_LABELS = { overdue: '逾期', today: '今天', tomorrow: '明天', later: '以后', none: '无截止时间' };
     var BUCKET_ORDER = ['overdue', 'today', 'tomorrow', 'later', 'none'];
     var PRIORITY_LABELS = { low: '低', normal: '普通', high: '高', urgent: '紧急' };
+    var RECURRENCE_LABELS = { daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年' };
+    var RECURRENCE_OPTIONS = [
+        { value: '', label: '不重复' },
+        { value: 'daily', label: '每天' },
+        { value: 'weekly', label: '每周' },
+        { value: 'monthly', label: '每月' },
+        { value: 'yearly', label: '每年' }
+    ];
 
     /* ------------------------------------------------------------------ *
      * DOM 小工具
@@ -120,6 +132,8 @@
         els.addListBtn = document.getElementById('todo-add-list-btn');
         els.views = els.page ? els.page.querySelector('.todo-views') : null;
         els.shell = els.page ? els.page.querySelector('.todo-shell') : null;
+        els.mainpane = els.page ? els.page.querySelector('.todo-mainpane') : null;
+        els.hints = els.page ? els.page.querySelector('.todo-foot__hints') : null;
     }
 
     function bindStaticEvents() {
@@ -291,6 +305,10 @@
         ensureAiButton();
         ensureQuickDue();
         ensureDraftFields();
+        ensureModeSwitch();
+        ensureRecurrenceField();
+        ensureTimeline();
+        ensureFooterHints();
         bindComposerExtras();
         refreshQuickDue();
     }
@@ -401,6 +419,184 @@
         els.tagChips = document.getElementById('todo-new-tags-chips');
         els.aiDraft = document.getElementById('todo-ai-draft');
         renderComposerTags();
+    }
+
+    /* ---- 列表 / 全景模式切换（运行时注入，兼容 ntools.html 无此结构） ---- */
+    function ensureModeSwitch() {
+        if (!els.page || document.getElementById('todo-mode-seg')) {
+            els.modeSeg = document.getElementById('todo-mode-seg');
+            return;
+        }
+        var actionsWrap = els.page.querySelector('.tools-head__actions');
+        if (!actionsWrap) return;
+        var seg = node('div', 'nc-seg todo-mode-seg');
+        seg.id = 'todo-mode-seg';
+        seg.setAttribute('role', 'group');
+        seg.setAttribute('aria-label', '视图模式');
+        [
+            { mode: 'list', label: '列表' },
+            { mode: 'timeline', label: '全景' }
+        ].forEach(function (item) {
+            var btn = node('button', 'nc-seg__btn', item.label);
+            btn.type = 'button';
+            attr(btn, 'data-mode', item.mode);
+            btn.addEventListener('click', function () { setMode(item.mode); });
+            seg.appendChild(btn);
+        });
+        var sortBtn = document.getElementById('todo-sort-btn');
+        if (sortBtn && sortBtn.parentNode === actionsWrap) actionsWrap.insertBefore(seg, sortBtn);
+        else actionsWrap.appendChild(seg);
+        els.modeSeg = seg;
+    }
+
+    function setMode(mode) {
+        if (mode !== 'list' && mode !== 'timeline') return false;
+        if (mode === 'timeline') {
+            /* 切换前先提交未落库的详情编辑并关闭检查器，避免数据丢失 */
+            flushDetailEdits();
+            if (store.getUi().drawerOpen) store.closeDrawer();
+        }
+        if (actions.setMode) return !!actions.setMode(mode);
+        store.updateSettings({ viewMode: mode });
+        return true;
+    }
+
+    function syncModeSeg(doc, ui) {
+        if (!els.modeSeg) return;
+        var mode = doc.settings.viewMode === 'timeline' ? 'timeline' : 'list';
+        Array.prototype.forEach.call(els.modeSeg.querySelectorAll('[data-mode]'), function (btn) {
+            var active = btn.getAttribute('data-mode') === mode;
+            toggleClass(btn, 'is-active', active);
+            attr(btn, 'aria-pressed', active ? 'true' : 'false');
+        });
+    }
+
+    /* ---- 全景模式容器与 mount/unmount 编排（时间线内部由 NC.timeline 渲染） ---- */
+    function ensureTimeline() {
+        if (!els.mainpane) return;
+        var container = document.getElementById('todo-timeline');
+        if (!container) {
+            container = node('div', 'todo-timeline');
+            container.id = 'todo-timeline';
+            container.hidden = true;
+            els.mainpane.appendChild(container);
+        }
+        els.timeline = container;
+    }
+
+    function syncMode(doc, ui) {
+        if (!els.mainpane) return;
+        var mode = doc.settings.viewMode === 'timeline' ? 'timeline' : 'list';
+        var timeline = mode === 'timeline';
+        toggleClass(els.mainpane, 'is-timeline', timeline);
+        if (els.shell) toggleClass(els.shell, 'is-timeline', timeline);
+        if (!els.timeline) ensureTimeline();
+        if (!els.timeline) return;
+        els.timeline.hidden = !timeline;
+        if (!timeline) {
+            if (timelineMounted) {
+                /* 先置位再调用，避免 unmount 内部触发同步重渲染造成重复调用 */
+                timelineMounted = false;
+                try {
+                    if (NC.timeline && typeof NC.timeline.unmount === 'function') NC.timeline.unmount();
+                } catch (err) { /* ignore */ }
+            }
+            return;
+        }
+        if (timelineMounted) return;
+        var hasApi = !!(NC.timeline && typeof NC.timeline.mount === 'function');
+        if (hasApi) {
+            timelineMounted = true;
+            timelineTried = true;
+            try {
+                NC.timeline.mount(els.timeline);
+                clearTimelineFallback();
+            } catch (err) {
+                timelineMounted = false;
+                renderTimelineFallback(true);
+            }
+        } else {
+            renderTimelineFallback(false);
+        }
+    }
+
+    function renderTimelineFallback(failed) {
+        if (!els.timeline) return;
+        var note = els.timeline.querySelector('.todo-timeline-note');
+        if (!note) {
+            note = node('div', 'todo-timeline-note');
+            els.timeline.appendChild(note);
+        }
+        note.textContent = failed
+            ? '全景视图加载失败，可切回列表继续使用。'
+            : '全景视图组件尚未加载（js/timeline.js），可切回列表继续使用。';
+    }
+
+    function clearTimelineFallback() {
+        if (!els.timeline) return;
+        var note = els.timeline.querySelector('.todo-timeline-note');
+        if (note && note.parentNode) note.parentNode.removeChild(note);
+    }
+
+    /* ---- 底部快捷键提示：把 N / 补进静态提示条 ---- */
+    function ensureFooterHints() {
+        if (!els.hints || document.getElementById('todo-hint-new')) return;
+        var newHint = node('span', null);
+        newHint.id = 'todo-hint-new';
+        newHint.appendChild(node('kbd', 'nc-kbd', 'N'));
+        newHint.appendChild(document.createTextNode(' 新建'));
+        var searchHint = node('span', null);
+        searchHint.id = 'todo-hint-search';
+        searchHint.appendChild(node('kbd', 'nc-kbd', '/'));
+        searchHint.appendChild(document.createTextNode(' 搜索'));
+        els.hints.insertBefore(searchHint, els.hints.firstChild);
+        els.hints.insertBefore(newHint, els.hints.firstChild);
+    }
+
+    /* ---- 创建区「重复」选择 ---- */
+    function ensureRecurrenceField() {
+        if (!els.composerExtra) return;
+        if (document.getElementById('todo-new-recurrence')) {
+            els.newRecurrence = document.getElementById('todo-new-recurrence');
+            return;
+        }
+        var field = node('label', 'todo-composer__field');
+        field.appendChild(node('span', 'todo-composer__fieldlabel', '重复'));
+        var select = document.createElement('select');
+        select.className = 'nc-select';
+        select.id = 'todo-new-recurrence';
+        attr(select, 'aria-label', '重复周期');
+        RECURRENCE_OPTIONS.forEach(function (item) {
+            var option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.label;
+            select.appendChild(option);
+        });
+        select.addEventListener('change', function () { onComposerRecurrenceChange(select.value); });
+        field.appendChild(select);
+        els.composerExtra.appendChild(field);
+        els.newRecurrence = select;
+    }
+
+    function onComposerRecurrenceChange(value) {
+        composerRecurrence = value || null;
+        if (!composerRecurrence) return;
+        if (els.newDue && !els.newDue.value) {
+            var ts = defaultDueForRecurrence();
+            els.newDue.value = util.toDateTimeInputValue(ts);
+            markQuickActive('');
+            ui.toast('已为循环任务设置默认截止时间', { type: 'info', duration: 2600 });
+        }
+    }
+
+    /** 循环任务缺 due 时的默认截止：今天下班时间（已过则当前时间），保证在 now 之后。 */
+    function defaultDueForRecurrence() {
+        var now = Date.now();
+        var workEnd = '17:30';
+        if (NC.todoTime && typeof NC.todoTime.getWorkEnd === 'function') workEnd = NC.todoTime.getWorkEnd();
+        var parts = /^(\d{1,2}):(\d{2})$/.exec(workEnd) || [null, 17, 30];
+        var todayEnd = util.startOfDay(now) + (parseInt(parts[1], 10) || 0) * 3600000 + (parseInt(parts[2], 10) || 0) * 60000;
+        return todayEnd > now ? todayEnd : now + 5 * 60000;
     }
 
     function bindComposerExtras() {
@@ -652,6 +848,8 @@
         syncSearchClear();
         syncDrawer(ui);
         syncDetailColumn(ui);
+        syncMode(doc, ui);
+        syncModeSeg(doc, ui);
         rendered.tickSig = bucketSignature(visible);
         rendered.initialized = true;
     }
@@ -759,26 +957,43 @@
         var now = Date.now();
         if (!tasks.length) return items;
 
+        /* 置顶分组：最顶部，且不与后续分组重复（回收站视图不做置顶分区） */
+        var pinned = [];
+        var rest = [];
         if (ui.view === 'trash') {
-            items.push(makeGroupItem('trash', '回收站', tasks.length, false, false));
-            tasks.forEach(function (task) { items.push(makeTaskItem(task)); });
+            rest = tasks;
+        } else {
+            tasks.forEach(function (task) {
+                if (task.pinned === true) pinned.push(task);
+                else rest.push(task);
+            });
+        }
+        if (pinned.length) {
+            items.push(makeGroupItem('pinned', '置顶', pinned.length, false, false));
+            pinned.forEach(function (task) { items.push(makeTaskItem(task)); });
+        }
+        if (!rest.length) return items;
+
+        if (ui.view === 'trash') {
+            items.push(makeGroupItem('trash', '回收站', rest.length, false, false));
+            rest.forEach(function (task) { items.push(makeTaskItem(task)); });
             return items;
         }
         if (visible.search) {
-            items.push(makeGroupItem('search', '搜索结果', tasks.length, false, false));
-            tasks.forEach(function (task) { items.push(makeTaskItem(task)); });
+            items.push(makeGroupItem('search', '搜索结果', rest.length, false, false));
+            rest.forEach(function (task) { items.push(makeTaskItem(task)); });
             return items;
         }
         if (ui.view === 'done') {
-            items.push(makeGroupItem('done', '已完成', tasks.length, false, false));
-            tasks.forEach(function (task) { items.push(makeTaskItem(task)); });
+            items.push(makeGroupItem('done', '已完成', rest.length, false, false));
+            rest.forEach(function (task) { items.push(makeTaskItem(task)); });
             return items;
         }
 
         var open = [];
         var done = [];
         var canceled = [];
-        tasks.forEach(function (task) {
+        rest.forEach(function (task) {
             if (task.status === 'done') done.push(task);
             else if (task.status === 'canceled') canceled.push(task);
             else open.push(task);
@@ -903,8 +1118,15 @@
         attr(body, 'aria-label', '查看任务：' + task.title);
 
         var titleline = node('span', 'todo-item__titleline');
+        var pinMark = node('span', 'todo-item__pin');
+        pinMark.appendChild(icon('flag', 12));
+        attr(pinMark, 'aria-hidden', 'true');
+        titleline.appendChild(pinMark);
         var title = node('span', 'todo-item__title');
         titleline.appendChild(title);
+        var repeatMark = node('span', 'todo-item__repeat');
+        repeatMark.appendChild(icon('refresh', 12));
+        titleline.appendChild(repeatMark);
         var tags = node('span', 'todo-item__titleline-tags');
         tags.className = 'todo-item__tags';
         titleline.appendChild(tags);
@@ -925,6 +1147,12 @@
         body.appendChild(meta);
 
         var acts = node('div', 'todo-item__actions');
+        var pinBtn = node('button', 'nc-btn nc-btn--icon nc-btn--sm');
+        attr(pinBtn, 'type', 'button');
+        attr(pinBtn, 'data-act', 'pin');
+        attr(pinBtn, 'aria-label', '置顶任务');
+        pinBtn.appendChild(icon('flag', 14));
+        acts.appendChild(pinBtn);
         var editBtn = node('button', 'nc-btn nc-btn--icon nc-btn--sm');
         attr(editBtn, 'type', 'button');
         attr(editBtn, 'data-act', 'edit');
@@ -953,10 +1181,15 @@
         var classes = 'todo-item';
         if (done) classes += ' is-done';
         if (canceled) classes += ' is-canceled';
+        if (task.pinned === true) classes += ' is-pinned';
         if (ui.selectedId === task.id) classes += ' is-selected';
         if (ui.editingId === task.id) classes += ' is-editing';
         if (!done && !canceled && task.due != null && task.due < now) classes += ' is-overdue';
+        var heat = heatClass(task, now);
+        if (heat) classes += ' ' + heat;
         li.className = classes;
+        attr(li, 'data-heat', heat || '');
+        attr(li, 'data-pinned', task.pinned === true ? 'true' : 'false');
         attr(li, 'data-id', task.id);
         attr(li, 'data-status', task.status);
         attr(li, 'data-priority', task.priority);
@@ -984,6 +1217,26 @@
             if (task.tags.length > 3) tagsWrap.appendChild(node('span', 'todo-item__tag', '+' + (task.tags.length - 3)));
         }
 
+        /* 置顶 / 循环标识 */
+        var pinMark = li.querySelector('.todo-item__pin');
+        if (pinMark) pinMark.hidden = task.pinned !== true;
+        var repeatMark = li.querySelector('.todo-item__repeat');
+        if (repeatMark) {
+            repeatMark.hidden = !task.recurrence;
+            if (task.recurrence) {
+                var freqLabel = RECURRENCE_LABELS[task.recurrence.freq] || '循环';
+                attr(repeatMark, 'title', '循环：' + freqLabel);
+                attr(repeatMark, 'aria-label', '循环任务：' + freqLabel);
+            }
+        }
+        var pinBtn = li.querySelector('.todo-item__actions [data-act="pin"]');
+        if (pinBtn) {
+            toggleClass(pinBtn, 'is-active', task.pinned === true);
+            attr(pinBtn, 'aria-label', task.pinned ? '取消置顶' : '置顶任务');
+            attr(pinBtn, 'title', task.pinned ? '取消置顶（P）' : '置顶（P）');
+            attr(pinBtn, 'aria-pressed', task.pinned ? 'true' : 'false');
+        }
+
         /* 截止时间 + 优先级 + 清单 */
         var dueEl = li.querySelector('.todo-item__due');
         updateDueLabel(dueEl, task, now);
@@ -1009,6 +1262,30 @@
             }
         }
         syncEditingState(li, task, ui);
+    }
+
+    /**
+     * 三天内到期热区：未完成且有 due。
+     * overdue → heat-overdue；<=24h → heat-3；<=48h → heat-2；<=72h → heat-1。
+     */
+    function heatClass(task, now) {
+        if (!task || task.status !== 'open' || !util.isFiniteNum(task.due)) return '';
+        var remain = task.due - now;
+        if (remain < 0) return 'heat-overdue';
+        if (remain > 72 * 3600000) return '';
+        if (remain <= 24 * 3600000) return 'heat-3';
+        if (remain <= 48 * 3600000) return 'heat-2';
+        return 'heat-1';
+    }
+
+    /** tick 时同步热区等级（跨 24/48/72h 边界时无需整树重建） */
+    function syncHeatClass(li, task, now) {
+        if (!li || !li.classList) return;
+        var heat = heatClass(task, now);
+        if (li.getAttribute('data-heat') === (heat || '')) return;
+        li.classList.remove('heat-1', 'heat-2', 'heat-3', 'heat-overdue');
+        if (heat) li.classList.add(heat);
+        attr(li, 'data-heat', heat || '');
     }
 
     var WEEK_SHORT = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -1310,6 +1587,7 @@
             if (!li) return;
             li.__task = task;
             updateDueLabel(li.querySelector('.todo-item__due'), task, now);
+            syncHeatClass(li, task, now);
         });
         /* 计数可能跨分钟变化 */
         var counts = store.counts(true);
@@ -1396,6 +1674,10 @@
         var badge = node('span', 'nc-badge');
         attr(badge, 'data-detail-status', '');
         sub.appendChild(badge);
+        var repeatBadge = node('span', 'nc-badge nc-badge--accent');
+        attr(repeatBadge, 'data-detail-repeat', '');
+        repeatBadge.hidden = true;
+        sub.appendChild(repeatBadge);
         var saveHint = node('span', 'detail-savehint');
         attr(saveHint, 'data-detail-saved', '');
         sub.appendChild(saveHint);
@@ -1480,6 +1762,21 @@
         });
         listField.appendChild(listSelect);
         propSection.appendChild(listField);
+
+        var repeatField = node('div', 'detail-field');
+        repeatField.appendChild(node('label', 'nc-label', '重复'));
+        var repeatSelect = document.createElement('select');
+        repeatSelect.className = 'nc-select';
+        attr(repeatSelect, 'data-field', 'recurrence');
+        attr(repeatSelect, 'aria-label', '重复周期');
+        RECURRENCE_OPTIONS.forEach(function (item) {
+            var option = document.createElement('option');
+            option.value = item.value;
+            option.textContent = item.label;
+            repeatSelect.appendChild(option);
+        });
+        repeatField.appendChild(repeatSelect);
+        propSection.appendChild(repeatField);
         form.appendChild(propSection);
 
         /* 备注 */
@@ -1526,6 +1823,12 @@
 
         /* 底部操作 */
         var foot = node('div', 'detail-foot');
+        var pinBtn = node('button', 'nc-btn nc-btn--sm');
+        attr(pinBtn, 'type', 'button');
+        attr(pinBtn, 'data-act', 'detail-pin');
+        pinBtn.appendChild(icon('flag', 14));
+        pinBtn.appendChild(node('span', null, '置顶'));
+        foot.appendChild(pinBtn);
         var deleteBtn = node('button', 'nc-btn nc-btn--sm nc-btn--danger');
         attr(deleteBtn, 'type', 'button');
         attr(deleteBtn, 'data-act', 'detail-delete');
@@ -1580,6 +1883,9 @@
         var restoreBtn = root.querySelector('[data-act="detail-restore"]');
         var purgeBtn = root.querySelector('[data-act="detail-purge"]');
         var completeBtn = root.querySelector('[data-act="detail-toggle"]');
+        var pinBtn = root.querySelector('[data-act="detail-pin"]');
+        var repeatSelect = root.querySelector('[data-field="recurrence"]');
+        var repeatBadge = root.querySelector('[data-detail-repeat]');
         var form = root.querySelector('.detail-form');
         if (!form || !titleEl) return;
 
@@ -1597,6 +1903,10 @@
         }
         if (priorityEl.value !== task.priority) priorityEl.value = task.priority;
         if (listEl.value !== task.listId) listEl.value = task.listId;
+        if (repeatSelect) {
+            var recurrenceValue = task.recurrence ? task.recurrence.freq : '';
+            if (repeatSelect.value !== recurrenceValue) repeatSelect.value = recurrenceValue;
+        }
         if (force || active !== tagsEl) {
             if (tagsEl.value !== task.tags.join(', ')) tagsEl.value = task.tags.join(', ');
         }
@@ -1629,6 +1939,21 @@
             }
         }
 
+        if (repeatBadge) {
+            if (task.recurrence) {
+                repeatBadge.hidden = false;
+                repeatBadge.textContent = '循环：' + (RECURRENCE_LABELS[task.recurrence.freq] || '自定义');
+            } else {
+                repeatBadge.hidden = true;
+            }
+        }
+        if (pinBtn) {
+            pinBtn.hidden = !!task.deletedAt;
+            toggleClass(pinBtn, 'is-active', task.pinned === true);
+            pinBtn.lastChild && (pinBtn.lastChild.textContent = task.pinned ? '取消置顶' : '置顶');
+            attr(pinBtn, 'aria-label', task.pinned ? '取消置顶' : '置顶任务');
+            attr(pinBtn, 'aria-pressed', task.pinned ? 'true' : 'false');
+        }
         if (deleteBtn) deleteBtn.hidden = !!task.deletedAt;
         if (restoreBtn) restoreBtn.hidden = !task.deletedAt;
         if (purgeBtn) purgeBtn.hidden = !task.deletedAt;
@@ -1648,14 +1973,27 @@
     }
 
     function scheduleDetailSave(field, apply, wait) {
-        if (detailTimers[field]) {
-            global.clearTimeout(detailTimers[field]);
-            detailTimers[field] = null;
+        if (detailPending[field]) {
+            global.clearTimeout(detailPending[field].timer);
+            detailPending[field] = null;
         }
-        detailTimers[field] = global.setTimeout(function () {
-            detailTimers[field] = null;
+        var timer = global.setTimeout(function () {
+            delete detailPending[field];
             apply();
         }, wait || 450);
+        detailPending[field] = { timer: timer, apply: apply };
+    }
+
+    /** 切换视图模式 / 关闭抽屉前，先把详情里尚未落库的 debounce 编辑立即提交。 */
+    function flushDetailEdits() {
+        Object.keys(detailPending).forEach(function (field) {
+            var item = detailPending[field];
+            if (!item) return;
+            global.clearTimeout(item.timer);
+            delete detailPending[field];
+            try { item.apply(); } catch (err) { /* ignore */ }
+        });
+        detailTimers = Object.create(null);
     }
 
     function onDetailInput(event) {
@@ -1693,7 +2031,7 @@
         var id = store.getUi().selectedId;
         if (!field || !id || !store.getTask(id)) return;
         if (field === 'status') {
-            store.toggleTask(id);
+            toggleTaskWithFeedback(id);
         } else if (field === 'priority') {
             store.updateTask(id, { priority: event.target.value }, { label: '修改优先级' });
         } else if (field === 'listId') {
@@ -1701,6 +2039,29 @@
         } else if (field === 'due') {
             var ts = util.parseDateTimeInputValue(event.target.value);
             store.updateTask(id, { due: ts }, { label: '修改截止时间' });
+        } else if (field === 'recurrence') {
+            var freq = event.target.value;
+            if (!freq) {
+                store.updateTask(id, { recurrence: null }, { label: '取消重复' });
+                return;
+            }
+            var current = store.getTask(id);
+            var patch = {
+                recurrence: {
+                    freq: freq,
+                    interval: 1,
+                    byWeekday: [],
+                    until: null,
+                    count: null,
+                    lastMaterializedAt: null,
+                    lastCompletedAt: null
+                }
+            };
+            if (current && !util.isFiniteNum(current.due)) {
+                patch.due = defaultDueForRecurrence();
+                ui.toast('已为循环任务设置默认截止时间', { type: 'info', duration: 2600 });
+            }
+            store.updateTask(id, patch, { label: '设置重复' });
         }
     }
 
@@ -1747,7 +2108,9 @@
                 ui.toast('已彻底删除', { type: 'success' });
             });
         } else if (act === 'detail-toggle') {
-            store.toggleTask(id);
+            toggleTaskWithFeedback(id);
+        } else if (act === 'detail-pin') {
+            togglePinWithFeedback(id);
         } else if (act === 'due-clear') {
             store.updateTask(id, { due: null }, { label: '清除截止时间' });
         } else if (act === 'due-quick') {
@@ -1794,6 +2157,22 @@
     function onListClick(event) {
         var groupToggle = event.target.closest('[data-act="toggle-completed"]');
         if (groupToggle) {
+            /* 折叠：先让已完成行淡出，再真正移除（展开时新行自带 is-new 动画） */
+            if (store.getDoc().settings.showCompleted) {
+                var doneRows = [];
+                Object.keys(nodeMap).forEach(function (key) {
+                    var el = nodeMap[key];
+                    if (el && el.classList && el.classList.contains('todo-item') &&
+                        el.getAttribute('data-status') === 'done') {
+                        doneRows.push(el);
+                    }
+                });
+                if (doneRows.length) {
+                    doneRows.forEach(function (el) { el.classList.add('is-collapsing'); });
+                    global.setTimeout(function () { store.toggleShowCompleted(); }, 150);
+                    return;
+                }
+            }
             store.toggleShowCompleted();
             return;
         }
@@ -1805,6 +2184,10 @@
         var act = actBtn ? actBtn.getAttribute('data-act') : null;
         if (act === 'delete' && actBtn.closest('.todo-item__actions')) {
             deleteWithUndo(id);
+            return;
+        }
+        if (act === 'pin' && actBtn.closest('.todo-item__actions')) {
+            togglePinWithFeedback(id);
             return;
         }
         if (act === 'edit' && actBtn.closest('.todo-item__actions')) {
@@ -1824,7 +2207,7 @@
         if (!event.target.classList || !event.target.classList.contains('todo-item__check')) return;
         var row = rowFromEvent(event);
         if (!row) return;
-        store.toggleTask(row.getAttribute('data-id'));
+        toggleTaskWithFeedback(row.getAttribute('data-id'));
     }
 
     function onListKeydown(event) {
@@ -1856,7 +2239,7 @@
         }
         if (key === ' ' || key === 'Spacebar') {
             event.preventDefault();
-            store.toggleTask(id);
+            toggleTaskWithFeedback(id);
             return;
         }
         if (key === 'Enter') {
@@ -1895,6 +2278,35 @@
         store.reorderTask(id, target.id, direction > 0 ? 'after' : 'before');
         var body = els.list.querySelector('.todo-item[data-id="' + util.cssEscape(id) + '"] .todo-item__body');
         if (body) body.focus();
+    }
+
+    function toggleTaskWithFeedback(id) {
+        var before = store.getTask(id);
+        if (!before) return;
+        var beforeStatus = before.status;
+        var ok = store.toggleTask(id);
+        if (!ok) return;
+        var after = store.getTask(id);
+        /* 普通完成：给一次短暂的完成动效（高频列表不做 stagger） */
+        if (after && beforeStatus !== 'done' && after.status === 'done') {
+            var li = nodeMap['t:' + id];
+            if (li) {
+                li.classList.add('is-completing');
+                global.setTimeout(function () { li.classList.remove('is-completing'); }, 260);
+            }
+        }
+    }
+
+    function togglePinWithFeedback(id) {
+        if (!id) return;
+        var pinned = store.togglePin(id);
+        if (pinned == null) return;
+        ui.toast(pinned ? '已置顶' : '已取消置顶', { type: 'success', duration: 1600 });
+        var li = nodeMap['t:' + id];
+        if (li) {
+            li.classList.add('is-repinned');
+            global.setTimeout(function () { li.classList.remove('is-repinned'); }, 260);
+        }
     }
 
     function deleteWithUndo(id) {
@@ -2109,7 +2521,24 @@
         var priority = els.newPriority ? els.newPriority.value : 'normal';
         var notes = els.newNotes ? String(els.newNotes.value || '').trim() : '';
         var tags = composerTags.slice(0, 20);
-        var task = store.addTask({ title: title, notes: notes, due: due, listId: listId, priority: priority, tags: tags });
+        var recurrence = composerRecurrence ? {
+            freq: composerRecurrence,
+            interval: 1,
+            byWeekday: [],
+            until: null,
+            count: null,
+            lastMaterializedAt: null,
+            lastCompletedAt: null
+        } : null;
+        var task = store.addTask({
+            title: title,
+            notes: notes,
+            due: due,
+            listId: listId,
+            priority: priority,
+            tags: tags,
+            recurrence: recurrence
+        });
         if (!task) {
             ui.toast('添加失败，请检查输入', { type: 'error' });
             return;
@@ -2120,6 +2549,8 @@
         resetComposerTags();
         clearQuickActive();
         setDraftActive(false);
+        composerRecurrence = null;
+        if (els.newRecurrence) els.newRecurrence.value = '';
         els.newTitle.focus();
         if (hasClass(els.composer, 'is-expanded')) {
             /* 连续录入时保留清单/优先级，收起日期 */
@@ -2142,6 +2573,11 @@
         ensureExtras: ensureExtras,
         refreshQuickDue: refreshQuickDue,
         getComposerTags: function () { return composerTags.slice(); },
+        togglePinWithFeedback: togglePinWithFeedback,
+        flushDetailEdits: flushDetailEdits,
+        toggleTaskWithFeedback: toggleTaskWithFeedback,
+        setMode: setMode,
+        applyMode: function () { syncMode(store.getDoc(), store.getUi()); },
         undoWithToast: undoWithToast,
         redoWithToast: redoWithToast,
         openMoreMenu: openMoreMenu,

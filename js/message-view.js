@@ -198,6 +198,77 @@
         return '思考过程';
     }
 
+    /** 当前是否应跳过位移动画（Lite / reduced-motion）。 */
+    function prefersReducedMotionNow() {
+        try {
+            if (document.documentElement.getAttribute('data-lite') === 'true') return true;
+            return !!(global.matchMedia && global.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (err) {
+            return false;
+        }
+    }
+
+    /**
+     * 思考过程展开/收起：details 原生切换太快且无法过渡关闭，
+     * 这里接管 click，用 max-height/opacity 做 180ms 的双向过渡（tokens 驱动）。
+     * 流式追加（程序化 details.open=true）不播动画，保持即时。
+     */
+    function setReasoningOpen(details, open) {
+        var body = details.querySelector('.chat-reasoning__body');
+        if (!body) {
+            details.open = open;
+            return;
+        }
+        if (details.__ncAnimBusy) return;
+        if (prefersReducedMotionNow()) {
+            details.open = open;
+            return;
+        }
+        details.__ncAnimBusy = true;
+        if (open) {
+            var target = Math.max(1, Math.min(body.scrollHeight || 0, 240));
+            details.open = true;
+            body.style.overflow = 'hidden';
+            body.style.maxHeight = '0px';
+            body.style.opacity = '0';
+            body.style.transform = 'translateY(-2px)';
+            void body.offsetHeight; // force reflow so the transition starts from 0
+            body.style.transition = 'max-height var(--nc-dur) var(--nc-ease-out), opacity var(--nc-dur-fast) var(--nc-ease-out), transform var(--nc-dur-fast) var(--nc-ease-out)';
+            body.style.maxHeight = target + 'px';
+            body.style.opacity = '1';
+            body.style.transform = 'none';
+        } else {
+            var height = body.scrollHeight || 0;
+            body.style.overflow = 'hidden';
+            body.style.maxHeight = height + 'px';
+            body.style.opacity = '1';
+            void body.offsetHeight;
+            body.style.transition = 'max-height var(--nc-dur) var(--nc-ease-out), opacity var(--nc-dur-fast) var(--nc-ease-out), transform var(--nc-dur-fast) var(--nc-ease-out)';
+            body.style.maxHeight = '0px';
+            body.style.opacity = '0';
+            body.style.transform = 'translateY(-2px)';
+        }
+        setTimeout(function () {
+            details.__ncAnimBusy = false;
+            if (!open) details.open = false;
+            body.style.transition = '';
+            body.style.maxHeight = '';
+            body.style.overflow = '';
+            body.style.opacity = '';
+            body.style.transform = '';
+        }, open ? 200 : 190);
+    }
+
+    function bindReasoningToggle(details) {
+        var summary = details.querySelector('.chat-reasoning__summary');
+        if (!summary || summary.__ncReasoningBound) return;
+        summary.__ncReasoningBound = true;
+        summary.addEventListener('click', function (event) {
+            event.preventDefault();
+            setReasoningOpen(details, !details.open);
+        });
+    }
+
     function ensureReasoning(article) {
         var existing = article.querySelector('.chat-reasoning');
         if (existing) return existing;
@@ -208,6 +279,7 @@
         }));
         var body = util.e('div', { class: 'chat-reasoning__body chat-md' });
         details.appendChild(body);
+        bindReasoningToggle(details);
         var bubble = article.querySelector('.chat-msg__bubble');
         bubble.insertBefore(details, bubble.firstChild);
         return details;
@@ -337,8 +409,12 @@
     /* ------------------------------------------------------------------ *
      * 灯箱 / 统计浮层 / 操作
      * ------------------------------------------------------------------ */
+    var lightboxHideTimer = null;
+
     function openLightbox(src, alt) {
         if (!lightboxEl || !lightboxImg || !src) return;
+        if (lightboxHideTimer) { clearTimeout(lightboxHideTimer); lightboxHideTimer = null; }
+        lightboxEl.classList.remove('is-closing');
         lightboxPrevFocus = document.activeElement;
         lightboxImg.src = src;
         lightboxImg.alt = alt || '图片预览';
@@ -353,8 +429,20 @@
     function closeLightbox() {
         if (!lightboxEl || lightboxEl.hidden) return;
         lightboxEl.classList.remove('is-open');
-        lightboxEl.hidden = true;
+        lightboxEl.classList.add('is-closing');
         lightboxImg.removeAttribute('src');
+        if (lightboxHideTimer) { clearTimeout(lightboxHideTimer); lightboxHideTimer = null; }
+        if (prefersReducedMotionNow()) {
+            lightboxEl.hidden = true;
+            lightboxEl.classList.remove('is-closing');
+        } else {
+            // 等 opacity 过渡完成后再 hidden，避免退出被瞬间裁切
+            lightboxHideTimer = setTimeout(function () {
+                lightboxHideTimer = null;
+                lightboxEl.hidden = true;
+                lightboxEl.classList.remove('is-closing');
+            }, 180);
+        }
         if (lightboxPrevFocus && lightboxPrevFocus.focus) {
             try { lightboxPrevFocus.focus(); } catch (err) { /* ignore */ }
         }
@@ -443,7 +531,10 @@
         head.appendChild(util.e('p', { class: 'chat-welcome__title' }));
         inner.appendChild(head);
 
-        inner.appendChild(util.e('p', {
+        // Lead / Support 两拍：标题行先到，说明 + 建议列表 + 快捷键作为一组随后进入；
+        // 容器本身不播第二次动画，避免“父容器 + 子项”双重入场。
+        var body = util.e('div', { class: 'chat-welcome__body' });
+        body.appendChild(util.e('p', {
             class: 'chat-welcome__hint',
             text: '对话与系统提示词按端点隔离，记录只保存在本机。'
         }));
@@ -466,14 +557,15 @@
             });
             suggestions.appendChild(item);
         });
-        inner.appendChild(suggestions);
+        body.appendChild(suggestions);
 
         var foot = util.e('div', { class: 'chat-welcome__foot' });
         foot.appendChild(util.e('kbd', { class: 'nc-kbd', text: 'Enter' }));
         foot.appendChild(util.e('span', { text: '发送' }));
         foot.appendChild(util.e('kbd', { class: 'nc-kbd', text: 'Shift + Enter' }));
         foot.appendChild(util.e('span', { text: '换行' }));
-        inner.appendChild(foot);
+        body.appendChild(foot);
+        inner.appendChild(body);
 
         emptyEl.appendChild(inner);
         listEl.appendChild(emptyEl);
@@ -651,7 +743,7 @@
             var lite = document.documentElement.getAttribute('data-lite') === 'true';
             if (!lite && util.prefersReducedMotion && !util.prefersReducedMotion()) {
                 article.classList.add('nc-list-leave');
-                setTimeout(finish, 130);
+                setTimeout(finish, 150);
             } else {
                 finish();
             }

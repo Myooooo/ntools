@@ -1,4 +1,4 @@
-# nTools v4 架构说明
+# nTools v4.1 架构说明
 
 > 运行形态：纯静态、`file://` 双击可用、无构建链、无后端；经典 `<script>` + IIFE 命名空间（`window.NC`）。
 > 目标内核：奇安信可信浏览器 Chromium 102 / 麒麟 Linux ARM。
@@ -42,13 +42,13 @@
 
 | 顺序 | 文件 | 职责 |
 |---|---|---|
-| 1 | `css/tokens.css` → `base.css` → `components.css` → `tools.css` → `chat.css` → `settings.css` | 设计令牌 / 基础 / 公共组件 / 页面样式 |
+| 1 | `css/tokens.css` → `base.css` → `components.css` → `tools.css` → `chat.css` → `settings.css` → `rail.css` → `timeline.css` → `interaction.css` | 设计令牌 / 基础 / 公共组件 / 页面样式 / 侧栏 / 时间线 / 交互收口 |
 | 2 | `js/theme-boot.js`（阻塞） | 首屏设置 `data-theme`/`data-lite`，防 FOUC |
 | 3 | `polyfills.js` → `marked` → `purify` → `qrcode` | 兼容垫片 + 本地 vendor |
 | 4 | `core.js` → `compat.js` → `icons.js` → `storage.js` → `ui.js` → `theme.js` | 基础设施 |
 | 5 | `schema-chat.js` → `llm-store.js` → `ai.js` → `settings-panel.js` | 端点/AI/设置 |
 | 6 | `sse.js` → `api.js` → `conversation-store.js` → `settings-store.js` → `message-view.js` → `composer.js` → `settings-view.js` → `chat-controller.js` → `chat-embed.js` | 原生聊天 |
-| 7 | `schema-todo.js` → `todo-store.js` → `todo-view.js` → `todo-time.js` → `todo-ai.js` → `todo.js` | 待办与 Todo AI |
+| 7 | `schema-todo.js` → `todo-store.js` → `todo-view.js` → `todo-time.js` → `todo-ai.js` → `todo-timeline.js` → `todo.js` | 待办、Todo AI 与全景时间线 |
 | 8 | `qr.js` → `markdown.js` → `image.js` | 工具叶子模块 |
 | 9 | `ntools-app.js` | 主组合根，最后加载 |
 
@@ -138,5 +138,6 @@ todo-time.computeQuickDue(kind, now, workEnd)
 - `tools/verify.js`：页面级验收（含原生聊天无 iframe、设置面板、v1→v2 迁移、截图）；
 - `tools/e2e.js`：回归交互（待办/聊天流式/停止/安全/500 条性能）；
 - `tools/e2e-features.js`：功能回归（多端点 CRUD、系统提示词、端点会话隔离、Todo AI、快捷时间）；
-- `tools/break-ui.js`：最坏数据 / 320–1440 / 200% 缩放 / 移动端原生审计（v4，32 组 0 问题）；
+- `tools/break-ui.js`：最坏数据 / 320–1440 / 200% 缩放 / 移动端原生审计（v4.1，32 组 0 问题）；
+- `tools/e2e-timeline.js`：全景时间线 E2E（40 断言）；`tools/e2e-v41.js`：v4.1 交互/置顶/循环/热区/侧栏/设置弹窗 E2E（17 断言）；
 - 现场：`chrome://version`、CORS（Origin: null + OPTIONS）、存储持久性、中文 IME、下载/剪贴板策略。

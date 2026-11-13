@@ -78,7 +78,7 @@
 | M5 | `overscroll-behavior` | ✅ | html/body `none`；内部滚动容器 `contain` |
 | M6 | `touch-action: manipulation` | ✅ | 按钮/`[role=button]`/chip 等已覆盖（base.css） |
 | M7 | 粗指针输入字号 ≥16px（防 iOS 聚焦缩放） | ✅ | 实测 todo/chat/md 输入在 `(pointer:coarse)` 下均为 **16px**（此前被类选择器覆盖，已由 A/B 修复）；`#chat-profile-select` 亦为 16px |
-| M8 | hover 全部包 `@media (hover:hover) and (pointer:fine)` | ✅ | 静态扫描最终 CSS：**77/77 条 `:hover` 均已门控**（base/components/tools/chat/settings 全过）；v2 审计点名的 58 处已收口 |
+| M8 | hover 全部包 `@media (hover:hover) and (pointer:fine)` | ✅ | 静态扫描最终 CSS：**84/84 条 `:hover` 均已门控**（base/components/tools/chat/settings 全过）；v2 审计点名的 58 处已收口 |
 | M9 | safe-area 使用 | ✅ | `env(safe-area-inset-*)` 共 14 处（base/components/chat/tools/settings） |
 | M10 | 应用壳 100vh→100dvh 回退 | ✅ | `height:100vh; height:100dvh`；Chromium 102 忽略后者、更高内核生效 |
 | M11 | hover/pointer 能力查询生效 | ✅ | 移动 emulation 下 `(pointer:coarse)`/`(hover:none)` 均命中 |
@@ -98,7 +98,7 @@
 | 聊天大渐变气泡 | 访谈记录：角色刻度 + 全宽助手 + 轻量用户蓝块 | ✅ `chat-*` 截图；长代码块横向滚动在 `pre` 内（预期，不撑破页面） |
 | 每页 fade-up | 一次工作台 reveal + 页面切换淡入 | 代码层 `nc-shell-in`/`nc-anim-in` 存在；Lite 关闭 |
 | Lite = 动画 0 | Lite = 标准减去 ambient/glass/shadow/lift/scale | ✅ 14 处 `data-lite` 覆盖 + tokens 级去效果；截图对比待人工验收 |
-| 58 处未门控 hover | 全部能力查询 | ✅ 77/77 条 `:hover` 已包 `@media (hover:hover) and (pointer:fine)`（M8） |
+| 58 处未门控 hover | 全部能力查询 | ✅ 84/84 条 `:hover` 已包 `@media (hover:hover) and (pointer:fine)`（M8） |
 | 13.5px 输入移动端缩放 | coarse 下 16px | ✅ coarse 下 todo/chat/md 输入实测 16px（M7） |
 
 ## 7. 截图与产物

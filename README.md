@@ -1,17 +1,19 @@
-# nTools · v4
+# nTools · v4.1
 
 > 本地优先的 AI 效率工作台：nChat 原生聊天 + 待办（Todo AI 识别）+ 二维码 / Markdown / 图片工具。
 > 纯静态 HTML，双击即用，无需服务器、无需安装、无需构建链；数据只留在本机浏览器。
-> v4 采用 **Precision Workbench** 设计方向：石墨/纸面、发丝分隔、仪器蓝强调、铜色时间语义；标准模式保留完整材质与动效，**Light（Lite）模式是它的性能减法**。
+> v4.1 采用 **Precision Workbench** 设计方向：石墨/纸面、发丝分隔、仪器蓝强调、铜色时间语义；标准模式保留完整材质与动效，**Light（Lite）模式是它的性能减法**。
 > 目标环境：国企内网 / 信创 ARM / 麒麟 Linux / 奇安信可信浏览器（Chromium 102 基线）。
 >
 > **仓库**：[github.com/Myooooo/ntools](https://github.com/Myooooo/ntools)
 
 ![nChat 原生聊天](img/main.png)
 
-![nTools 待办 + AI 识别](img/tools.png)
+![nTools 待办（置顶 / 循环 / 三天内热区）](img/tools.png)
 
-![全局设置（多模型端点）](img/settings.png)
+![全景时间线（可框选范围）](img/timeline.png)
+
+![全局设置（居中弹窗）](img/settings.png)
 
 ## ✨ 核心特性
 
@@ -23,7 +25,7 @@
 
 ### 多模型端点（全局设置）
 
-- 设置面板（侧栏齿轮 / 更多菜单 →「设置」）统一管理**多个 OpenAI 兼容端点**：
+- 设置面板改为**居中弹窗**（侧栏齿轮 / 更多菜单 →「设置」），不再从右侧滑出；左侧分区导航 + 右侧内容，移动端全屏。统一管理**多个 OpenAI 兼容端点**：
   - 名称、Base URL、API Key、Model ID、Temperature / Top P；
   - 每个端点可单独配置**聊天系统提示词**（聊天页顶部「系统提示词」可快捷编辑）；
   - 测试连接、设为当前、导入/导出（默认不含密钥，含密钥需二次确认）。
@@ -47,6 +49,10 @@
 
 - 新增 / 行内编辑 / 完成 / 软删除 + 5 秒撤销 / 回收站。
 - 筛选：全部 / 今天 / 逾期 / 已完成；搜索标题、备注、标签；排序：智能 / 截止 / 创建 / 手动。
+- **置顶**：任务可置顶，永远显示在列表最顶部「置顶」分组；四种排序均优先，快捷键 `P`。
+- **循环任务**：每天 / 每周 / 每月 / 每年；完成后同一任务自动前移到下一周期并重置为未完成，按新到期时间排序；不生成副本、不丢历史（记录完成时间）。月末/闰年自动夹取，错过多个周期会连续前移到未来。
+- **三天内热区**：到期前 72 小时内的未完成任务整行渐变染色，黄→红随剩余时间加深；逾期更深红，完成/取消/无日期不染色。
+- **全景时间线**：横向时间轴按到期时间排布任务，自动分道、显示「现在」线；可拖拽刻度区框选起止时间，或用起止时间/未来 3 天/本周/本月预设；窄屏自动切换纵向时间流水。
 - 优先级、多清单、标签、拖拽排序、统计概览。
 - 页内提醒：对齐分钟检查，页内 Toast + 标题角标 + 逾期计数；关闭页面后不提醒（纯前端限制）。
 - v1 → v2 数据幂等迁移、导入导出（预览/合并/替换/自动备份）、跨标签同步。
@@ -59,7 +65,9 @@
 
 ### 设计与性能
 
-- **标准模式**：石墨/纸面配色 + 仪器蓝强调 + 铜色时间语义；发丝线代替卡片阴影；196px 工具导轨、记录式待办 ledger、访谈式聊天记录；小面积玻璃材质、环境光、克制的 tab/列表/弹层动效（仅 transform/opacity）。
+- **标准模式**：石墨/纸面配色 + 仪器蓝强调 + 铜色时间语义；发丝线代替卡片阴影；196px 工具导轨、记录式待办 ledger、访谈式聊天记录；小面积玻璃材质、环境光、有目的的入场/退场动效（仅 transform/opacity）。
+- **可收起侧栏**：点击导轨右上角收起后仅显示各功能图标，底部只保留设置按钮；状态持久化。
+- **动效审计**：基于 emilkowalski `animate` / `choreograph` 原则逐面校准——高频表面不动画、进入 ease-out / 退出更快、弹层 origin-aware、菜单可中断不叠放、设置窗口缩放淡入、时间线一次性揭示。
 - **Light（Lite）性能模式**：建立在标准模式之上，**去掉高级动效与页面特效**（ambient/玻璃/阴影/渐变/位移动画全部关闭），保留布局、字阶、颜色语义与即时反馈；适合低配 ARM/软渲染/长时间办公。
 - 深色 / 浅色主题均基于同一套 `--nc-*` 令牌；系统「减少动效」自动降级。
 - 性能：聊天 tab 懒加载（首次切到 nChat 才初始化）；待办 keyed diff + 分钟对齐 ticker；500 条任务导入/渲染/搜索在 40ms 级。
@@ -88,6 +96,7 @@
 | 待办 | `↑` `↓` / `Space` / `Enter` | 移动 / 完成 / 打开详情 |
 | 待办 | `E` / `Delete` | 编辑 / 删除（进回收站） |
 | 待办 | `Ctrl+Z` / `Ctrl+Shift+Z` | 撤销 / 重做 |
+| 待办 | `P` | 置顶 / 取消置顶当前任务 |
 | 待办 | `Alt+↑` / `Alt+↓` | 手动排序（sort=手动） |
 | 待办 | `?` | 快捷键帮助 |
 | AI 识别弹窗 | `Ctrl/Cmd + Enter` | 立即识别 |
@@ -106,7 +115,10 @@ ntools/
 │  ├─ components.css          # 按钮/输入/模态/Toast/菜单等公共组件（nc-*）
 │  ├─ chat.css                # 聊天（含原生嵌入样式）
 │  ├─ tools.css               # 工具页与待办
-│  └─ settings.css            # 全局设置 Sheet
+│  ├─ timeline.css            # 全景时间线
+│  ├─ rail.css                # 可收起侧栏
+│  ├─ interaction.css         # v4.1 交互动效收口
+│  └─ settings.css            # 全局设置弹窗
 ├─ js/
 │  ├─ vendor：marked / purify / qrcode（本地）
 │  ├─ 基础设施：theme-boot / polyfills / core / compat / icons / storage / ui / theme
@@ -114,7 +126,7 @@ ntools/
 │  ├─ 聊天：settings-store（适配层）/ conversation-store / sse / api /
 │  │        message-view / composer / settings-view（系统提示词 sheet）/
 │  │        chat-controller / chat-embed（组合根）
-│  ├─ 待办：todo-store / todo-view / todo-ai / todo-time / todo
+│  ├─ 待办：todo-store / todo-view / todo-ai / todo-time / todo-timeline / todo
 │  ├─ 工具：qr / markdown / image
 │  └─ 组合根：ntools-app
 ├─ docs/
@@ -123,6 +135,9 @@ ntools/
 │  ├─ v4-design-report.md     # v4 设计改造与验收报告
 │  ├─ design-direction-v4.md  # 设计方向/令牌/动效/Light 定义
 │  ├─ design-break-audit.md   # 最坏数据/移动端原生审计
+│  ├─ animation-audit-v4.1.md # v4.1 全站动效审计与修复记录
+│  ├─ timeline-view.md        # 全景时间线调研/API/交互与限制
+│  ├─ v41-release-report.md   # v4.1 交付与验收报告
 │  ├─ v2-implementation-report.md  # v2 重构报告（历史）
 │  ├─ compatibility.md        # 兼容性结论与现场验证步骤
 │  ├─ dev-contract*.md        # 开发契约
@@ -130,7 +145,9 @@ ntools/
 ├─ tools/
 │  ├─ verify.js               # CDP 页面验收（报错/DOM/迁移/原生聊天/设置面板 + 截图）
 │  ├─ e2e.js                  # 回归交互（待办/聊天流式/安全/性能）
-│  ├─ e2e-features.js         # 新功能 E2E（端点/系统提示词/Todo AI/快捷时间）
+│  ├─ e2e-features.js         # 功能 E2E（端点/系统提示词/Todo AI/快捷时间）
+│  ├─ e2e-timeline.js         # 全景时间线 E2E（40 断言 + 截图）
+│  ├─ e2e-v41.js              # v4.1 交互/置顶/循环/热区/侧栏/设置弹窗 E2E
 │  ├─ break-ui.js             # 最坏数据 + 响应式 + 移动端原生审计
 │  ├─ design-shots.sh         # v4 设计截图归档（标准/浅色/Lite × 桌面/移动）
 │  ├─ run-tests.js            # 无头运行 tests.html
@@ -169,19 +186,21 @@ ntools/
 无构建链：修改后直接刷新浏览器；新增模块按 `ntools.html` 中经典 `<script defer>` 顺序加载。
 
 ```bash
-# 一键全量验收（语法 + 页面 + 回归 E2E + 新功能 E2E + 纯函数）
+# 一键全量验收（语法 + 页面 + 3 套交互/功能 E2E + 时间线 + v4.1 + 纯函数）
 bash tools/check.sh
 
 # 分项
 node tools/verify.js          # 页面级（捕获报错 + DOM/迁移/原生聊天/设置面板 + 截图）
 node tools/e2e.js             # 回归交互（待办/聊天流式/安全/性能）
 node tools/e2e-features.js    # 功能回归（多端点/系统提示词/Todo AI/快捷时间）
+node tools/e2e-timeline.js    # 全景时间线（mount/框选/点击/响应式/500 条）
+node tools/e2e-v41.js         # v4.1 交互（菜单/设置弹窗/侧栏/置顶/循环/热区）
 node tools/run-tests.js       # tests.html 断言（无头）
 open tests.html               # 或双击运行
 ```
 
-- 最近验收结果：115+ PASS / 0 FAIL（verify 4 页、回归 E2E、功能 E2E 53 项、纯函数 81 项）；`break-ui` 32/32 组合 0 问题、移动端原生 12/12 PASS。
-- 截图输出：`/tmp/nc-shots/v4/design/`（30 张 v4 设计矩阵）、`/tmp/nc-shots/v4/break/`（最坏数据 25 张）、`/tmp/nc-shots/`（基础三页）。
+- 最近验收结果：`bash tools/check.sh` **7/7 全绿**（verify 4 页、回归 E2E、功能 E2E 53 项、时间线 E2E 40 项、v4.1 E2E 17 项、纯函数 81 项，全部 PASS / 0 FAIL）；`break-ui` 32 组最坏数据 0 问题、移动端原生 12/12 PASS。
+- 截图输出：`/tmp/nc-shots/v41/final/`（v4.1 设计验收）、`/tmp/nc-shots/v4/timeline/`（时间线）、`/tmp/nc-shots/v4/break/`（最坏数据）、`/tmp/nc-shots/`（基础三页）。
 
 ## ❓ 常见问题
 
@@ -198,11 +217,19 @@ open tests.html               # 或双击运行
 
 ## 🗒️ 版本变更
 
-### v4（当前）
+### v4.1（当前）
+
+- 交互修复：Todo/全局菜单重复点击不再叠放（单例 + 退出动画）、设置改为**居中弹窗**、侧栏**可收起**（图标模式，底部只留设置）、补齐菜单/弹层/设置/侧栏/待办/聊天的入场与退场动效并做全站动效审计。
+- Todo 新能力：**置顶**、**每日/每周/每月/每年循环任务**、**三天内到期整行黄→红热区渐变**、新建按钮快捷键提示调整（N 移到列表底部）。
+- 新增 **全景时间线**：按到期时间排布、自动分道、现在线、范围拖拽框选 + 起止输入 + 预设；窄屏纵向流水；独立模块 `NC.timeline`。
+- 移动端详情抽屉改为底部上滑；新增 `rail/timeline/interaction` 样式层；`check.sh` 增至 7 阶段。
+- 验收：`bash tools/check.sh` 7/7 全绿；时间线 E2E 40/40；v4.1 E2E 17/17；纯函数 81/81。
+
+### v4
 
 - 设计方向升级为 **Precision Workbench**：石墨/纸面 + 发丝线 + 仪器蓝/铜色语义；工具导轨、记录式待办 ledger、访谈式聊天、检查器设置面板全面重做。
 - 标准模式补全高级效果与细腻动效；**Light（Lite）模式 = 标准模式的减法**（去 ambient/玻璃/阴影/渐变/位移/缩放与不必要的动画），同一套令牌派生。
-- 移动端原生基线：viewport-fit、theme-color 动态、tap-highlight、overscroll、粗指针 16px、safe-area、77/77 hover 能力门控。
+- 移动端原生基线：viewport-fit、theme-color 动态、tap-highlight、overscroll、粗指针 16px、safe-area、84/84 hover 能力门控。
 - 可访问性对比度修正（浅色 text-3/accent/time/danger 等）、popover origin-aware、图标按钮尺寸修复。
 - 新增 `break-ui` / `design-shots` 工具与 32 组最坏数据审计；验收 118 PASS / 0 FAIL，纯函数 81/81。
 
