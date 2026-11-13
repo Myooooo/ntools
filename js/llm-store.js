@@ -24,9 +24,11 @@
     var DEFAULT_TODO_PROMPT = [
         '你是待办事项提取助手。请从用户提供的文本中提取一项待办任务，并只输出 JSON 对象，不要输出解释。',
         '字段：title（≤80字）、notes（≤1000字）、due（YYYY-MM-DDTHH:mm 本地时间，无法判断为 null）、',
-        'dueAllDay（boolean）、priority（low|normal|high|urgent）、tags（0-5 个字符串）、listName（可选）。',
+        'dueAllDay（boolean）、priority（low|normal|high|urgent）、tags（0-5 个字符串）、listName（可选）、',
+        'recurrence（循环规则，null 或 {"freq":"daily"|"weekly"|"monthly"|"yearly","interval":1}）。',
         '当前时间：{{NOW}}（{{WEEKDAY}}，时区 {{TZ}}），下班时间 {{WORK_END}}。',
-        '相对时间（如“明天下班前”“周五前”“月底前”）请换算成具体时间；无法判断 due 时给 null。'
+        '相对时间（如“明天下班前”“周五前”“月底前”）请换算成具体时间；无法判断 due 时给 null。',
+        '识别“每天/每周/每月/每年/工作日每天”等循环语义时填写 recurrence（工作日每天按 daily，interval 固定为 1）；一次性任务 recurrence 为 null。'
     ].join('');
 
     function defaults() {
@@ -59,6 +61,7 @@
             baseUrl: 'https://api.openai.com/v1',
             apiKey: '',
             modelId: 'gpt-4o',
+            apiFormat: 'openai',
             chatSystemPrompt: '',
             temperature: 1,
             topP: 0.95,
@@ -66,6 +69,12 @@
             updatedAt: now
         };
         return applyProfilePatch(profile, partial || {}, true);
+    }
+
+    /** API 格式：openai（默认）/ bocai；未知值一律回落 openai。 */
+    function normalizeApiFormat(value) {
+        var text = value == null ? '' : String(value).trim().toLowerCase();
+        return text === 'bocai' ? 'bocai' : 'openai';
     }
 
     function str(value, fallback) {
@@ -111,6 +120,7 @@
         if ('baseUrl' in src) profile.baseUrl = sanitizeUrl(src.baseUrl);
         if ('apiKey' in src) profile.apiKey = trimStr(src.apiKey, '', 2048);
         if ('modelId' in src) profile.modelId = trimStr(src.modelId, '', 120);
+        if ('apiFormat' in src) profile.apiFormat = normalizeApiFormat(src.apiFormat);
         if ('chatSystemPrompt' in src) profile.chatSystemPrompt = trimStr(src.chatSystemPrompt, '', 20000);
         if ('temperature' in src) profile.temperature = clampNum(src.temperature, profile.temperature, 0, 2);
         if ('topP' in src) profile.topP = clampNum(src.topP, profile.topP, 0, 2);
@@ -128,6 +138,7 @@
             baseUrl: sanitizeUrl(src.baseUrl || src.apiUrl || 'https://api.openai.com/v1'),
             apiKey: trimStr(src.apiKey, '', 2048),
             modelId: trimStr(src.modelId, 'gpt-4o', 120),
+            apiFormat: normalizeApiFormat(src.apiFormat || src.api_format || 'openai'),
             chatSystemPrompt: trimStr(src.chatSystemPrompt || src.systemPrompt || '', '', 20000),
             temperature: clampNum(src.temperature, 1, 0, 2),
             topP: clampNum(src.topP != null ? src.topP : src.top_p, 0.95, 0, 2),
@@ -504,6 +515,8 @@
             apiUrl: profile.baseUrl,
             apiKey: profile.apiKey,
             modelId: profile.modelId,
+            apiFormat: normalizeApiFormat(profile.apiFormat),
+            sessionId: profile.id,
             systemPrompt: profile.chatSystemPrompt || '',
             enableAdvanced: true,
             temperature: profile.temperature,

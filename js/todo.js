@@ -170,8 +170,8 @@
     }
 
     /**
-     * 用识别结果填充创建区（绝不自动创建）。
-     * @param {{title,notes,due,dueAllDay,priority,tags,listName}} data
+     * 用识别结果填充创建区（绝不自动创建；重复周期由 todo-view.applyDraft 按白名单填入）。
+     * @param {{title,notes,due,dueAllDay,priority,tags,listName,recurrence}} data
      * @returns {boolean}
      */
     function fillDraft(data) {

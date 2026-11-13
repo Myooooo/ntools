@@ -219,3 +219,21 @@ html[data-lite="true"] .tools-nav__item {
         transition: none;
     }
 }
+
+/* v4.9：收起态导航不再出现横向滚动条；活动刻度收进 40px 图标位内 */
+.tools-nav {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+@media (min-width: 901px) {
+    .tools-app.is-rail-collapsed .tools-nav__item {
+        overflow: hidden;
+    }
+
+    .tools-app.is-rail-collapsed .tools-nav__item.is-active::before {
+        left: 0;
+        top: 10px;
+        bottom: 10px;
+    }
+}

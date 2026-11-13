@@ -14,9 +14,107 @@
     var DEFAULT_TIMEOUT = 60000;
     var MAX_RESPONSE_CHARS = 200000;
 
+    var THINK_PAIRS = [
+        { open: '<think>', close: '</think>' },
+        { open: '<thinking>', close: '</thinking>' },
+        { open: '<\uff5cDSML\uff5cthinking>', close: '</\uff5cDSML\uff5cthinking>' },
+        { open: '<|DSML|thinking>', close: '</|DSML|thinking>' },
+        { open: '<reasoning>', close: '</reasoning>' }
+    ];
+
+    function normalizeApiFormat(value) {
+        var text = value == null ? '' : String(value).trim().toLowerCase();
+        return text === 'bocai' ? 'bocai' : 'openai';
+    }
+
+    function escapeRegExp(value) {
+        return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    /**
+     * 剥离 content 中内嵌的思考块（<think>/<thinking>/<reasoning>/｜DSML｜thinking）。
+     * 未闭合的思考块从开标签处截断；思考正文单独返回，供调用方记录/调试。
+     */
+    function stripThinkTags(value) {
+        var text = typeof value === 'string' ? value : String(value == null ? '' : value);
+        var reasoning = '';
+        THINK_PAIRS.forEach(function (pair) {
+            var re = new RegExp(escapeRegExp(pair.open) + '\\s*([\\s\\S]*?)\\s*' + escapeRegExp(pair.close), 'gi');
+            text = text.replace(re, function (match, inner) {
+                if (inner) reasoning += inner;
+                return '';
+            });
+            // 未闭合：开标签到文本结尾全部视为思考内容
+            var lower = text.toLowerCase();
+            var openAt = lower.indexOf(pair.open.toLowerCase());
+            if (openAt !== -1) {
+                var tail = text.slice(openAt + pair.open.length);
+                if (tail) reasoning += tail;
+                text = text.slice(0, openAt);
+            }
+        });
+        // 残留的孤立闭合标签不应出现在正文
+        THINK_PAIRS.forEach(function (pair) {
+            text = text.replace(new RegExp(escapeRegExp(pair.close), 'gi'), '');
+        });
+        return { text: text.trim(), reasoning: reasoning.trim() };
+    }
+
+    function contentParts(value) {
+        if (typeof value === 'string') return { text: value, reasoning: '' };
+        if (value == null) return { text: '', reasoning: '' };
+        if (Array.isArray(value)) {
+            var texts = [];
+            var reasons = [];
+            value.forEach(function (part) {
+                var parsed = contentParts(part);
+                texts.push(parsed.text);
+                reasons.push(parsed.reasoning);
+            });
+            return { text: texts.join(''), reasoning: reasons.join('') };
+        }
+        if (typeof value === 'object') {
+            var kind = String(value.type == null ? '' : value.type).toLowerCase().replace(/-/g, '_');
+            var raw = value.text;
+            if (raw == null) raw = value.content;
+            if (raw == null) raw = value.value;
+            if (raw == null) raw = value.output_text;
+            if (raw == null) raw = value.summary;
+            if (raw == null) raw = value.delta;
+            var parsedValue = contentParts(raw);
+            var reasoningKind = kind.indexOf('reasoning') === 0 || kind.indexOf('thinking') === 0 ||
+                kind === 'analysis' || kind === 'reasoning_text';
+            if (reasoningKind) return { text: '', reasoning: parsedValue.reasoning + parsedValue.text };
+            if (!parsedValue.text && !parsedValue.reasoning) {
+                var keys = ['thinking', 'reasoning', 'reasoning_content'];
+                for (var i = 0; i < keys.length; i += 1) {
+                    if (keys[i] in value) {
+                        var nested = contentParts(value[keys[i]]);
+                        return { text: '', reasoning: nested.reasoning + nested.text };
+                    }
+                }
+            }
+            return parsedValue;
+        }
+        return { text: String(value), reasoning: '' };
+    }
+
+    function hasImageContent(messages) {
+        if (!Array.isArray(messages)) return false;
+        for (var i = 0; i < messages.length; i += 1) {
+            var message = messages[i];
+            if (!message || !Array.isArray(message.content)) continue;
+            for (var j = 0; j < message.content.length; j += 1) {
+                var part = message.content[j];
+                if (part && typeof part === 'object' && part.type === 'image_url') return true;
+            }
+        }
+        return false;
+    }
+
     function buildEndpoint(baseUrl) {
         var base = String(baseUrl == null ? '' : baseUrl).trim();
-        if (!base) return '';
+        if (!base || /[\s\u0000-\u001f]/.test(base)) return '';
         base = base.replace(/\/+$/, '');
         if (/\/chat\/completions$/i.test(base)) return base;
         return base + '/chat/completions';
@@ -51,10 +149,14 @@
         var baseUrl = source.baseUrl || source.apiUrl || '';
         var apiKey = source.apiKey || '';
         var modelId = source.modelId || source.model || '';
+        var sessionId = source.sessionId || source.id || source.profileId || '';
         return {
+            id: source.id || source.profileId || '',
             baseUrl: baseUrl,
             apiKey: apiKey,
-            modelId: modelId
+            modelId: modelId,
+            apiFormat: normalizeApiFormat(source.apiFormat || source.api_format),
+            sessionId: String(sessionId || '')
         };
     }
 
@@ -85,29 +187,47 @@
         return { type: 'server', message: '服务错误（HTTP ' + status + '）' + (detail ? '：' + detail : ''), status: status };
     }
 
-    function readContent(data) {
-        if (!data || typeof data !== 'object') return '';
+    /**
+     * 从非流式响应中读取正文/思考。兼容：
+     * - choices[0].message / choices[0].delta / choices[0].text；
+     * - content 为字符串或多模态/推理 part 数组；
+     * - reasoning_content / reasoning / thinking / reasoning_details；
+     * - 顶层 output_text；
+     * 最后剥离 content 中内嵌的思考标签。
+     */
+    function readResponseContent(data) {
+        if (!data || typeof data !== 'object') return { text: '', reasoning: '' };
         var choice = data.choices && data.choices[0];
         if (choice) {
-            if (choice.message && choice.message.content != null) return normalizeContent(choice.message.content);
-            if (choice.delta && choice.delta.content != null) return normalizeContent(choice.delta.content);
-            if (choice.text != null) return String(choice.text);
+            var source = (choice.message && typeof choice.message === 'object')
+                ? choice.message
+                : ((choice.delta && typeof choice.delta === 'object') ? choice.delta : choice);
+            var parsed = contentParts(source.content);
+            if (!parsed.text) {
+                var fallbackValue = source.text != null ? source.text : choice.text;
+                var fallback = contentParts(fallbackValue);
+                parsed.text = fallback.text;
+                parsed.reasoning += fallback.reasoning;
+            }
+            var seen = [];
+            ['reasoning_content', 'reasoning', 'thinking', 'thinking_content', 'reasoning_details'].forEach(function (key) {
+                if (!source || !(key in source)) return;
+                var part = contentParts(source[key]);
+                var fragment = part.reasoning + part.text;
+                if (fragment && seen.indexOf(fragment) === -1) {
+                    seen.push(fragment);
+                    parsed.reasoning += fragment;
+                }
+            });
+            var stripped = stripThinkTags(parsed.text);
+            return { text: stripped.text, reasoning: parsed.reasoning + stripped.reasoning };
         }
-        if (typeof data.output_text === 'string') return data.output_text;
-        return '';
-    }
-
-    function normalizeContent(content) {
-        if (typeof content === 'string') return content;
-        if (Array.isArray(content)) {
-            return content.map(function (part) {
-                if (typeof part === 'string') return part;
-                if (part && typeof part.text === 'string') return part.text;
-                return '';
-            }).join('');
+        if (data.output_text != null) {
+            var output = contentParts(data.output_text);
+            var cleaned = stripThinkTags(output.text);
+            return { text: cleaned.text, reasoning: output.reasoning + cleaned.reasoning };
         }
-        if (content == null) return '';
-        return String(content);
+        return { text: '', reasoning: '' };
     }
 
     function readUsage(data) {
@@ -136,8 +256,21 @@
         if (!profile.modelId) {
             return Promise.resolve({ ok: false, error: { type: 'config', message: '未配置 Model ID' } });
         }
+        var endpoint = buildEndpoint(profile.baseUrl);
+        if (!endpoint) {
+            return Promise.resolve({ ok: false, error: { type: 'config', message: 'Base URL 无效，请检查配置' } });
+        }
         if (!messages.length) {
             return Promise.resolve({ ok: false, error: { type: 'config', message: '缺少要发送的内容' } });
+        }
+        if (profile.apiFormat === 'bocai' && hasImageContent(messages)) {
+            return Promise.resolve({
+                ok: false,
+                error: {
+                    type: 'unsupported',
+                    message: '当前端点 API 格式为 bocai，参考实现不支持图片输入；请改用 openai 格式端点，或移除图片后重试'
+                }
+            });
         }
 
         var payload = {
@@ -149,6 +282,7 @@
         var topP = Number(opts.topP);
         if (isFinite(temperature)) payload.temperature = Math.min(2, Math.max(0, temperature));
         if (isFinite(topP)) payload.top_p = Math.min(2, Math.max(0, topP));
+        if (profile.apiFormat === 'bocai' && profile.sessionId) payload.sessionId = profile.sessionId;
 
         var headers = { 'Content-Type': 'application/json' };
         if (profile.apiKey) headers.Authorization = 'Bearer ' + profile.apiKey;
@@ -185,8 +319,7 @@
             }
         }
 
-        var url = buildEndpoint(profile.baseUrl);
-        return global.fetch(url, {
+        return global.fetch(endpoint, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(payload),
@@ -202,13 +335,14 @@
                 } catch (err) {
                     throw { __http: { type: 'parse', message: '返回内容不是合法 JSON（可能是网关错误页）' } };
                 }
-                var content = readContent(data);
-                if (!content) {
+                var content = readResponseContent(data);
+                if (!content.text) {
                     throw { __http: { type: 'parse', message: '模型返回为空或格式不受支持' } };
                 }
                 return {
                     ok: true,
-                    text: content.length > MAX_RESPONSE_CHARS ? content.slice(0, MAX_RESPONSE_CHARS) : content,
+                    text: content.text.length > MAX_RESPONSE_CHARS ? content.text.slice(0, MAX_RESPONSE_CHARS) : content.text,
+                    reasoning: content.reasoning,
                     usage: readUsage(data),
                     latencyMs: Date.now() - started,
                     raw: data
@@ -331,6 +465,11 @@
         extractJson: extractJson,
         testProfile: testProfile,
         buildEndpoint: buildEndpoint,
-        normalizeMessages: normalizeMessages
+        normalizeMessages: normalizeMessages,
+        normalizeApiFormat: normalizeApiFormat,
+        stripThinkTags: stripThinkTags,
+        hasImageContent: hasImageContent,
+        contentParts: contentParts,
+        readResponseContent: readResponseContent
     };
 })(window);

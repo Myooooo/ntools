@@ -1015,14 +1015,14 @@
             eq(NC.todoTime.computeQuickDue('friday', tsOf(2026, 5, 23, 9, 0), '17:30'), tsOf(2026, 5, 29, 17, 30), '周六 → 下周五');
         }, [TT]);
         t('todoTime', '下周前 / 月底前 / 清除', function () {
-            eq(NC.todoTime.computeQuickDue('next-week', tsOf(2026, 5, 20, 10, 0), '17:30'), tsOf(2026, 5, 25, 9, 0), '下周一 09:00');
+            eq(NC.todoTime.computeQuickDue('next-week', tsOf(2026, 5, 20, 10, 0), '17:30'), tsOf(2026, 5, 29, 17, 30), '下周五下班前 17:30');
             eq(NC.todoTime.computeQuickDue('month-end', tsOf(2026, 5, 20, 10, 0), '17:30'), tsOf(2026, 5, 31, 17, 30), '本月最后一天 17:30');
             eq(NC.todoTime.computeQuickDue('clear', tsOf(2026, 5, 20, 10, 0), '17:30'), null, 'clear → null');
         }, [TT]);
         t('todoTime', '跨年边界', function () {
             // 2026-12-31 是周四
             eq(NC.todoTime.computeQuickDue('friday', tsOf(2026, 12, 31, 10, 0), '17:30'), tsOf(2027, 1, 1, 17, 30), '跨年周五');
-            eq(NC.todoTime.computeQuickDue('next-week', tsOf(2026, 12, 31, 10, 0), '17:30'), tsOf(2027, 1, 4, 9, 0), '跨年下周一');
+            eq(NC.todoTime.computeQuickDue('next-week', tsOf(2026, 12, 31, 10, 0), '17:30'), tsOf(2027, 1, 8, 17, 30), '跨年下周五下班前');
             eq(NC.todoTime.computeQuickDue('month-end', tsOf(2026, 12, 15, 10, 0), '17:30'), tsOf(2026, 12, 31, 17, 30), '12 月底');
             eq(NC.todoTime.computeQuickDue('tomorrow', tsOf(2026, 12, 31, 10, 0), '17:30'), tsOf(2027, 1, 1, 17, 30), '跨年明天');
         }, [TT]);

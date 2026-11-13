@@ -18,6 +18,7 @@
     <link rel="stylesheet" href="css/rail.css">
     <link rel="stylesheet" href="css/timeline.css">
     <link rel="stylesheet" href="css/interaction.css">
+    <link rel="stylesheet" href="css/email-tab.css">
 
     <!-- 主题引导：CSS 之后、其他脚本之前，阻塞加载，防止主题闪烁 -->
     <script src="js/theme-boot.js"></script>
@@ -61,6 +62,7 @@
     <script defer src="js/markdown.js"></script>
     <script defer src="js/image.js"></script>
     <!-- 组合根 -->
+    <script defer src="js/email-tab.js"></script>
     <script defer src="js/ntools-app.js"></script>
 </head>
 
@@ -82,6 +84,10 @@
                 <span class="tools-nav__icon" data-icon="check-circle"></span>
                 <span class="tools-nav__label">待办</span>
                 <span class="tools-nav__badge" id="nav-todo-badge" hidden></span>
+            </a>
+            <a class="tools-nav__item" href="#email" data-tab="email" title="邮件管理">
+                <span class="tools-nav__icon" data-icon="mail"></span>
+                <span class="tools-nav__label">邮件</span>
             </a>
             <a class="tools-nav__item" href="#qr" data-tab="qr" title="二维码生成">
                 <span class="tools-nav__icon" data-icon="grid"></span>
@@ -111,7 +117,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" title="版本">v4.8</span>
+            <span class="tools-rail__version" title="版本">v4.9</span>
         </div>
     </aside>
 
@@ -273,6 +279,36 @@
                     </aside>
                 </div>
                 <div class="todo-scrim" id="todo-drawer-scrim" hidden></div>
+            </section>
+
+            <!-- ---------------- Tab：邮件管理（动态从 GitHub 拉取，不随仓库发布） ---------------- -->
+            <section class="tools-page tools-page--email" id="page-email" data-panel="email" data-page="email" aria-label="邮件管理" hidden>
+                <header class="tools-head">
+                    <div class="tools-head__text">
+                        <h1 class="tools-title">邮件管理</h1>
+                        <p class="tools-subtitle">动态加载自 Myooooo/email-manager，不随本项目发布。</p>
+                    </div>
+                    <div class="tools-head__actions">
+                        <span class="email-status" id="email-status" role="status" aria-live="polite"></span>
+                        <button type="button" class="nc-btn nc-btn--sm" id="email-refresh-btn" title="重新从 GitHub 拉取">
+                            <span data-icon="refresh" data-icon-size="15"></span>
+                            <span>刷新</span>
+                        </button>
+                        <a class="nc-btn nc-btn--sm nc-btn--ghost" href="https://github.com/Myooooo/email-manager/blob/master/email-manager.html" target="_blank" rel="noopener" title="在 GitHub 打开 email-manager">
+                            <span data-icon="mail" data-icon-size="15"></span>
+                            <span>GitHub</span>
+                        </a>
+                    </div>
+                </header>
+                <div class="email-shell">
+                    <div class="email-state" id="email-state">
+                        <span class="email-state__icon" data-icon="mail" data-icon-size="26"></span>
+                        <strong class="email-state__title">正在加载邮件管理…</strong>
+                        <span class="email-state__desc">首次打开会从 GitHub 获取最新页面。</span>
+                    </div>
+                    <iframe class="email-frame" id="email-frame" title="邮件管理（email-manager）"
+                        sandbox="allow-scripts allow-forms allow-downloads allow-same-origin allow-modals allow-popups" hidden></iframe>
+                </div>
             </section>
 
             <!-- ---------------- Tab 2：二维码 ---------------- -->

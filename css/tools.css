@@ -1349,7 +1349,10 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .todo-quick-chip[data-quick-kind="clear"] {
-    color: var(--nc-text-3);
+    border-color: var(--nc-danger-ring);
+    background: var(--nc-danger-soft);
+    color: var(--nc-danger);
+    font-weight: 600;
 }
 
 /* ---- 8.4 列表滚动区（无卡片、无阴影） ---- */
@@ -1964,6 +1967,20 @@ input[type="range"]::-webkit-slider-thumb {
     min-width: 0;
 }
 
+.detail-due-clear {
+    color: var(--nc-danger);
+    border-color: var(--nc-danger-ring);
+    background: var(--nc-danger-soft);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .detail-due-clear:hover {
+        color: var(--nc-danger);
+        border-color: var(--nc-danger);
+        background: var(--nc-danger-ring);
+    }
+}
+
 .detail-quick {
     display: flex;
     flex-wrap: wrap;
@@ -2107,6 +2124,26 @@ input[type="range"]::-webkit-slider-thumb {
     color: var(--nc-text-3);
     font-size: var(--nc-fs-sm);
     line-height: 1.6;
+}
+
+.todo-ai-dialog__endpoint {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 9px;
+}
+
+.todo-ai-dialog__endpoint-label {
+    flex: 0 0 auto;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.todo-ai-dialog__endpoint .nc-select {
+    flex: 1;
+    min-width: 200px;
 }
 
 .todo-ai-textarea {
@@ -2413,8 +2450,9 @@ input[type="range"]::-webkit-slider-thumb {
     }
 
     .todo-quick-chip[data-quick-kind="clear"]:hover {
+        border-color: var(--nc-danger);
+        background: var(--nc-danger-ring);
         color: var(--nc-danger);
-        background: var(--nc-danger-soft);
     }
 
     .todo-draft-tag__remove:hover,
@@ -3145,6 +3183,11 @@ html[data-lite="true"] .todo-scroll {
     .todo-ai-textarea {
         min-height: 150px;
         max-height: 40vh;
+    }
+
+    .todo-ai-dialog__endpoint .nc-select {
+        flex-basis: 100%;
+        min-width: 0;
     }
 
     .todo-ai-dialog__hint {

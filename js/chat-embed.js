@@ -159,6 +159,8 @@
         if (!el.profileSelect) return;
         var state = store.getState();
         var profiles = state.profiles || [];
+        // 自定义触发层在无端点时显示占位文案（原生 select 仍保持空 options）
+        el.profileSelect.setAttribute('data-placeholder', '未配置端点');
         el.profileSelect.textContent = '';
         profiles.forEach(function (profile) {
             el.profileSelect.appendChild(util.e('option', {

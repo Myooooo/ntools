@@ -1217,3 +1217,269 @@
 .sp-profile__meta-item.is-warn {
     color: var(--nc-warning);
 }
+
+/* ==========================================================================
+ * v4.9 设置面板可用性收口
+ *  - 端点行：右侧操作与「当前」标签同排，垂直居中，不重叠
+ *  - 关闭按钮：32×32 正方形、flex 居中、圆角与同区按钮一致
+ *  - Range：自定义 track/thumb，浅色模式也清晰可见（不只 accent-color）
+ *  - 数据 tab：操作按钮同尺寸/边框/图标排列
+ * ========================================================================== */
+
+/* ---------- 端点行：主信息 + 右侧操作同排 ---------- */
+.settings-sheet .sp-profile {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+}
+
+.settings-sheet .sp-profile__main {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: stretch;
+    min-width: 0;
+    padding: 14px 14px 14px 16px;
+}
+
+.settings-sheet .sp-profile__main .nc-badge {
+    flex: 0 0 auto;
+}
+
+/* 覆盖 interaction.css 的桌面绝对定位：操作区回到行内第二列并垂直居中 */
+.settings-sheet .sp-profile__actions {
+    position: static;
+    right: auto;
+    bottom: auto;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+    padding: 0 12px 0 4px;
+}
+
+.sp-profile__actions .nc-btn {
+    flex: 0 0 auto;
+}
+
+.sp-profile__actions .nc-icon {
+    display: block;
+}
+
+.sp-profile-editor {
+    grid-column: 1 / -1;
+    grid-row: 2;
+}
+
+.sp-profile__meta-item--format {
+    color: var(--nc-accent);
+    font-weight: 550;
+}
+
+/* ---------- 右上关闭按钮：正方形、flex 居中 ---------- */
+.settings-sheet__close.nc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    padding: 0;
+    border-radius: var(--nc-radius-sm);
+}
+
+.settings-sheet__head {
+    gap: 12px;
+}
+
+/* ---------- Range：自定义 track / thumb ---------- */
+.sp-range__input {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 22px;
+    min-width: 0;
+    padding: 0;
+    background: transparent;
+    cursor: pointer;
+    accent-color: var(--nc-accent);
+}
+
+.sp-range__input:focus {
+    outline: none;
+}
+
+.sp-range__input:focus-visible {
+    border-radius: var(--nc-radius-pill);
+    box-shadow: var(--nc-focus-ring);
+}
+
+.sp-range__input::-webkit-slider-runnable-track {
+    height: 5px;
+    border-radius: 999px;
+    background: linear-gradient(
+        to right,
+        var(--nc-accent) 0,
+        var(--nc-accent) var(--sp-range-progress, 0%),
+        var(--nc-border-strong) var(--sp-range-progress, 0%),
+        var(--nc-border-strong) 100%
+    );
+    box-shadow: inset 0 0 0 1px var(--nc-border-faint);
+}
+
+.sp-range__input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    margin-top: -5px;
+    border: 2px solid var(--nc-accent);
+    border-radius: 50%;
+    background: var(--nc-surface);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28), 0 0 0 3px var(--nc-accent-faint);
+    transition: transform var(--nc-dur-fast) var(--nc-ease), box-shadow var(--nc-dur-fast) var(--nc-ease);
+}
+
+.sp-range__input:hover::-webkit-slider-thumb {
+    transform: scale(1.08);
+}
+
+.sp-range__input:focus-visible::-webkit-slider-thumb {
+    box-shadow: var(--nc-focus-ring), 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.sp-range__input::-moz-range-track {
+    height: 5px;
+    border-radius: 999px;
+    background: var(--nc-border-strong);
+}
+
+.sp-range__input::-moz-range-progress {
+    height: 5px;
+    border-radius: 999px;
+    background: var(--nc-accent);
+}
+
+.sp-range__input::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border: 2px solid var(--nc-accent);
+    border-radius: 50%;
+    background: var(--nc-surface);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+/* 浅色模式：轨道进一步加深，避免白底上几乎不可见 */
+html[data-theme="light"] .sp-range__input::-webkit-slider-runnable-track {
+    background: linear-gradient(
+        to right,
+        var(--nc-accent) 0,
+        var(--nc-accent) var(--sp-range-progress, 0%),
+        rgba(20, 24, 32, 0.5) var(--sp-range-progress, 0%),
+        rgba(20, 24, 32, 0.5) 100%
+    );
+}
+
+html[data-theme="light"] .sp-range__input::-moz-range-track {
+    background: rgba(20, 24, 32, 0.5);
+}
+
+/* ---------- 数据 / 通用操作按钮对齐 ---------- */
+.sp-data-card__actions,
+.sp-data-row,
+.sp-about-actions,
+.sp-section-actions {
+    align-items: center;
+}
+
+.sp-data-card__actions .nc-btn,
+.sp-data-row .nc-btn,
+.sp-about-actions .nc-btn {
+    flex: 0 0 auto;
+}
+
+.sp-data-card__actions .nc-btn {
+    min-height: 28px;
+}
+
+.sp-editor-actions {
+    flex-wrap: wrap;
+    row-gap: 8px;
+}
+
+.sp-editor-actions .nc-btn {
+    flex: 0 0 auto;
+}
+
+@media (max-width: 900px) {
+    .settings-sheet .sp-profile__actions {
+        padding-right: 10px;
+    }
+}
+
+@media (max-width: 560px) {
+    .settings-sheet .sp-profile__actions {
+        gap: 0;
+        padding-right: 6px;
+    }
+
+    .settings-sheet .sp-profile__main {
+        padding: 12px 6px 12px 12px;
+        gap: 10px;
+    }
+
+    .sp-editor-status {
+        flex-basis: 100%;
+        order: 2;
+    }
+
+    .sp-editor-actions {
+        justify-content: flex-end;
+    }
+}
+
+/* ---------- v4.9 移动端布局修复 ----------
+ * v4.1 的 `.settings-sheet__layout { grid-template-columns: 208px ... }`
+ * 写在 @media 之后，覆盖了 900px 以下的单列规则，导致 390 宽度下
+ * 左侧导航仍占一列、正文被压到 ~190px 且行内按钮被挤压。这里在末尾
+ * 重新声明移动端单列 + 横向滚动导航。
+ */
+@media (max-width: 900px) {
+    .settings-sheet__layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .settings-sheet__nav {
+        flex-direction: row;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 12px;
+        border-right: 0;
+        border-bottom: 1px solid var(--nc-border);
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .settings-sheet__nav .sp-nav {
+        flex: 0 0 auto;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: var(--nc-radius-sm);
+    }
+
+    .settings-sheet__nav .sp-nav::before {
+        display: none;
+    }
+
+    .settings-sheet__nav .sp-nav__desc {
+        display: none;
+    }
+
+    .settings-sheet__main {
+        min-height: 0;
+    }
+}

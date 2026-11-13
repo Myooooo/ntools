@@ -314,7 +314,7 @@
         { kind: 'work-end', label: '下班前' },
         { kind: 'tomorrow', label: '明天前' },
         { kind: 'friday', label: '周五前' },
-        { kind: 'next-week', label: '下周前' },
+        { kind: 'next-week', label: '下周五前' },
         { kind: 'month-end', label: '月底前' },
         { kind: 'clear', label: '清除' }
     ];
@@ -379,6 +379,7 @@
                 chip.type = 'button';
                 attr(chip, 'data-quick-kind', option.kind);
                 attr(chip, 'aria-pressed', 'false');
+                if (option.kind === 'clear') toggleClass(chip, 'todo-quick-chip--danger', true);
                 row.appendChild(chip);
             });
             wrap.appendChild(row);
@@ -822,19 +823,65 @@
         });
     }
 
+    /**
+     * 快捷时间选项（添加页与详情页共用，含 kind/顺序/文案）。
+     * @returns {Array<{kind:string,label:string,ts:number|null,text:string}>}
+     */
+    function quickDueOptionList() {
+        if (NC.todoTime && typeof NC.todoTime.quickDueOptions === 'function') {
+            return NC.todoTime.quickDueOptions();
+        }
+        return QUICK_FALLBACK.map(function (option) {
+            return { kind: option.kind, label: option.label, ts: null, text: option.label };
+        });
+    }
+
+    function applyQuickChipMeta(chip, option) {
+        if (!chip || !option) return;
+        var text = option.text || option.label;
+        attr(chip, 'title', text);
+        attr(chip, 'aria-label', option.kind === 'clear' ? '清除截止时间' : option.label + '：' + text);
+    }
+
+    /**
+     * 详情页快捷时间与添加页保持一致：同一组 kind/顺序/文案，清除按钮同款危险色。
+     */
+    function syncDetailQuick(task) {
+        if (!els.detailInner) return;
+        var quick = els.detailInner.querySelector('.detail-quick');
+        if (!quick) return;
+        var options = quickDueOptionList();
+        var activeKind = '';
+        if (task && util.isFiniteNum(task.due)) {
+            options.forEach(function (option) {
+                if (option.kind !== 'clear' && option.ts === task.due) activeKind = option.kind;
+            });
+        }
+        options.forEach(function (option) {
+            var chip = quick.querySelector('[data-quick-kind="' + option.kind + '"]');
+            if (!chip) return;
+            applyQuickChipMeta(chip, option);
+            toggleClass(chip, 'is-active', option.kind === activeKind);
+            attr(chip, 'aria-pressed', option.kind === activeKind ? 'true' : 'false');
+        });
+    }
+
+    function refreshDetailQuick() {
+        if (!els.detailInner) return;
+        var id = store.getUi().selectedId;
+        var task = id ? store.getTask(id) : null;
+        if (task) syncDetailQuick(task);
+    }
+
     function refreshQuickDue() {
         if (!els.quickDue) return;
-        var options = (NC.todoTime && typeof NC.todoTime.quickDueOptions === 'function')
-            ? NC.todoTime.quickDueOptions()
-            : null;
-        if (!options) return;
+        var options = quickDueOptionList();
         options.forEach(function (option) {
             var chip = els.quickDue.querySelector('[data-quick-kind="' + option.kind + '"]');
             if (!chip) return;
-            attr(chip, 'title', option.text);
-            if (option.kind === 'clear') attr(chip, 'aria-label', '清除截止时间');
-            else attr(chip, 'aria-label', option.label + '：' + option.text);
+            applyQuickChipMeta(chip, option);
         });
+        refreshDetailQuick();
     }
 
     function addTagsFromInput() {
@@ -880,8 +927,20 @@
     }
 
     /**
+     * 从 AI 草稿中取合法的重复频率（白名单，只接受 UI 支持的四种）。
+     * @param {*} value
+     * @returns {string} '' 表示不重复
+     */
+    function draftRecurrenceFreq(value) {
+        var freq = (value && typeof value === 'object' && typeof value.freq === 'string')
+            ? value.freq.trim().toLowerCase()
+            : '';
+        return ['daily', 'weekly', 'monthly', 'yearly'].indexOf(freq) > -1 ? freq : '';
+    }
+
+    /**
      * 用 AI 识别的结果填充创建区（不创建任务）。
-     * @param {{title,notes,due,dueAllDay,priority,tags,listName}} data
+     * @param {{title,notes,due,dueAllDay,priority,tags,listName,recurrence}} data
      * @returns {boolean}
      */
     function applyDraft(data) {
@@ -894,6 +953,13 @@
         if (els.newDue) els.newDue.value = util.isFiniteNum(data.due) ? util.toDateTimeInputValue(data.due) : '';
         if (els.newPriority && data.priority && ['low', 'normal', 'high', 'urgent'].indexOf(data.priority) > -1) {
             els.newPriority.value = data.priority;
+        }
+        /* 循环：AI 可能省略或返回非法值，一律按白名单处理，避免残留上一次草稿的重复设置 */
+        var recurrenceFreq = draftRecurrenceFreq(data.recurrence);
+        composerRecurrence = recurrenceFreq || null;
+        if (els.newRecurrence) els.newRecurrence.value = recurrenceFreq;
+        if (recurrenceFreq && els.newDue && !els.newDue.value) {
+            els.newDue.value = util.toDateTimeInputValue(defaultDueForRecurrence());
         }
         var tags = Array.isArray(data.tags) ? data.tags : [];
         composerTags = tags.filter(function (tag) {
@@ -1731,6 +1797,7 @@
         if (detailTask && rendered.detailId === detailTask.id) {
             var metaEl = els.detailInner ? els.detailInner.querySelector('[data-detail-meta]') : null;
             if (metaEl) metaEl.textContent = detailMetaText(detailTask);
+            syncDetailQuick(detailTask);
         }
     }
 
@@ -1839,23 +1906,23 @@
         attr(dueInput, 'data-field', 'due');
         attr(dueInput, 'aria-label', '截止时间');
         dueRow.appendChild(dueInput);
-        var dueClear = node('button', 'nc-btn nc-btn--icon nc-btn--sm');
+        var dueClear = node('button', 'nc-btn nc-btn--icon nc-btn--sm detail-due-clear');
         attr(dueClear, 'type', 'button');
         attr(dueClear, 'data-act', 'due-clear');
         attr(dueClear, 'aria-label', '清除截止时间');
+        attr(dueClear, 'title', '清除截止时间');
         dueClear.appendChild(icon('x', 14));
         dueRow.appendChild(dueClear);
         dueWrap.appendChild(dueRow);
         var quick = node('div', 'detail-quick');
-        [
-            { label: '今天 18:00', ts: util.startOfDay(Date.now()) + 18 * 3600000 },
-            { label: '明天 09:00', ts: util.startOfDay(Date.now()) + 86400000 + 9 * 3600000 },
-            { label: '下周一 09:00', ts: nextMonday() }
-        ].forEach(function (item) {
-            var chip = node('button', 'nc-chip', item.label);
+        quickDueOptionList().forEach(function (option) {
+            var chip = node('button', 'nc-chip todo-quick-chip', option.label);
             attr(chip, 'type', 'button');
             attr(chip, 'data-act', 'due-quick');
-            attr(chip, 'data-ts', item.ts);
+            attr(chip, 'data-quick-kind', option.kind);
+            attr(chip, 'aria-pressed', 'false');
+            if (option.kind === 'clear') toggleClass(chip, 'todo-quick-chip--danger', true);
+            applyQuickChipMeta(chip, option);
             quick.appendChild(chip);
         });
         dueWrap.appendChild(quick);
@@ -1994,12 +2061,6 @@
         return form;
     }
 
-    function nextMonday() {
-        var base = util.startOfDay(Date.now()) + 86400000;
-        while (new Date(base).getDay() !== 1) base += 86400000;
-        return base + 9 * 3600000;
-    }
-
     function syncDetailForm(task, doc, force) {
         var root = els.detailInner;
         if (!root) return;
@@ -2036,6 +2097,7 @@
             var dueValue = util.isFiniteNum(task.due) ? util.toDateTimeInputValue(task.due) : '';
             if (dueEl.value !== dueValue) dueEl.value = dueValue;
         }
+        syncDetailQuick(task);
         if (priorityEl.value !== task.priority) priorityEl.value = task.priority;
         if (listEl.value !== task.listId) listEl.value = task.listId;
         if (repeatSelect) {
@@ -2257,7 +2319,23 @@
         } else if (act === 'due-clear') {
             store.updateTask(id, { due: null }, { label: '清除截止时间' });
         } else if (act === 'due-quick') {
-            var ts = Number(btn.getAttribute('data-ts'));
+            var kind = btn.getAttribute('data-quick-kind');
+            if (!kind) {
+                /* 兼容旧详情 DOM（data-ts 静态快捷按钮） */
+                var legacyTs = Number(btn.getAttribute('data-ts'));
+                if (!util.isFiniteNum(legacyTs)) return;
+                store.updateTask(id, { due: legacyTs }, { label: '修改截止时间' });
+                return;
+            }
+            if (!NC.todoTime || typeof NC.todoTime.computeQuickDue !== 'function') {
+                ui.toast('快捷时间模块未加载（js/todo-time.js）', { type: 'warn' });
+                return;
+            }
+            if (kind === 'clear') {
+                store.updateTask(id, { due: null }, { label: '清除截止时间' });
+                return;
+            }
+            var ts = NC.todoTime.computeQuickDue(kind);
             if (!util.isFiniteNum(ts)) return;
             store.updateTask(id, { due: ts }, { label: '修改截止时间' });
         } else if (act === 'tag-remove') {

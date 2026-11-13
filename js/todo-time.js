@@ -6,7 +6,7 @@
  *   work-end   下班前：工作日且未过 → 今天 workEnd；已过 / 周末 → 下一工作日 workEnd
  *   tomorrow   明天前：明天 workEnd
  *   friday     周五前：本周五 workEnd；已过 → 下周五 workEnd
- *   next-week  下周前：下周一 09:00
+ *   next-week  下周五前：下周一 + 4 天（下周五）的 workEnd
  *   month-end  月底前：本月最后一天 workEnd；已过则下月最后一天 workEnd
  *   clear      清除：null
  * 所有函数不 throw；日期一律用本地时区（与 Todo due 存储 epoch ms 一致）。
@@ -18,7 +18,7 @@
     var util = NC.util;
 
     var DEFAULT_WORK_END = '17:30';
-    var NEXT_WEEK_HOUR = 9;
+    var NEXT_WEEK_FRIDAY_OFFSET = 4; /* 下周一 + 4 天 = 下周五 */
     var DAY_MS = 86400000;
 
     /**
@@ -28,7 +28,7 @@
         { kind: 'work-end', label: '下班前' },
         { kind: 'tomorrow', label: '明天前' },
         { kind: 'friday', label: '周五前' },
-        { kind: 'next-week', label: '下周前' },
+        { kind: 'next-week', label: '下周五前' },
         { kind: 'month-end', label: '月底前' },
         { kind: 'clear', label: '清除' }
     ];
@@ -81,12 +81,6 @@
         var parts = parseWorkEnd(workEnd);
         var d = new Date(dayStart);
         d.setHours(parts.hour, parts.minute, 0, 0);
-        return d.getTime();
-    }
-
-    function atHour(dayStart, hour) {
-        var d = new Date(dayStart);
-        d.setHours(hour, 0, 0, 0);
         return d.getTime();
     }
 
@@ -153,7 +147,8 @@
             var day2 = weekday(today);
             var toMonday = (8 - day2) % 7; /* 周一 → 7；周二 → 6；周日 → 1 */
             if (toMonday === 0) toMonday = 7;
-            return atHour(addDays(today, toMonday), NEXT_WEEK_HOUR);
+            var nextMonday = addDays(today, toMonday);
+            return atWorkEnd(addDays(nextMonday, NEXT_WEEK_FRIDAY_OFFSET), end);
         }
 
         if (kind === 'month-end') {
@@ -196,12 +191,28 @@
     }
 
     /**
-     * 便捷文案：如「今天 17:30」「周五 17:30」「下周一 09:00」「10-31 17:30」。
+     * 目标日是否属于「下周」的周五（周一为一周起点）。
+     * 用于把 next-week 的文案固定成「下周五 17:30」，周末也不会误写成「周五」。
      */
-    function describe(ts, now) {
+    function isNextWeekFriday(ts, now) {
+        var current = startOfDay(isNum(now) ? now : Date.now());
+        var monday = addDays(current, -((weekday(current) + 6) % 7));
+        return startOfDay(ts) === addDays(monday, 7 + NEXT_WEEK_FRIDAY_OFFSET);
+    }
+
+    /**
+     * 便捷文案：如「今天 17:30」「周五 17:30」「下周五 17:30」「10-31 17:30」。
+     * @param {number} ts
+     * @param {number} [now]
+     * @param {string} [kind] 传 'next-week' 时强制使用「下周五」前缀
+     */
+    function describe(ts, now, kind) {
         if (!isNum(ts)) return '无截止时间';
         var current = isNum(now) ? now : Date.now();
-        return dateLabel(ts, current) + ' ' + timeLabel(ts);
+        var prefix = (kind === 'next-week' || isNextWeekFriday(ts, current))
+            ? '下周五'
+            : dateLabel(ts, current);
+        return prefix + ' ' + timeLabel(ts);
     }
 
     /**
@@ -219,7 +230,7 @@
                 kind: option.kind,
                 label: option.label,
                 ts: ts,
-                text: option.kind === 'clear' ? '清除截止时间' : describe(ts, current)
+                text: option.kind === 'clear' ? '清除截止时间' : describe(ts, current, option.kind)
             };
         });
     }

@@ -52,7 +52,7 @@
     flex: 1 0 auto;
     gap: 22px;
     width: 100%;
-    max-width: 860px;
+    max-width: 1000px;
     margin: 0 auto;
 }
 
@@ -313,13 +313,15 @@ html[data-theme="light"] .chat-msg__role {
     box-shadow: none;
 }
 
-/* 用户：右侧轻量蓝底块，克制的 1px 发丝边 */
+/* 用户：右侧轻量蓝底块，柔和的大圆角 + 右下方收窄，
+ * 与左侧助手“角色刻度”分属不同边缘，不互相抢读。
+ * 形状/内边距与主题无关，深色、浅色与 Lite 保持一致。 */
 .chat-msg--user .chat-msg__bubble {
     justify-self: end;
-    max-width: min(560px, 78%);
-    padding: 9px 12px;
+    max-width: min(580px, 78%);
+    padding: 10px 13px;
     border: 1px solid var(--nc-border-faint);
-    border-radius: var(--nc-radius-md);
+    border-radius: 14px 14px 6px 14px;
     background: var(--nc-accent-soft);
     box-shadow: none;
 }
@@ -462,7 +464,7 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
 }
 
 /* --------------------------------------------------------------------------
- * 4. 消息操作：仅 hover / focus 显现；触屏常显
+ * 4. 消息操作：默认常显（focus / 触屏直接可用），不再依赖 hover 才出现
  * -------------------------------------------------------------------------- */
 .chat-msg__actions {
     display: flex;
@@ -470,14 +472,6 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
     gap: 2px;
     min-height: 24px;
     margin-top: 6px;
-    opacity: 0;
-    transform: translateY(-2px);
-    transition:
-        opacity var(--nc-dur-fast) var(--nc-ease),
-        transform var(--nc-dur-fast) var(--nc-ease);
-}
-
-.chat-msg:focus-within .chat-msg__actions {
     opacity: 1;
     transform: none;
 }
@@ -967,7 +961,7 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
     flex-wrap: wrap;
     gap: 6px;
     width: 100%;
-    max-width: 860px;
+    max-width: 1000px;
     margin: 0 auto var(--nc-space-2);
 }
 
@@ -1007,7 +1001,7 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
     align-items: flex-end;
     gap: 4px;
     width: 100%;
-    max-width: 860px;
+    max-width: 1000px;
     margin: 0 auto;
     padding: 4px 4px 4px 8px;
     border: 1px solid var(--nc-border);
@@ -1318,11 +1312,6 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
     .chat-menu__item.is-danger:hover {
         background: var(--nc-danger-soft);
         color: var(--nc-danger);
-    }
-
-    .chat-msg:hover .chat-msg__actions {
-        opacity: 1;
-        transform: none;
     }
 
     .chat-msg__action:hover {
@@ -1938,4 +1927,120 @@ html[data-lite="true"] .chat-toolbar .chat-profile-meta {
     .chat-toolbar.is-switching .chat-profile-meta {
         transition: none;
     }
+}
+
+/* ==========================================================================
+ * v4.9 端点下拉：自定义触发层 + 更宽的可读记录列
+ * native #chat-profile-select 仍在 DOM（value/options/change 不变），
+ * 视觉由 wrapper 内的 trigger 承担；浮层由全局 select 增强器负责。
+ * ========================================================================== */
+
+/* 1) 工具栏里的 wrapper 保持内容宽度，不抢右侧操作区 */
+.chat-toolbar__left > .nc-select-wrap {
+    display: flex;
+    flex: 0 1 auto;
+    width: auto;
+    max-width: 208px;
+    min-width: 0;
+}
+
+/* 2) 原生 select 透明覆盖整个 wrapper，保留点击/标签/键盘语义 */
+.chat-toolbar__left > .nc-select-wrap > #chat-profile-select {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    opacity: 0.001;
+    cursor: pointer;
+}
+
+/* 3) 触发层：与旧端点下拉的尺寸/字重/透明底一致 */
+#chat-profile-select + .nc-select__trigger {
+    width: auto;
+    max-width: 100%;
+    height: 28px;
+    padding: 0 24px 0 8px;
+    border: 1px solid transparent;
+    border-radius: var(--nc-radius-sm);
+    background-color: transparent;
+    color: var(--nc-text);
+    font-size: var(--nc-fs-md);
+    font-weight: 600;
+    transition:
+        background-color var(--nc-dur-fast) var(--nc-ease),
+        border-color var(--nc-dur-fast) var(--nc-ease),
+        color var(--nc-dur-fast) var(--nc-ease);
+}
+
+#chat-profile-select + .nc-select__trigger .nc-select__chevron {
+    top: calc(50% - 6px);
+    right: 7px;
+    width: 12px;
+    height: 12px;
+    color: var(--nc-text-3);
+}
+
+.chat-toolbar__left > .nc-select-wrap:focus-within > #chat-profile-select + .nc-select__trigger {
+    border-color: var(--nc-accent);
+    box-shadow: none;
+    color: var(--nc-text);
+}
+
+.chat-toolbar__left > .nc-select-wrap.is-open > #chat-profile-select + .nc-select__trigger {
+    border-color: var(--nc-accent-ring);
+    background-color: var(--nc-surface-2);
+    color: var(--nc-text);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .chat-toolbar__left > .nc-select-wrap:hover > #chat-profile-select + .nc-select__trigger {
+        border-color: var(--nc-border);
+        background-color: var(--nc-surface-2);
+        color: var(--nc-text);
+    }
+}
+
+/* 4) 切换端点时的短暂压低反馈，作用于可见触发层 */
+.chat-toolbar__left > .nc-select-wrap {
+    transition: opacity var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+.chat-toolbar.is-switching .chat-toolbar__left > .nc-select-wrap {
+    opacity: 0.55;
+}
+
+/* 5) 响应式：与旧下拉的宽度/高度/字号保持一致 */
+@media (max-width: 768px) {
+    .chat-toolbar__left > .nc-select-wrap {
+        max-width: 156px;
+    }
+}
+
+@media (pointer: coarse) {
+    #chat-profile-select + .nc-select__trigger {
+        height: 32px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chat-toolbar__left > .nc-select-wrap,
+    #chat-profile-select + .nc-select__trigger {
+        transition: none;
+    }
+}
+
+html[data-lite="true"] .chat-toolbar__left > .nc-select-wrap,
+html[data-lite="true"] #chat-profile-select + .nc-select__trigger {
+    transition: none;
+}
+
+/* 键盘焦点保留旧的 focus-visible 细环（鼠标点击仍只显示边框） */
+.chat-toolbar__left > .nc-select-wrap > #chat-profile-select:focus-visible + .nc-select__trigger {
+    box-shadow: 0 0 0 3px var(--nc-accent-faint);
 }

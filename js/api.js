@@ -22,8 +22,58 @@
         maxBodyPreview: 2000
     };
 
+    var API_FORMAT_OPENAI = 'openai';
+    var API_FORMAT_BOCAI = 'bocai';
+
+    /**
+     * 内嵌思考块标签对。参考 bocai-code 的 dsml.py：
+     * <think>、<thinking>、<reasoning>、<｜DSML｜thinking>（全角竖线），
+     * 另外兼容半角竖线写法。匹配大小写不敏感。
+     */
+    var THINK_PAIRS = [
+        { open: '<think>', close: '</think>' },
+        { open: '<thinking>', close: '</thinking>' },
+        { open: '<\uff5cDSML\uff5cthinking>', close: '</\uff5cDSML\uff5cthinking>' },
+        { open: '<|DSML|thinking>', close: '</|DSML|thinking>' },
+        { open: '<reasoning>', close: '</reasoning>' }
+    ];
+    var THINK_OPENERS = THINK_PAIRS.map(function (pair) { return pair.open; });
+    var THINK_CLOSER_BY_OPEN = Object.create(null);
+    THINK_PAIRS.forEach(function (pair) { THINK_CLOSER_BY_OPEN[pair.open.toLowerCase()] = pair.close; });
+
     var IMAGE_FALLBACK_RE = /^data:image\/(?:png|jpe?g|webp|gif);base64,/i;
     var CJK_RE = /[\u2e80-\u9fff\uf900-\ufaff\u3040-\u30ff\uac00-\ud7af]/;
+
+    /** 端点 API 格式归一化：仅 openai / bocai，其它一律回落 openai。 */
+    function normalizeApiFormat(value) {
+        var text = value == null ? '' : String(value).trim().toLowerCase();
+        return text === API_FORMAT_BOCAI ? API_FORMAT_BOCAI : API_FORMAT_OPENAI;
+    }
+
+    function isBocai(config) {
+        return normalizeApiFormat(config && config.apiFormat) === API_FORMAT_BOCAI;
+    }
+
+    /** 消息中是否含图片内容块（用于 bocai 格式的前置拒绝）。 */
+    function hasImageContent(messages) {
+        if (!Array.isArray(messages)) return false;
+        for (var i = 0; i < messages.length; i += 1) {
+            var message = messages[i];
+            if (!message || !Array.isArray(message.content)) continue;
+            for (var j = 0; j < message.content.length; j += 1) {
+                var part = message.content[j];
+                if (part && typeof part === 'object' && part.type === 'image_url') return true;
+            }
+        }
+        return false;
+    }
+
+    function bocaiImageError() {
+        return {
+            type: 'unsupported',
+            message: '当前端点 API 格式为 bocai，参考实现不支持图片输入；请改用 openai 格式端点，或移除图片后重试'
+        };
+    }
 
     function allowedImage(url) {
         var schema = NC.schema && NC.schema.chat;
@@ -65,7 +115,11 @@
         return answer ? { role: 'assistant', content: answer } : null;
     }
 
-    /** Base URL 归一化：去尾斜杠、必要时补 /chat/completions；非法返回 ''。 */
+    /**
+     * Base URL 归一化：去尾斜杠、必要时补 /chat/completions；非法返回 ''。
+     * 支持只填 host（https://host）、带 /v1 的 base（https://host/v1），
+     * 也兼容用户直接粘贴完整 /chat/completions（不会重复追加）。
+     */
     function buildUrl(base) {
         if (typeof base !== 'string') return '';
         var value = base.trim();
@@ -73,6 +127,14 @@
         value = value.replace(/\/+$/, '');
         if (!/\/chat\/completions$/i.test(value)) value += '/chat/completions';
         return value;
+    }
+
+    function readSessionId(config) {
+        var source = config || {};
+        var candidate = typeof source.sessionId === 'string' ? source.sessionId.trim() : '';
+        if (!candidate && typeof source.id === 'string') candidate = source.id.trim();
+        if (!candidate && typeof source.profileId === 'string') candidate = source.profileId.trim();
+        return candidate;
     }
 
     function buildPayload(options) {
@@ -98,6 +160,12 @@
         }
         if (opts.stream !== false && opts.includeUsage) {
             payload.stream_options = { include_usage: true };
+        }
+        // bocai：在标准 OpenAI body 上追加稳定会话键（参考实现用服务端 sessionId
+        // 维持多轮身份）。openai 格式保持字段完全不变。
+        if (isBocai(config)) {
+            var sessionId = readSessionId(config);
+            if (sessionId) payload.sessionId = sessionId;
         }
         return payload;
     }
@@ -190,14 +258,15 @@
     }
 
     /**
-     * 思考标签跨 chunk 状态机：处理 <think>…</think>，并把被 chunk 截断的半个标签留到下一
-     * 个 chunk，避免标签碎片漏进正文/思考文本。结构化 reasoning_content 不经过本过滤器。
+     * 思考标签跨 chunk 状态机：处理 <think> / <thinking> / <reasoning> /
+     * <｜DSML｜thinking>，并把被 chunk 截断的半个标签留到下一个 chunk，
+     * 避免标签碎片漏进正文/思考文本。结构化 reasoning_content 不经过本过滤器。
+     * 未闭合的思考块在 end() 时整体归入 reasoning；未闭合的开标签碎片归入正文。
      */
     function createThinkFilter(handlers) {
         var h = handlers || {};
-        var OPEN = '<think>';
-        var CLOSE = '</think>';
         var inThink = false;
+        var activeCloser = '';
         var carry = '';
 
         function emit(fn, value) {
@@ -205,12 +274,35 @@
             fn(value);
         }
 
-        function prefixSuffixLength(text, tag) {
-            var max = Math.min(text.length, tag.length - 1);
-            for (var len = max; len > 0; len -= 1) {
-                if (text.slice(text.length - len) === tag.slice(0, len)) return len;
+        function findMarker(buffer, markers) {
+            var lower = buffer.toLowerCase();
+            var found = -1;
+            var foundMarker = '';
+            for (var i = 0; i < markers.length; i += 1) {
+                var marker = markers[i];
+                var at = lower.indexOf(marker.toLowerCase());
+                if (at !== -1 && (found === -1 || at < found)) {
+                    found = at;
+                    foundMarker = marker;
+                }
             }
-            return 0;
+            return found === -1 ? null : { index: found, marker: foundMarker };
+        }
+
+        function prefixSuffixLength(text, markers) {
+            var lower = text.toLowerCase();
+            var maximum = 0;
+            for (var i = 0; i < markers.length; i += 1) {
+                var marker = markers[i].toLowerCase();
+                var max = Math.min(text.length, marker.length - 1);
+                for (var len = max; len > 0; len -= 1) {
+                    if (lower.slice(lower.length - len) === marker.slice(0, len)) {
+                        maximum = Math.max(maximum, len);
+                        break;
+                    }
+                }
+            }
+            return maximum;
         }
 
         function feed(text) {
@@ -221,26 +313,28 @@
             while (buf && guard < 500) {
                 guard += 1;
                 if (inThink) {
-                    var closeAt = buf.indexOf(CLOSE);
-                    if (closeAt !== -1) {
-                        emit(h.onReasoning, buf.slice(0, closeAt));
-                        buf = buf.slice(closeAt + CLOSE.length);
+                    var closer = findMarker(buf, [activeCloser]);
+                    if (closer) {
+                        emit(h.onReasoning, buf.slice(0, closer.index));
+                        buf = buf.slice(closer.index + closer.marker.length);
                         inThink = false;
+                        activeCloser = '';
                         continue;
                     }
-                    var keepClose = prefixSuffixLength(buf, CLOSE);
+                    var keepClose = prefixSuffixLength(buf, [activeCloser]);
                     emit(h.onReasoning, keepClose ? buf.slice(0, buf.length - keepClose) : buf);
                     carry = keepClose ? buf.slice(buf.length - keepClose) : '';
                     buf = '';
                 } else {
-                    var openAt = buf.indexOf(OPEN);
-                    if (openAt !== -1) {
-                        emit(h.onAnswer, buf.slice(0, openAt));
-                        buf = buf.slice(openAt + OPEN.length);
+                    var opener = findMarker(buf, THINK_OPENERS);
+                    if (opener) {
+                        emit(h.onAnswer, buf.slice(0, opener.index));
+                        buf = buf.slice(opener.index + opener.marker.length);
                         inThink = true;
+                        activeCloser = THINK_CLOSER_BY_OPEN[opener.marker.toLowerCase()] || '</think>';
                         continue;
                     }
-                    var keepOpen = prefixSuffixLength(buf, OPEN);
+                    var keepOpen = prefixSuffixLength(buf, THINK_OPENERS);
                     emit(h.onAnswer, keepOpen ? buf.slice(0, buf.length - keepOpen) : buf);
                     carry = keepOpen ? buf.slice(buf.length - keepOpen) : '';
                     buf = '';
@@ -259,6 +353,88 @@
             end: end,
             isThinking: function () { return inThink; }
         };
+    }
+
+    /**
+     * 归一化 content 字符串/数组/对象，返回 {text, reasoning}。
+     * 兼容 OpenAI 多模态 content part、reasoning/thinking 类型 part、
+     * 以及 output_text / summary / value 等兼容字段。
+     */
+    function contentParts(value) {
+        if (typeof value === 'string') return { text: value, reasoning: '' };
+        if (value == null) return { text: '', reasoning: '' };
+        if (Array.isArray(value)) {
+            var texts = [];
+            var reasons = [];
+            value.forEach(function (part) {
+                var parsed = contentParts(part);
+                texts.push(parsed.text);
+                reasons.push(parsed.reasoning);
+            });
+            return { text: texts.join(''), reasoning: reasons.join('') };
+        }
+        if (typeof value === 'object') {
+            var kind = String(value.type == null ? '' : value.type).toLowerCase().replace(/-/g, '_');
+            var raw = value.text;
+            if (raw == null) raw = value.content;
+            if (raw == null) raw = value.value;
+            if (raw == null) raw = value.output_text;
+            if (raw == null) raw = value.summary;
+            if (raw == null) raw = value.delta;
+            var parsedValue = contentParts(raw);
+            var reasoningKind = kind.indexOf('reasoning') === 0 || kind.indexOf('thinking') === 0 ||
+                kind === 'analysis' || kind === 'reasoning_text';
+            if (reasoningKind) {
+                return { text: '', reasoning: parsedValue.reasoning + parsedValue.text };
+            }
+            if (!parsedValue.text && !parsedValue.reasoning) {
+                var keys = ['thinking', 'reasoning', 'reasoning_content'];
+                for (var i = 0; i < keys.length; i += 1) {
+                    if (keys[i] in value) {
+                        var nested = contentParts(value[keys[i]]);
+                        return { text: '', reasoning: nested.reasoning + nested.text };
+                    }
+                }
+            }
+            return parsedValue;
+        }
+        return { text: String(value), reasoning: '' };
+    }
+
+    /**
+     * 读取一条 choice 的正文/思考片段。流式优先 delta，非流式用 message；
+     * 兼容 choices[0].text 与 delta.text 回退，以及 reasoning_content /
+     * reasoning / thinking / reasoning_details 字段。
+     */
+    function readChoiceFragments(choice, source) {
+        var delta = source || {};
+        var parsed = contentParts(delta.content);
+        var text = parsed.text;
+        var reasoning = parsed.reasoning;
+        if (!text) {
+            var fallbackValue = delta.text != null ? delta.text : (choice ? choice.text : '');
+            var fallback = contentParts(fallbackValue);
+            text = fallback.text;
+            reasoning += fallback.reasoning;
+        }
+        var seen = [];
+        ['reasoning_content', 'reasoning', 'thinking', 'thinking_content', 'reasoning_details'].forEach(function (key) {
+            if (!delta || !(key in delta)) return;
+            var part = contentParts(delta[key]);
+            var fragment = part.reasoning + part.text;
+            if (fragment && seen.indexOf(fragment) === -1) {
+                seen.push(fragment);
+                reasoning += fragment;
+            }
+        });
+        return { text: text, reasoning: reasoning };
+    }
+
+    function extractApiError(error) {
+        if (typeof error === 'string' && error) return error;
+        if (error && typeof error.message === 'string' && error.message) return error.message;
+        if (error && typeof error.detail === 'string' && error.detail) return error.detail;
+        return 'API 返回错误';
     }
 
     function call(fn, payload) {
@@ -298,6 +474,9 @@
         if (!model) {
             return { ok: false, error: { type: 'config', message: 'Model ID 未填写，请检查配置' } };
         }
+        if (isBocai(config) && hasImageContent(opts.messages)) {
+            return { ok: false, error: bocaiImageError() };
+        }
 
         var hasAbort = typeof global.AbortController === 'function';
         var controller = hasAbort ? new global.AbortController() : null;
@@ -313,6 +492,7 @@
         var finishReason = null;
         var answerText = '';
         var reasoningText = '';
+        var structuredReasoningSeen = false;
 
         function onExternalAbort() {
             aborted = true;
@@ -346,6 +526,8 @@
             },
             onReasoning: function (text) {
                 if (!text) return;
+                // 原生 reasoning_content 已存在时，不再重复上报内嵌思考块
+                if (structuredReasoningSeen) return;
                 reasoningText += text;
                 markOutput();
                 call(opts.onReasoning, text);
@@ -355,14 +537,16 @@
         var apiErrorMessage = '';
         var parser = null;
 
-        function handleData(dataText) {
+        function emitStructuredReasoning(fragment) {
+            if (!fragment) return;
+            structuredReasoningSeen = true;
+            reasoningText += fragment;
+            markOutput();
+            call(opts.onReasoning, fragment);
+        }
+
+        function handleJson(json) {
             sawAnyData = true;
-            var json;
-            try {
-                json = JSON.parse(dataText);
-            } catch (err) {
-                return; // 单条坏事件不终止流
-            }
             if (!json || typeof json !== 'object') return;
             var normalizedUsage = normalizeUsage(json.usage);
             if (normalizedUsage) {
@@ -370,23 +554,37 @@
                 call(opts.onUsage, normalizedUsage);
             }
             if (json.error) {
-                apiErrorMessage = (json.error && json.error.message) || 'API 返回错误';
+                apiErrorMessage = extractApiError(json.error);
                 return;
             }
             var choices = Array.isArray(json.choices) ? json.choices : [];
             var choice = choices[0];
-            if (!choice) return;
-            if (choice.finish_reason) finishReason = choice.finish_reason;
-            var delta = choice.delta || {};
-            var reasoning = delta.reasoning_content != null ? delta.reasoning_content : delta.reasoning;
-            if (typeof reasoning === 'string' && reasoning) {
-                reasoningText += reasoning;
-                markOutput();
-                call(opts.onReasoning, reasoning);
+            if (choice) {
+                if (choice.finish_reason) finishReason = choice.finish_reason;
+                var source;
+                if (choice.delta && typeof choice.delta === 'object') source = choice.delta;
+                else if (choice.message && typeof choice.message === 'object') source = choice.message;
+                else source = choice;
+                var fragments = readChoiceFragments(choice, source);
+                emitStructuredReasoning(fragments.reasoning);
+                if (fragments.text) thinkFilter.feed(fragments.text);
+                return;
             }
-            if (typeof delta.content === 'string' && delta.content) {
-                thinkFilter.feed(delta.content);
+            // 无 choices 的兼容形状：顶层 output_text
+            var output = contentParts(json.output_text);
+            emitStructuredReasoning(output.reasoning);
+            if (output.text) thinkFilter.feed(output.text);
+        }
+
+        function handleData(dataText) {
+            var json;
+            try {
+                json = JSON.parse(dataText);
+            } catch (err) {
+                sawAnyData = true; // 单条坏事件不终止流
+                return;
             }
+            handleJson(json);
         }
 
         parser = NC.sse.createParser({ onEvent: handleData });
@@ -445,7 +643,28 @@
                 };
             }
 
-            if (response.body && typeof response.body.getReader === 'function' && typeof global.TextDecoder === 'function') {
+            // 部分兼容网关忽略 stream:true，直接返回 application/json；
+            // 此时按一次性响应解析，避免产生“非 SSE 响应”的误报。
+            var contentType = '';
+            try {
+                if (response.headers && typeof response.headers.get === 'function') {
+                    contentType = String(response.headers.get('content-type') || '');
+                }
+            } catch (headerErr) {
+                contentType = '';
+            }
+            var jsonMode = false;
+            if (/application\/json/i.test(contentType)) {
+                var jsonText = await safeText(response, 8 * 1024 * 1024);
+                var jsonBody = null;
+                try { jsonBody = JSON.parse(jsonText); } catch (parseErr) { jsonBody = null; }
+                if (jsonBody) {
+                    handleJson(jsonBody);
+                    jsonMode = true;
+                }
+            }
+
+            if (!jsonMode && response.body && typeof response.body.getReader === 'function' && typeof global.TextDecoder === 'function') {
                 var reader = response.body.getReader();
                 var decoder = new global.TextDecoder('utf-8');
                 // 兜底：即使 fetch 实现未把 signal 传播到 body 流，也主动取消读取
@@ -473,11 +692,22 @@
                 } finally {
                     if (controller) controller.signal.removeEventListener('abort', abortHook);
                 }
-            } else {
-                // 非流式回退：一次性读取后按 SSE 解析
+            } else if (!jsonMode) {
+                // 非流式回退：一次性读取后按 SSE 解析；若实际是 JSON 则按一次性响应处理
                 var fullText = await safeText(response, 8 * 1024 * 1024);
-                parser.feed(fullText);
-                parser.end();
+                var trimmed = fullText.replace(/^\ufeff/, '').trim();
+                if (trimmed.charAt(0) === '{') {
+                    var fallbackJson = null;
+                    try { fallbackJson = JSON.parse(trimmed); } catch (parseErr2) { fallbackJson = null; }
+                    if (fallbackJson) {
+                        handleJson(fallbackJson);
+                        jsonMode = true;
+                    }
+                }
+                if (!jsonMode) {
+                    parser.feed(fullText);
+                    parser.end();
+                }
             }
 
             thinkFilter.end();
@@ -590,9 +820,16 @@
 
     NC.api = {
         DEFAULTS: DEFAULTS,
+        API_FORMAT_OPENAI: API_FORMAT_OPENAI,
+        API_FORMAT_BOCAI: API_FORMAT_BOCAI,
+        THINK_PAIRS: THINK_PAIRS,
         chat: chat,
         buildUrl: buildUrl,
         buildPayload: buildPayload,
+        normalizeApiFormat: normalizeApiFormat,
+        hasImageContent: hasImageContent,
+        contentParts: contentParts,
+        readChoiceFragments: readChoiceFragments,
         estimateTokens: estimateTokens,
         estimateMessagesTokens: estimateMessagesTokens,
         computeStats: computeStats,

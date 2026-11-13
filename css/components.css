@@ -1412,3 +1412,246 @@ html[data-theme="light"] .nc-select {
 .nc-toast.is-leaving {
     transition-duration: 140ms;
 }
+
+/* ==========================================================================
+ * 自定义下拉框（native select 保留并同步）
+ * 结构：.nc-select-wrap > select.nc-select + span.nc-select__trigger
+ * 浮层 .nc-select-pop append 到 body；进入 160ms / 退出 130ms，class 驱动。
+ * ========================================================================== */
+.nc-select-wrap {
+    position: relative;
+    display: block;
+    width: 100%;
+    min-width: 0;
+}
+
+/* 原生 select 保持全尺寸覆盖：点击/标签转发都落在它身上，弹层由 JS 接管 */
+.nc-select-wrap > select.nc-select {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    /* 近乎不可见，同时保留点击/标签转发；不用 opacity:0，
+       避免部分内核把完全透明节点排除在命中测试之外。 */
+    opacity: 0.001;
+    z-index: 2;
+    cursor: pointer;
+}
+
+.nc-select-wrap > .nc-select__trigger.nc-select {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    background-image: none;
+    background-repeat: no-repeat;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.nc-select__text {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nc-select__chevron {
+    position: absolute;
+    top: calc(50% - 7px);
+    right: 10px;
+    width: 14px;
+    height: 14px;
+    color: var(--nc-text-3);
+    pointer-events: none;
+    transition:
+        transform 160ms var(--nc-ease-out),
+        color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-select__chevron--text {
+    top: 50%;
+    margin-top: -9px;
+    font-size: 14px;
+    line-height: 14px;
+    text-align: center;
+}
+
+.nc-select-wrap.is-open > .nc-select__trigger.nc-select {
+    border-color: var(--nc-accent-ring);
+}
+
+.nc-select-wrap.is-open .nc-select__chevron {
+    transform: rotate(180deg);
+}
+
+.nc-select-wrap:focus-within > .nc-select__trigger.nc-select {
+    border-color: var(--nc-accent);
+    box-shadow: var(--nc-focus-ring);
+}
+
+.nc-select-wrap.is-disabled > .nc-select__trigger.nc-select {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nc-select-wrap:hover > .nc-select__trigger.nc-select {
+        border-color: var(--nc-border-strong);
+    }
+}
+
+/* 浮层：body 级 fixed，避免设置面板/抽屉的 overflow:hidden 裁剪 */
+.nc-select-pop {
+    position: fixed;
+    z-index: calc(var(--nc-z-modal) + 10);
+    box-sizing: border-box;
+    min-width: 140px;
+    max-width: calc(100vw - 16px);
+    padding: 5px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--nc-elevated);
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-md);
+    box-shadow: var(--nc-shadow-3);
+    opacity: 0;
+    transform: scale(0.97);
+    transition:
+        opacity 160ms var(--nc-ease-out),
+        transform 160ms var(--nc-ease-out);
+}
+
+.nc-select-pop.is-open {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.nc-select-pop.is-closing {
+    opacity: 0;
+    transform: scale(0.97);
+    pointer-events: none;
+    transition:
+        opacity 130ms var(--nc-ease-out),
+        transform 130ms var(--nc-ease-out);
+}
+
+.nc-select-pop__option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 32px;
+    padding: 6px 9px;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-2);
+    font-size: inherit;
+    line-height: var(--nc-lh-snug);
+    text-align: left;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.nc-select-pop__option:focus,
+.nc-select-pop__option.is-active {
+    outline: none;
+    background: var(--nc-surface-2);
+    color: var(--nc-text);
+}
+
+.nc-select-pop__option.is-selected {
+    color: var(--nc-text);
+}
+
+.nc-select-pop__option.is-disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nc-select-pop__option:not(.is-disabled):hover {
+        background: var(--nc-surface-2);
+        color: var(--nc-text);
+    }
+}
+
+.nc-select-pop__check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    color: var(--nc-accent);
+}
+
+.nc-select-pop__label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nc-select-pop__group {
+    padding: 5px 9px 3px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    letter-spacing: 0.02em;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.nc-select-pop__empty {
+    padding: 9px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-sm);
+    text-align: center;
+}
+
+/* Lite / reduced：浮层即时出现，只保留状态切换 */
+html[data-lite="true"] .nc-select-pop,
+html[data-lite="true"] .nc-select-pop.is-closing,
+html[data-lite="true"] .nc-select__chevron {
+    transition: none;
+}
+
+html[data-lite="true"] .nc-select-pop,
+html[data-lite="true"] .nc-select-pop.is-closing {
+    transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nc-select-pop,
+    .nc-select-pop.is-closing,
+    .nc-select__chevron {
+        transition: none;
+    }
+
+    .nc-select-pop,
+    .nc-select-pop.is-closing {
+        transform: none;
+    }
+}
+
+/* 兼容既有 flex 表单：wrapper 承担原 select 的 flex 尺寸 */
+.todo-ai-dialog__endpoint .nc-select-wrap {
+    flex: 1 1 0%;
+    width: auto;
+    min-width: 200px;
+}
+
+@media (max-width: 768px) {
+    .todo-ai-dialog__endpoint .nc-select-wrap {
+        flex-basis: 100%;
+        min-width: 0;
+    }
+}

@@ -4,8 +4,8 @@
  *
  * 契约（模块说明见 docs/architecture.md）：
  *   buildSystemPrompt(now?, profile?)：每次调用注入 {{NOW}}/{{DATE}}/{{WEEKDAY}}/{{TZ}}/{{WORK_END}}
- *   parseText(text, {signal})：NC.ai.complete 非流式调用 → extractJson → 归一 data
- *   openDialog()：粘贴长文本 → 识别（loading、防误触关闭）→ 关闭 → NC.tools.todo.fillDraft(data)
+ *   parseText(text, {signal, profileId})：NC.ai.complete 非流式调用 → extractJson → 归一 data
+ *   openDialog()：端点下拉（记忆到 llm.todoAi）→ 粘贴长文本 → 识别 → 填充创建表单
  * 原则：绝不自动创建任务；解析失败不写任何数据；不产生 console.error。
  */
 (function (global) {
@@ -17,6 +17,7 @@
 
     var WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
     var PRIORITIES = ['low', 'normal', 'high', 'urgent'];
+    var RECURRENCE_FREQS = ['daily', 'weekly', 'monthly', 'yearly'];
     var MAX_TEXT = 20000;
     var MAX_TITLE = 80;
     var MAX_NOTES = 1000;
@@ -28,9 +29,11 @@
     var DEFAULT_PROMPT = [
         '你是待办事项提取助手。请从用户提供的文本中提取一项待办任务，并只输出 JSON 对象，不要输出解释。',
         '字段：title（≤80字）、notes（≤1000字）、due（YYYY-MM-DDTHH:mm 本地时间，无法判断为 null）、',
-        'dueAllDay（boolean）、priority（low|normal|high|urgent）、tags（0-5 个字符串）、listName（可选）。',
+        'dueAllDay（boolean）、priority（low|normal|high|urgent）、tags（0-5 个字符串）、listName（可选）、',
+        'recurrence（循环规则，null 或 {"freq":"daily"|"weekly"|"monthly"|"yearly","interval":1}）。',
         '当前时间：{{NOW}}（{{WEEKDAY}}，时区 {{TZ}}），下班时间 {{WORK_END}}。',
-        '相对时间（如“明天下班前”“周五前”“月底前”）请换算成具体时间；无法判断 due 时给 null。'
+        '相对时间（如“明天下班前”“周五前”“月底前”）请换算成具体时间；无法判断 due 时给 null。',
+        '识别“每天/每周/每月/每年/工作日每天”等循环语义时填写 recurrence（工作日每天按 daily，interval 固定为 1）；一次性任务 recurrence 为 null。'
     ].join('\n');
 
     var openInstance = null;
@@ -56,6 +59,22 @@
             temperature: 0.2,
             topP: 0.9
         };
+    }
+
+    function promptKey(value) {
+        return String(value == null ? '' : value).replace(/\s+/g, '').trim();
+    }
+
+    /**
+     * llm-store 内置的 Todo 默认提示词是 todo-ai 默认值的旧副本；用户没改过时
+     * 升级到本模块最新的 DEFAULT_PROMPT（新增 recurrence 字段），自定义提示词不动。
+     */
+    function isBuiltinPrompt(value) {
+        var store = llmStore();
+        var builtin = store && typeof store.DEFAULT_TODO_PROMPT === 'string'
+            ? store.DEFAULT_TODO_PROMPT
+            : '';
+        return !!builtin && promptKey(value) === promptKey(builtin);
     }
 
     function getWorkEndTime(fallbackProfile) {
@@ -101,15 +120,18 @@
      * 端点解析
      * ------------------------------------------------------------------ */
     /**
+     * @param {string} [preferredProfileId] 显式端点 id；不传则读 llm.todoAi.profileId，
+     *     null 表示跟随当前端点
      * @returns {{profile:Object|null, cfg:Object, configured:boolean, reason:string}}
      */
-    function resolveTarget() {
+    function resolveTarget(preferredProfileId) {
         var cfg = getTodoAiConfig();
         var store = llmStore();
+        var wanted = preferredProfileId === undefined ? cfg.profileId : preferredProfileId;
         var profile = null;
         try {
-            if (store && cfg.profileId && typeof store.getProfile === 'function') {
-                profile = store.getProfile(cfg.profileId);
+            if (store && wanted && typeof store.getProfile === 'function') {
+                profile = store.getProfile(wanted);
             }
             if (!profile && store && typeof store.getCurrentProfile === 'function') {
                 profile = store.getCurrentProfile();
@@ -154,9 +176,11 @@
      */
     function buildSystemPrompt(now, profile) {
         var cfg = getTodoAiConfig();
-        var template = (typeof cfg.systemPrompt === 'string' && cfg.systemPrompt.trim())
+        var configured = (typeof cfg.systemPrompt === 'string' && cfg.systemPrompt.trim())
             ? cfg.systemPrompt
             : DEFAULT_PROMPT;
+        /* 旧版内置提示词没有 recurrence 字段：升级为本模块最新 DEFAULT_PROMPT。 */
+        var template = (!configured || isBuiltinPrompt(configured)) ? DEFAULT_PROMPT : configured;
         var date = new Date(util.isFiniteNum(now) ? now : Date.now());
         var workEnd = getWorkEndTime(profile);
         var replaced = template
@@ -236,6 +260,30 @@
         return tags.slice(0, MAX_TAGS);
     }
 
+    /**
+     * 白名单解析循环规则：只接受 daily/weekly/monthly/yearly，interval 固定归一为 1。
+     * 显式传入非 1 的 interval（如“每 2 周”）返回 null，避免静默改变用户语义。
+     * @param {*} value
+     * @returns {{freq:string,interval:1}|null}
+     */
+    function normalizeRecurrence(value) {
+        if (value == null || value === '') return null;
+        var freq = '';
+        var interval = null;
+        if (typeof value === 'string') {
+            freq = value.trim().toLowerCase();
+        } else if (typeof value === 'object' && !Array.isArray(value)) {
+            freq = value.freq == null ? '' : String(value.freq).trim().toLowerCase();
+            interval = value.interval;
+        }
+        if (RECURRENCE_FREQS.indexOf(freq) === -1) return null;
+        if (interval != null) {
+            var n = Number(interval);
+            if (!isFinite(n) || n !== 1) return null;
+        }
+        return { freq: freq, interval: 1 };
+    }
+
     function firstLine(text, max) {
         var normalized = String(text == null ? '' : text).replace(/\r\n/g, '\n').trim();
         if (!normalized) return '';
@@ -250,7 +298,7 @@
      * 归一模型返回的 JSON（纯函数，便于测试）。
      * @param {*} raw
      * @param {string} [sourceText] 原文（title 缺失时兜底）
-     * @returns {{title,notes,due,dueAllDay,priority,tags,listName}}
+     * @returns {{title,notes,due,dueAllDay,priority,tags,listName,recurrence}}
      */
     function normalizeData(raw, sourceText) {
         var src = (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};
@@ -265,7 +313,8 @@
             dueAllDay: due != null && src.dueAllDay === true,
             priority: normalizePriority(src.priority),
             tags: normalizeTags(src.tags),
-            listName: trimText(src.listName, MAX_LIST_NAME)
+            listName: trimText(src.listName, MAX_LIST_NAME),
+            recurrence: normalizeRecurrence(src.recurrence)
         };
     }
 
@@ -285,7 +334,7 @@
 
     /**
      * @param {string} text 邮件/纪要等长文本
-     * @param {{signal?:AbortSignal}} [options]
+     * @param {{signal?:AbortSignal,profileId?:string|null}} [options] profileId 不传则读 llm.todoAi.profileId
      * @returns {Promise<{ok:true,data:object,usage?:object,latencyMs?:number,raw?:string}|{ok:false,error:object}>}
      */
     function parseText(text, options) {
@@ -303,7 +352,9 @@
                 error: { type: 'config', message: '模型调用模块未加载（js/ai.js），请刷新页面重试' }
             });
         }
-        var target = resolveTarget();
+        var target = resolveTarget(Object.prototype.hasOwnProperty.call(opts, 'profileId')
+            ? opts.profileId
+            : undefined);
         if (!target.configured) {
             return Promise.resolve({
                 ok: false,
@@ -312,6 +363,11 @@
         }
         var profile = target.profile;
         var cfg = target.cfg;
+        /*
+         * 只发送 Todo 自己的 buildSystemPrompt。
+         * 不要把 profile.chatSystemPrompt 拼进来（Chat 的系统提示词只属于聊天）；
+         * NC.ai.complete 的 readProfile 只读取 baseUrl/apiKey/modelId，也不会发送它。
+         */
         var systemPrompt = buildSystemPrompt(Date.now(), profile);
         var request = {
             profile: profile,
@@ -362,14 +418,99 @@
     /* ------------------------------------------------------------------ *
      * 识别弹窗
      * ------------------------------------------------------------------ */
+    function listProfiles() {
+        var store = llmStore();
+        try {
+            if (store && typeof store.getProfiles === 'function') {
+                var list = store.getProfiles();
+                if (Array.isArray(list)) return list;
+            }
+        } catch (err) { /* ignore */ }
+        return [];
+    }
+
+    function profileOptionLabel(profile) {
+        var name = (profile && profile.name) || '未命名端点';
+        var model = (profile && profile.modelId) || '未设置模型';
+        return name + ' · ' + model;
+    }
+
+    /**
+     * 记忆 Todo AI 使用的端点。
+     * llm-store 当前导出 setTodoAi；同时兼容后续可能提供的 updateTodoAi 别名，
+     * 两者都是写入 llm.todoAi.profileId，不影响聊天当前端点。
+     */
+    function persistTodoAiProfile(profileId) {
+        var store = llmStore();
+        if (!store) return false;
+        var fn = (typeof store.updateTodoAi === 'function')
+            ? store.updateTodoAi
+            : (typeof store.setTodoAi === 'function' ? store.setTodoAi : null);
+        if (!fn) return false;
+        try {
+            fn.call(store, { profileId: profileId || null });
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
+
+    function updateDialogTarget(refs) {
+        if (!refs) return;
+        refs.target = resolveTarget(refs.selectedProfileId);
+        var info = describeTarget(refs.target);
+        if (refs.badge) {
+            refs.badge.className = 'nc-badge ' + (info.configured ? 'nc-badge--accent' : 'nc-badge--warning');
+            refs.badge.textContent = info.configured ? (info.name + ' · ' + info.modelId) : '未配置模型端点';
+        }
+        if (refs.hint) {
+            refs.hint.textContent = info.configured
+                ? '文本只发送给所选端点；Todo 只使用自己的系统提示词，不会拼接聊天提示词。'
+                : (info.reason || '请先在设置中配置模型端点。');
+        }
+    }
+
     function buildDialogContent(prefill) {
         var wrap = document.createElement('div');
         wrap.className = 'todo-ai-dialog';
 
         var lead = document.createElement('p');
         lead.className = 'todo-ai-dialog__lead';
-        lead.textContent = '粘贴邮件、会议纪要或聊天记录，AI 会提取标题、详情、截止时间、优先级与标签。识别结果只会填充创建表单，需要你确认后手动创建。';
+        lead.textContent = '粘贴邮件、会议纪要或聊天记录，AI 会提取标题、详情、截止时间、优先级、标签与重复周期。识别结果只会填充创建表单，需要你确认后手动创建。';
         wrap.appendChild(lead);
+
+        /* 模型端点：全部 profiles + 跟随当前端点，默认回显 llm.todoAi.profileId */
+        var cfg = getTodoAiConfig();
+        var profiles = listProfiles();
+        var endpoint = document.createElement('div');
+        endpoint.className = 'todo-ai-dialog__endpoint';
+        var endpointLabel = document.createElement('label');
+        endpointLabel.className = 'todo-ai-dialog__endpoint-label';
+        endpointLabel.setAttribute('for', 'todo-ai-profile');
+        endpointLabel.textContent = '模型端点';
+        endpoint.appendChild(endpointLabel);
+        var profileSelect = document.createElement('select');
+        profileSelect.id = 'todo-ai-profile';
+        profileSelect.className = 'nc-select';
+        profileSelect.setAttribute('aria-label', 'AI 识别使用的模型端点');
+        var followOption = document.createElement('option');
+        followOption.value = '';
+        followOption.textContent = '跟随当前端点';
+        profileSelect.appendChild(followOption);
+        var selectedProfileId = '';
+        profiles.forEach(function (profile) {
+            if (!profile || !profile.id) return;
+            var option = document.createElement('option');
+            option.value = profile.id;
+            option.textContent = profileOptionLabel(profile);
+            profileSelect.appendChild(option);
+        });
+        if (cfg.profileId && profiles.some(function (profile) { return profile && profile.id === cfg.profileId; })) {
+            selectedProfileId = cfg.profileId;
+        }
+        profileSelect.value = selectedProfileId;
+        endpoint.appendChild(profileSelect);
+        wrap.appendChild(endpoint);
 
         var textarea = document.createElement('textarea');
         textarea.id = 'todo-ai-text';
@@ -381,7 +522,7 @@
         if (prefill) textarea.value = String(prefill).slice(0, MAX_TEXT);
         wrap.appendChild(textarea);
 
-        var target = resolveTarget();
+        var target = resolveTarget(selectedProfileId || null);
         var info = describeTarget(target);
         var meta = document.createElement('div');
         meta.className = 'todo-ai-dialog__meta';
@@ -401,7 +542,7 @@
         var hint = document.createElement('span');
         hint.className = 'todo-ai-dialog__hint';
         hint.textContent = info.configured
-            ? '文本会发送给所选端点，不会写入本地存储以外的位置。'
+            ? '文本只发送给所选端点；Todo 只使用自己的系统提示词，不会拼接聊天提示词。'
             : (info.reason || '请先在设置中配置模型端点。');
         meta.appendChild(hint);
         wrap.appendChild(meta);
@@ -412,14 +553,25 @@
         error.setAttribute('role', 'alert');
         wrap.appendChild(error);
 
-        return {
+        var refs = {
             node: wrap,
             textarea: textarea,
             error: error,
             target: target,
+            badge: badge,
+            hint: hint,
+            profileSelect: profileSelect,
+            selectedProfileId: selectedProfileId || null,
             loading: false,
             buttons: null
         };
+        profileSelect.addEventListener('change', function () {
+            refs.selectedProfileId = profileSelect.value || null;
+            persistTodoAiProfile(refs.selectedProfileId);
+            updateDialogTarget(refs);
+            clearError(refs);
+        });
+        return refs;
     }
 
     function setDialogLoading(instance, refs, loading) {
@@ -521,7 +673,9 @@
         refs.abortController = controller;
         setDialogLoading(instance, refs, true);
         var startedAt = Date.now();
-        return parseText(text, controller ? { signal: controller.signal } : {}).then(function (result) {
+        return parseText(text, controller
+            ? { signal: controller.signal, profileId: refs.selectedProfileId }
+            : { profileId: refs.selectedProfileId }).then(function (result) {
             setDialogLoading(instance, refs, false);
             if (!result || result.ok !== true) {
                 showError(refs, result && result.error);
@@ -664,6 +818,7 @@
         buildSystemPrompt: buildSystemPrompt,
         normalizeData: normalizeData,
         normalizeDue: normalizeDue,
+        normalizeRecurrence: normalizeRecurrence,
         parseText: parseText,
         openDialog: openDialog,
         isConfigured: isConfigured,

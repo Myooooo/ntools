@@ -73,19 +73,25 @@
         var options = opts || {};
         var btn = util.e('button', {
             type: 'button',
-            class: 'nc-btn' + (options.primary ? ' nc-btn--primary' : '') + (options.danger ? ' nc-btn--danger' : '') + (options.small ? ' nc-btn--sm' : '') + (options.ghost ? ' nc-btn--ghost' : ''),
+            class: 'nc-btn' +
+                (options.primary ? ' nc-btn--primary' : '') +
+                (options.danger ? ' nc-btn--danger' : '') +
+                (options.small ? ' nc-btn--sm' : '') +
+                (options.ghost ? ' nc-btn--ghost' : '') +
+                (options.iconOnly ? ' nc-btn--icon' : ''),
             text: label
         });
         if (options.icon && icons) {
             btn.textContent = '';
             btn.appendChild(icons.el(options.icon, options.iconSize || 15));
-            btn.appendChild(util.e('span', { text: label }));
+            if (!options.iconOnly && label) btn.appendChild(util.e('span', { text: label }));
         }
         if (options.onClick) btn.addEventListener('click', options.onClick);
         if (options.title) {
             btn.title = options.title;
-            if (!options.label) btn.setAttribute('aria-label', options.title);
+            if (options.iconOnly || !label) btn.setAttribute('aria-label', options.title);
         }
+        if (options.iconOnly && !options.title) btn.setAttribute('aria-label', label || '操作');
         return btn;
     }
 
@@ -127,14 +133,23 @@
             type: 'number', min: '0', max: '2', step: step,
             value: String(value), class: 'nc-input sp-range__number'
         });
+        function paintProgress() {
+            var min = Number(range.min) || 0;
+            var max = Number(range.max) || 100;
+            var current = Number(range.value) || 0;
+            var pct = max > min ? ((current - min) / (max - min)) * 100 : 0;
+            range.style.setProperty('--sp-range-progress', Math.max(0, Math.min(100, pct)) + '%');
+        }
         function sync(source) {
             var v = Math.min(2, Math.max(0, Number(source.value) || 0));
             range.value = v;
             number.value = v;
+            paintProgress();
             onChange(v);
         }
         range.addEventListener('input', function () { sync(range); });
         number.addEventListener('change', function () { sync(number); });
+        paintProgress();
         wrap.appendChild(label);
         wrap.appendChild(range);
         wrap.appendChild(number);
@@ -152,7 +167,7 @@
         var currentProfile = doc.profiles.filter(function (item) { return item.id === doc.currentProfileId; })[0];
         info.appendChild(util.e('p', {
             class: 'sp-section-desc',
-            text: '所有端点保存在本机；聊天与 Todo AI 共用。共 ' + doc.profiles.length + ' 个端点' +
+            text: '所有端点保存在本机；聊天与 Todo AI 共用，支持 OpenAI 与 bocai 两种 API 格式。共 ' + doc.profiles.length + ' 个端点' +
                 (currentProfile ? '，当前使用「' + currentProfile.name + '」' : '') + '。'
         }));
         head.appendChild(info);
@@ -189,9 +204,15 @@
             var meta = util.e('span', { class: 'sp-profile__meta' });
             meta.appendChild(util.e('span', { class: 'sp-profile__meta-item', text: profile.modelId || '未填模型' }));
             meta.appendChild(util.e('span', { class: 'sp-profile__meta-item', text: profile.baseUrl || '未填地址' }));
+            if (profile.apiFormat === 'bocai') {
+                meta.appendChild(util.e('span', { class: 'sp-profile__meta-item sp-profile__meta-item--format', text: 'bocai 格式' }));
+            }
             var metaItems = meta.querySelectorAll('.sp-profile__meta-item');
             if (metaItems[0]) metaItems[0].setAttribute('title', profile.modelId || '未填模型');
             if (metaItems[1]) metaItems[1].setAttribute('title', profile.baseUrl || '未填地址');
+            if (metaItems[2] && profile.apiFormat === 'bocai') {
+                metaItems[2].setAttribute('title', 'bocai：附带稳定 sessionId，不支持图片输入');
+            }
             if (!profile.apiKey) {
                 meta.appendChild(util.e('span', { class: 'sp-profile__meta-item is-warn', text: '未填写密钥' }));
             }
@@ -204,15 +225,25 @@
                 toast('已切换到「' + profile.name + '」', 'success');
             });
             item.appendChild(main);
-            var tools = util.e('div', { class: 'sp-profile__actions' });
-            tools.appendChild(button('编辑', {
-                ghost: true, small: true, icon: 'edit', onClick: function () {
+            var tools = util.e('div', {
+                class: 'sp-profile__actions',
+                role: 'group',
+                'aria-label': '端点操作：' + profile.name
+            });
+            tools.appendChild(button('', {
+                ghost: true, small: true, iconOnly: true, icon: 'copy', title: '复制端点',
+                onClick: function () { duplicateProfile(profile); }
+            }));
+            tools.appendChild(button('', {
+                ghost: true, small: true, iconOnly: true, icon: 'edit',
+                title: editing ? '收起编辑' : '编辑端点',
+                onClick: function () {
                     editingProfileId = editing ? null : profile.id;
                     renderSection('profiles');
                 }
             }));
             tools.appendChild(button('', {
-                ghost: true, small: true, icon: 'trash', title: '删除端点',
+                ghost: true, small: true, iconOnly: true, icon: 'trash', title: '删除端点',
                 onClick: function () {
                     if (doc.profiles.length <= 1) { toast('至少保留一个端点', 'warn'); return; }
                     ui.confirm('删除端点「' + profile.name + '」？该端点上的聊天记录会保留但不可见。', {
@@ -265,6 +296,41 @@
         container.appendChild(footer);
     }
 
+    /**
+     * 复制端点：沿用 baseUrl / apiKey / modelId / chatSystemPrompt /
+     * temperature / topP / apiFormat，名称追加“副本”，并直接打开编辑。
+     */
+    function duplicateProfile(profile) {
+        if (!profile) return;
+        var suffix = ' 副本';
+        var baseName = String(profile.name || '端点');
+        var maxBase = 60 - suffix.length;
+        if (baseName.length > maxBase) baseName = baseName.slice(0, maxBase);
+        var copy = store().addProfile({
+            name: baseName + suffix,
+            baseUrl: profile.baseUrl,
+            apiKey: profile.apiKey,
+            modelId: profile.modelId,
+            apiFormat: profile.apiFormat === 'bocai' ? 'bocai' : 'openai',
+            chatSystemPrompt: profile.chatSystemPrompt,
+            temperature: profile.temperature,
+            topP: profile.topP
+        });
+        if (!copy) {
+            toast('端点数量已达上限（30 个），请先删除不用的端点', 'warn');
+            return;
+        }
+        editingProfileId = copy.id;
+        renderSection('profiles');
+        toast('已复制为「' + copy.name + '」，可直接修改名称', 'success');
+        if (bodyEl && bodyEl.querySelector) {
+            var editor = bodyEl.querySelector('.sp-profile-editor');
+            if (editor && typeof editor.scrollIntoView === 'function') {
+                try { editor.scrollIntoView({ block: 'nearest' }); } catch (err) { /* 老内核忽略参数 */ }
+            }
+        }
+    }
+
     function renderProfileEditor(profile) {
         var wrap = util.e('div', { class: 'sp-profile-editor' });
         var form = util.e('div', { class: 'sp-form-grid' });
@@ -273,6 +339,10 @@
         var baseUrl = input({ value: profile.baseUrl, placeholder: 'https://api.openai.com/v1', spellcheck: 'false' });
         var modelId = input({ value: profile.modelId, placeholder: 'gpt-4o', spellcheck: 'false' });
         var apiKey = input({ value: profile.apiKey, type: 'password', placeholder: 'sk-...', autocomplete: 'new-password' });
+        var apiFormat = util.e('select', { class: 'nc-select', name: 'apiFormat', 'aria-label': 'API 格式' });
+        apiFormat.appendChild(util.e('option', { value: 'openai', text: 'openai（标准 OpenAI 兼容）' }));
+        apiFormat.appendChild(util.e('option', { value: 'bocai', text: 'bocai（BOCAI 网关）' }));
+        apiFormat.value = profile.apiFormat === 'bocai' ? 'bocai' : 'openai';
         var prompt = util.e('textarea', {
             class: 'nc-textarea sp-prompt', rows: '3',
             placeholder: '该端点的聊天系统提示词（可留空）'
@@ -280,15 +350,20 @@
         prompt.value = profile.chatSystemPrompt || '';
         var keyWrap = util.e('div', { class: 'sp-key-row' });
         keyWrap.appendChild(apiKey);
-        var reveal = button('', { ghost: true, small: true, icon: 'eye', title: '显示密钥' });
+        var reveal = button('', { ghost: true, small: true, iconOnly: true, icon: 'eye', title: '显示密钥' });
         reveal.addEventListener('click', function () {
             apiKey.type = apiKey.type === 'password' ? 'text' : 'password';
         });
         keyWrap.appendChild(reveal);
 
+        var baseField = field('Base URL', baseUrl,
+            '只填 OpenAI 兼容 base 即可：可带 /v1，也可只填 host（https://host）；无需填写 /chat/completions');
+        baseField.classList.add('sp-form-full');
         form.appendChild(field('端点名称', name));
         form.appendChild(field('Model ID', modelId));
-        form.appendChild(field('Base URL', baseUrl, 'OpenAI 兼容地址，通常以 /v1 结尾'));
+        form.appendChild(baseField);
+        form.appendChild(field('API 格式', apiFormat,
+            'openai 保持标准请求字段；bocai 会附加稳定 sessionId，且不支持图片输入'));
         form.appendChild(field('API Key', keyWrap, '仅保存在本机 localStorage'));
         var promptField = field('聊天系统提示词', prompt, '只对 nChat 生效；Todo AI 使用独立提示词');
         promptField.classList.add('sp-form-full');
@@ -310,9 +385,11 @@
                 ui.setBusy(btn, true);
                 status.textContent = '正在测试…';
                 ai().testProfile({
+                    id: profile.id,
                     baseUrl: baseUrl.value.trim(),
                     apiKey: apiKey.value.trim(),
-                    modelId: modelId.value.trim()
+                    modelId: modelId.value.trim(),
+                    apiFormat: apiFormat.value
                 }).then(function (result) {
                     ui.setBusy(btn, false);
                     status.textContent = result.message;
@@ -332,6 +409,7 @@
                     baseUrl: baseUrl.value,
                     apiKey: apiKey.value,
                     modelId: modelId.value,
+                    apiFormat: apiFormat.value,
                     chatSystemPrompt: prompt.value,
                     temperature: temp,
                     topP: topP
@@ -540,10 +618,11 @@
             }
         }));
         actions.appendChild(button('导入待办', {
-            small: true, ghost: true, icon: 'upload',
+            small: true, icon: 'upload',
             onClick: function () {
                 var file = document.getElementById('todo-import-file');
                 if (file) file.click();
+                else toast('待办模块未加载', 'warn');
             }
         }));
         actions.appendChild(button('清空待办', {
@@ -583,7 +662,7 @@
             }
         }));
         chatActions.appendChild(button('导出全部本地数据', {
-            small: true, ghost: true, icon: 'download',
+            small: true, icon: 'download',
             onClick: exportEverything
         }));
         chatCard.appendChild(chatActions);
@@ -693,7 +772,8 @@
         var panel = util.e('div', { class: 'settings-sheet__panel' });
         var head = util.e('div', { class: 'settings-sheet__head' });
         head.appendChild(util.e('div', { class: 'settings-sheet__title', text: '设置' }));
-        closeBtn = button('', { ghost: true, small: true, icon: 'x', title: '关闭设置' });
+        closeBtn = button('', { ghost: true, small: true, iconOnly: true, icon: 'x', iconSize: 16, title: '关闭设置' });
+        closeBtn.classList.add('settings-sheet__close');
         closeBtn.setAttribute('aria-label', '关闭设置');
         closeBtn.addEventListener('click', close);
         head.appendChild(closeBtn);

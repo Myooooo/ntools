@@ -11,9 +11,10 @@
     var icons = NC.icons;
     var ui = NC.ui;
 
-    var TABS = ['todo', 'qr', 'md', 'image', 'nchat'];
+    var TABS = ['todo', 'email', 'qr', 'md', 'image', 'nchat'];
     var PAGE_TITLES = {
         todo: '待办事项',
+        email: '邮件管理',
         qr: '二维码生成',
         md: 'Markdown 渲染',
         image: '图片与 Base64',
@@ -189,6 +190,7 @@
 
         if (updateHash) setHash(target);
         if (target === 'nchat') initChat();
+        if (target === 'email' && NC.emailTab && typeof NC.emailTab.activate === 'function') NC.emailTab.activate();
         if (target === 'todo' && NC.view && NC.view.todo && NC.view.todo.render) {
             /* 回到待办时刷新时间标签，确保跨分钟准确 */
             NC.view.todo.refreshTimes();
