@@ -485,6 +485,9 @@
             if (ui.view === 'today') {
                 return task.status === 'open' && schema.isToday(task, ts);
             }
+            if (ui.view === 'week') {
+                return task.status === 'open' && schema.isThisWeek(task, ts);
+            }
             if (ui.view === 'overdue') {
                 return schema.isOverdue(task, ts);
             }

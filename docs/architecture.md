@@ -48,7 +48,7 @@
 | 4 | `core.js` → `compat.js` → `icons.js` → `storage.js` → `ui.js` → `theme.js` | 基础设施 |
 | 5 | `schema-chat.js` → `llm-store.js` → `ai.js` → `settings-panel.js` | 端点/AI/设置 |
 | 6 | `sse.js` → `api.js` → `conversation-store.js` → `settings-store.js` → `message-view.js` → `composer.js` → `settings-view.js` → `chat-controller.js` → `chat-embed.js` | 原生聊天 |
-| 7 | `schema-todo.js` → `todo-store.js` → `todo-view.js` → `todo-time.js` → `todo-ai.js` → `todo-timeline.js` → `todo.js` | 待办、Todo AI 与全景时间线 |
+| 7 | `schema-todo.js` → `todo-store.js` → `todo-view.js` → `todo-time.js` → `todo-ai.js` → `todo-timeline.js` → `todo.js` | 待办（全部/今天/本周/逾期/已完成）、Todo AI 与全景时间线 |
 | 8 | `qr.js` → `markdown.js` → `image.js` | 工具叶子模块 |
 | 9 | `ntools-app.js` | 主组合根，最后加载 |
 

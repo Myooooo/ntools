@@ -3742,3 +3742,62 @@ html[data-lite="true"] .todo-item.heat-3::before,
 html[data-lite="true"] .todo-item.heat-overdue::before {
     transition: none;
 }
+
+/* ==========================================================================
+ * 18. v4.6：详情侧边栏展开/收起动画（桌面内容 180ms 进 / 140ms 出）
+ * ========================================================================== */
+.todo-detail {
+    --nc-detail-in-dur: 180ms;
+    --nc-detail-out-dur: 140ms;
+    --nc-detail-in-x: 10px;
+    --nc-detail-out-x: 12px;
+}
+
+@keyframes todo-detail-in {
+    from {
+        opacity: 0;
+        transform: translateX(var(--nc-detail-in-x));
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes todo-detail-out {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(var(--nc-detail-out-x));
+    }
+}
+
+@media (min-width: 1101px) {
+    .todo-detail.is-detail-opening .todo-detail__inner {
+        animation: todo-detail-in var(--nc-detail-in-dur) var(--nc-ease-out) both;
+    }
+
+    .todo-detail.is-detail-closing .todo-detail__inner {
+        animation: todo-detail-out var(--nc-detail-out-dur) var(--nc-ease-out) both;
+    }
+
+    .todo-detail.is-detail-closing {
+        pointer-events: none;
+    }
+}
+
+/* Lite / reduced-motion：即时无动画 */
+html[data-lite="true"] .todo-detail.is-detail-opening .todo-detail__inner,
+html[data-lite="true"] .todo-detail.is-detail-closing .todo-detail__inner {
+    animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .todo-detail.is-detail-opening .todo-detail__inner,
+    .todo-detail.is-detail-closing .todo-detail__inner {
+        animation: none;
+    }
+}

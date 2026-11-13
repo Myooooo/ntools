@@ -39,7 +39,7 @@
         rawPreview: 400
     };
 
-    var VIEWS = ['all', 'today', 'overdue', 'done'];
+    var VIEWS = ['all', 'today', 'week', 'overdue', 'done'];
     var SORTS = ['smart', 'due', 'created', 'manual'];
     var STATUSES = ['open', 'done', 'canceled'];
     var PRIORITIES = ['low', 'normal', 'high', 'urgent'];
@@ -904,6 +904,16 @@
         return task.due >= util.startOfDay(ts) && task.due <= util.endOfDay(ts);
     }
 
+    /** 本周：本地时区周一 00:00 – 周日 23:59（含本周已过去的工作日）。 */
+    function isThisWeek(task, now) {
+        if (!isActive(task) || !isFiniteDue(task)) return false;
+        var ts = isNum(now) ? now : nowTs();
+        var start = util.startOfDay(ts);
+        var day = new Date(start).getDay(); /* 0=周日 */
+        start -= ((day + 6) % 7) * 86400000;
+        return task.due >= start && task.due <= start + 7 * 86400000 - 1;
+    }
+
     /**
      * 智能分组用的时间桶（已完成/删除任务由调用方处理）。
      * @returns {'overdue'|'today'|'tomorrow'|'later'|'none'}
@@ -927,7 +937,7 @@
         var todayEnd = util.endOfDay(ts);
         var weekStart = todayStart - ((new Date(todayStart).getDay() + 6) % 7) * 86400000;
         var counts = {
-            open: 0, done: 0, canceled: 0, overdue: 0, today: 0, trash: 0,
+            open: 0, done: 0, canceled: 0, overdue: 0, today: 0, week: 0, trash: 0,
             completedToday: 0, completedWeek: 0, byList: {}, total: 0
         };
         (doc && doc.tasks || []).forEach(function (task) {
@@ -952,6 +962,7 @@
             if (isFiniteDue(task)) {
                 if (task.due < ts) counts.overdue++;
                 if (task.due >= todayStart && task.due <= todayEnd) counts.today++;
+                if (task.due >= weekStart && task.due <= weekStart + 7 * 86400000 - 1) counts.week++;
             }
         });
         return counts;
@@ -989,6 +1000,7 @@
         isFiniteDue: isFiniteDue,
         isOverdue: isOverdue,
         isToday: isToday,
+        isThisWeek: isThisWeek,
         timeBucket: timeBucket,
         nextRecurrenceDue: nextRecurrenceDue,
         advanceRecurrenceOnce: advanceRecurrenceOnce,

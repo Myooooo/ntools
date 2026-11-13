@@ -469,6 +469,146 @@ async function main() {
             JSON.stringify({ closed: segClosed, open: segOpen, timeline: segTimeline, back: segBack }));
         assert('切回列表卸载时间线', (await evaluate("NC.store.todo.getDoc().settings.viewMode")) === 'list' && (await evaluate("!!(NC.timeline && NC.timeline.isMounted && NC.timeline.isMounted())")) === false);
 
+        /* ---------------- 9. v4.6：本周视图 ---------------- */
+        const weekState = await evaluate(`(function(){
+            var s = NC.store.todo;
+            var c = s.counts(true);
+            s.setView('week');
+            var v = s.selectVisible();
+            var badge = document.querySelector('[data-count="week"]');
+            var nav = document.querySelector('[data-view="week"]');
+            var weekStart = (function(){ var d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.getTime(); })();
+            return { count: c.week, visible: v.tasks.length,
+                     allWeek: v.tasks.every(function(t){ return t.status === 'open' && NC.schema.todo.isThisWeek(t, Date.now()); }),
+                     hasDone: v.tasks.some(function(t){ return t.status !== 'open'; }),
+                     beforeWeek: v.tasks.filter(function(t){ return NC.util.startOfDay(t.due) < weekStart; }).length,
+                     badge: badge ? badge.textContent : null,
+                     label: nav ? nav.querySelector('.todo-view-item__name').textContent : null,
+                     active: nav ? nav.classList.contains('is-active') : null };
+        })()`);
+        assert('本周视图筛选/计数', weekState.count > 0 && weekState.visible === weekState.count && weekState.allWeek &&
+            !weekState.hasDone && weekState.beforeWeek === 0 && weekState.badge === String(weekState.count) &&
+            weekState.label === '本周' && weekState.active === true, JSON.stringify(weekState));
+
+        /* ---------------- 10. v4.6：详情打开/关闭/保存动画 ---------------- */
+        await evaluate(`(function(){ NC.store.todo.setView('all'); NC.store.todo.clearSelection(); return true; })()`);
+        await sleep(260);
+        const detailOpenAnim = await evaluate(`(async function(){
+            var s = NC.store.todo;
+            var t = s.getDoc().tasks.filter(function(x){ return !x.deletedAt && x.status === 'open'; })[0];
+            s.selectTask(t.id);
+            await new Promise(function(r){ setTimeout(r, 40); });
+            var d = document.getElementById('todo-detail');
+            var inner = d.querySelector('.todo-detail__inner');
+            return { id: t.id, sel: s.getUi().selectedId, cls: d.className,
+                     anim: getComputedStyle(inner).animationName, dur: getComputedStyle(inner).animationDuration };
+        })()`);
+        assert('详情打开动画（180ms opacity+translateX）', detailOpenAnim.sel === detailOpenAnim.id &&
+            /is-detail-opening/.test(detailOpenAnim.cls) && detailOpenAnim.anim === 'todo-detail-in' &&
+            detailOpenAnim.dur === '0.18s', JSON.stringify(detailOpenAnim));
+        await sleep(260);
+        const detailOpenSettled = await evaluate(`(function(){
+            var d = document.getElementById('todo-detail');
+            return { cls: d.className, anim: getComputedStyle(d.querySelector('.todo-detail__inner')).animationName };
+        })()`);
+        assert('详情打开动画结束清理 class', !/is-detail-opening/.test(detailOpenSettled.cls) && detailOpenSettled.anim === 'none', JSON.stringify(detailOpenSettled));
+
+        const detailCloseAnim = await evaluate(`(async function(){
+            var s = NC.store.todo;
+            var before = s.getUi().selectedId;
+            document.querySelector('.detail-close').click();
+            await new Promise(function(r){ setTimeout(r, 40); });
+            var d = document.getElementById('todo-detail');
+            var mid = { before: before, sel: s.getUi().selectedId, cls: d.className,
+                        anim: getComputedStyle(d.querySelector('.todo-detail__inner')).animationName,
+                        dur: getComputedStyle(d.querySelector('.todo-detail__inner')).animationDuration,
+                        visible: d.offsetParent !== null };
+            await new Promise(function(r){ setTimeout(r, 200); });
+            return { mid: mid, end: { sel: s.getUi().selectedId, hidden: d.offsetParent === null, cls: d.className } };
+        })()`);
+        assert('详情关闭动画（140ms 后清空选中/收起）', detailCloseAnim.mid.sel === detailCloseAnim.mid.before &&
+            /is-detail-closing/.test(detailCloseAnim.mid.cls) && detailCloseAnim.mid.anim === 'todo-detail-out' &&
+            detailCloseAnim.mid.dur === '0.14s' && detailCloseAnim.mid.visible === true &&
+            detailCloseAnim.end.sel === null && detailCloseAnim.end.hidden === true &&
+            !/is-detail-closing/.test(detailCloseAnim.end.cls), JSON.stringify(detailCloseAnim));
+
+        const detailSaveAnim = await evaluate(`(async function(){
+            var s = NC.store.todo;
+            var t = s.getDoc().tasks.filter(function(x){ return !x.deletedAt; })[0];
+            s.selectTask(t.id);
+            await new Promise(function(r){ setTimeout(r, 120); });
+            var root = document.getElementById('todo-detail-inner');
+            var ti = root.querySelector('[data-field="title"]');
+            ti.value = ti.value + '（动画保存）';
+            ti.dispatchEvent(new Event('input', { bubbles: true }));
+            root.querySelector('[data-act="detail-save"]').click();
+            await new Promise(function(r){ setTimeout(r, 40); });
+            var d = document.getElementById('todo-detail');
+            var mid = { sel: s.getUi().selectedId,
+                        saveToast: Array.prototype.some.call(document.querySelectorAll('.nc-toast__text'), function(n){ return /已保存/.test(n.textContent); }),
+                        cls: d.className };
+            await new Promise(function(r){ setTimeout(r, 220); });
+            return { mid: mid, end: { sel: s.getUi().selectedId, hidden: d.offsetParent === null,
+                     title: s.getTask(t.id).title,
+                     toasts: Array.prototype.map.call(document.querySelectorAll('.nc-toast__text'), function(n){ return n.textContent; }).join('|') } };
+        })()`);
+        assert('保存后关闭动画结束再 toast', detailSaveAnim.mid.sel && detailSaveAnim.mid.saveToast === false &&
+            /is-detail-closing/.test(detailSaveAnim.mid.cls) && detailSaveAnim.end.sel === null &&
+            detailSaveAnim.end.hidden === true && /动画保存/.test(detailSaveAnim.end.title || '') &&
+            /已保存/.test(detailSaveAnim.end.toasts || ''), JSON.stringify(detailSaveAnim));
+
+        /* ---------------- 11. v4.6：Lite / reduced-motion 无动画 ---------------- */
+        await navigate(URL_NTOOLS + '&theme=dark&lite=1&v=lite-anim');
+        const liteAnim = await evaluate(`(async function(){
+            var s = NC.store.todo;
+            var t = s.getDoc().tasks.filter(function(x){ return !x.deletedAt; })[0];
+            s.selectTask(t.id);
+            await new Promise(function(r){ setTimeout(r, 40); });
+            var d = document.getElementById('todo-detail');
+            var opened = { cls: d.className, anim: getComputedStyle(d.querySelector('.todo-detail__inner')).animationName };
+            document.querySelector('.detail-close').click();
+            await new Promise(function(r){ setTimeout(r, 30); });
+            return { opened: opened, sel: s.getUi().selectedId, hidden: d.offsetParent === null };
+        })()`);
+        assert('Lite 模式详情无动画且立即关闭', !/is-detail-opening/.test(liteAnim.opened.cls) &&
+            liteAnim.opened.anim === 'none' && liteAnim.sel === null && liteAnim.hidden === true, JSON.stringify(liteAnim));
+
+        await client.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+        await navigate(URL_NTOOLS + '&theme=dark&v=reduced-anim');
+        const reducedAnim = await evaluate(`(async function(){
+            var s = NC.store.todo;
+            var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            var t = s.getDoc().tasks.filter(function(x){ return !x.deletedAt; })[0];
+            s.selectTask(t.id);
+            await new Promise(function(r){ setTimeout(r, 40); });
+            var d = document.getElementById('todo-detail');
+            var opened = { cls: d.className, anim: getComputedStyle(d.querySelector('.todo-detail__inner')).animationName };
+            document.querySelector('.detail-close').click();
+            await new Promise(function(r){ setTimeout(r, 30); });
+            return { reduce: reduce, opened: opened, sel: s.getUi().selectedId, hidden: d.offsetParent === null };
+        })()`);
+        assert('reduced-motion 详情无动画且立即关闭', reducedAnim.reduce === true &&
+            !/is-detail-opening/.test(reducedAnim.opened.cls) && reducedAnim.opened.anim === 'none' &&
+            reducedAnim.sel === null && reducedAnim.hidden === true, JSON.stringify(reducedAnim));
+        await client.send('Emulation.setEmulatedMedia', { features: [] });
+
+        /* ---------------- 12. v4.6：本周空状态 ---------------- */
+        const CLEAN_URL = 'file://' + path.join(ROOT, 'ntools.html').split(path.sep).join('/') + '?theme=dark&v=week-empty';
+        await navigate(CLEAN_URL);
+        await sleep(300);
+        const weekEmpty = await evaluate(`(async function(){
+            var s = NC.store.todo;
+            s.setView('week');
+            await new Promise(function(r){ setTimeout(r, 260); });
+            var title = document.querySelector('.nc-empty__title');
+            var badge = document.querySelector('[data-count="week"]');
+            var nav = document.querySelector('[data-view="week"]');
+            return { title: title ? title.textContent : null, count: s.counts(true).week,
+                     badge: badge ? badge.textContent : null, active: nav ? nav.classList.contains('is-active') : null };
+        })()`);
+        assert('本周空状态（本周没有待办）', /本周没有待办/.test(weekEmpty.title || '') &&
+            weekEmpty.count === 0 && weekEmpty.badge === '0' && weekEmpty.active === true, JSON.stringify(weekEmpty));
+
         await evaluate('localStorage.clear(); true;');
     } finally {
         if (client) { try { client.ws.close(); } catch (err) { /* ignore */ } }

@@ -43,9 +43,14 @@
     var timelineMounted = false;
     var timelineTried = false;
     var modeEnterTimer = null;
+    var detailClosing = false;
+    var detailClosingId = null;
+    var detailAnimTimer = null;
+    var detailOpenTimer = null;
+    var lastDetailAnimId = null;
 
     var SORT_LABELS = { smart: '智能排序', due: '按截止时间', created: '按创建时间', manual: '手动排序' };
-    var VIEW_LABELS = { all: '全部任务', today: '今天', overdue: '逾期', done: '已完成', trash: '回收站' };
+    var VIEW_LABELS = { all: '全部任务', today: '今天', week: '本周', overdue: '逾期', done: '已完成', trash: '回收站' };
     var BUCKET_LABELS = { overdue: '逾期', today: '今天', tomorrow: '明天', later: '以后', none: '无截止时间' };
     var BUCKET_ORDER = ['overdue', 'today', 'tomorrow', 'later', 'none'];
     var PRIORITY_LABELS = { low: '低', normal: '普通', high: '高', urgent: '紧急' };
@@ -176,6 +181,17 @@
         }
 
         if (els.addListBtn) els.addListBtn.addEventListener('click', createListFlow);
+
+        /* Esc 关闭详情（捕获阶段，早于 todo.js 的全局 Esc；输入框内不拦截） */
+        document.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape' || event.isComposing) return;
+            var ui = store.getUi();
+            if (!ui.selectedId) return;
+            var active = document.activeElement;
+            if (active && active.tagName && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
+            event.preventDefault();
+            if (!detailClosing) closeDetailAnimated();
+        }, true);
 
         /* 搜索 */
         var commitSearch = util.debounce(function (value) {
@@ -921,6 +937,8 @@
         renderComposer(doc, ui);
         renderList(visible, ui, doc);
         renderDetail(ui, doc, reason);
+        syncDetailAnimation(ui);
+        autoCloseMissingDetail(ui);
         renderStatusBar(visible, counts, ui, doc);
         syncSort(ui, doc);
         syncSearchClear();
@@ -936,7 +954,7 @@
      * 视图计数 / 清单
      * ------------------------------------------------------------------ */
     function renderViewState(ui, counts, doc) {
-        var sig = [ui.view, ui.listId, counts.open, counts.today, counts.overdue, counts.done, counts.trash].join('|');
+        var sig = [ui.view, ui.listId, counts.open, counts.today, counts.week, counts.overdue, counts.done, counts.trash].join('|');
         if (rendered.viewSig === sig) return;
         rendered.viewSig = sig;
         if (!els.views) return;
@@ -948,6 +966,7 @@
                 var value = 0;
                 if (view === 'all') value = counts.open;
                 else if (view === 'today') value = counts.today;
+                else if (view === 'week') value = counts.week;
                 else if (view === 'overdue') value = counts.overdue;
                 else if (view === 'done') value = counts.done;
                 else if (view === 'trash') value = counts.trash;
@@ -1583,6 +1602,8 @@
             variant = { icon: 'search', title: '没有匹配的任务', desc: '换个关键词，或清除搜索查看全部任务。', action: 'clear-search', actionLabel: '清除搜索' };
         } else if (ui.view === 'today') {
             variant = { icon: 'calendar', title: '今天没有待办', desc: '今天空闲，可以安排一项新任务。', action: 'new', actionLabel: '新建任务' };
+        } else if (ui.view === 'week') {
+            variant = { icon: 'calendar', title: '本周没有待办', desc: '本周还没有安排任务，可以从今天开始规划。', action: 'new', actionLabel: '新建任务' };
         } else if (ui.view === 'overdue') {
             variant = { icon: 'check-circle', title: '没有逾期任务', desc: '所有任务都按时完成，保持这个节奏。' };
         } else if (ui.view === 'done') {
@@ -2196,22 +2217,25 @@
         if (!btn) return;
         var act = btn.getAttribute('data-act');
         if (act === 'detail-close') {
-            /* 先提交未落库编辑，再清空选中：桌面检查器列收起、移动抽屉关闭 */
+            /* 先提交未落库编辑，再走收起动画（结束后清空选中） */
             flushDetailEdits();
-            store.clearSelection();
+            closeDetailAnimated();
             return;
         }
         if (!id) return;
         if (act === 'detail-delete') {
-            var task = store.getTask(id);
-            var result = store.deleteTask(id);
-            if (result && ui) {
-                ui.toast('已删除「' + (task ? task.title : '任务') + '」', {
-                    type: 'success',
-                    duration: 5000,
-                    action: { label: '撤销', onClick: function () { store.undo(result.token); } }
-                });
-            }
+            /* 删除后自动收起详情（动画结束再删除/提示） */
+            closeDetailAnimated(function () {
+                var task = store.getTask(id);
+                var result = store.deleteTask(id);
+                if (result && ui) {
+                    ui.toast('已删除「' + (task ? task.title : '任务') + '」', {
+                        type: 'success',
+                        duration: 5000,
+                        action: { label: '撤销', onClick: function () { store.undo(result.token); } }
+                    });
+                }
+            });
         } else if (act === 'detail-restore') {
             store.restoreTask(id);
             ui.toast('已恢复任务', { type: 'success' });
@@ -2251,8 +2275,114 @@
         var task = store.getTask(id);
         if (!task) return;
         flushDetailEdits();
-        store.clearSelection();
-        ui.toast('已保存并关闭', { type: 'success', duration: 1800 });
+        /* toast 等关闭动画结束后再出现 */
+        closeDetailAnimated(function () {
+            ui.toast('已保存并关闭', { type: 'success', duration: 1800 });
+        });
+    }
+
+    /* ---- 详情展开/收起动画编排 ---- */
+    function canAnimateDetail() {
+        if (NC.theme && typeof NC.theme.isLite === 'function' && NC.theme.isLite()) return false;
+        if (util.prefersReducedMotion && util.prefersReducedMotion()) return false;
+        return true;
+    }
+
+    function isMobileDetail() {
+        return global.matchMedia ? global.matchMedia('(max-width: 1100px)').matches : false;
+    }
+
+    function playDetailOpen() {
+        if (!els.detail || !canAnimateDetail()) return;
+        /* 移动端抽屉本身有 220ms 滑入，不再叠加内容动画 */
+        if (isMobileDetail()) return;
+        els.detail.classList.remove('is-detail-opening');
+        void els.detail.offsetWidth;
+        els.detail.classList.add('is-detail-opening');
+        if (detailOpenTimer) global.clearTimeout(detailOpenTimer);
+        detailOpenTimer = global.setTimeout(function () {
+            detailOpenTimer = null;
+            if (els.detail) els.detail.classList.remove('is-detail-opening');
+        }, 230);
+    }
+
+    function cancelDetailClose() {
+        if (detailAnimTimer) {
+            global.clearTimeout(detailAnimTimer);
+            detailAnimTimer = null;
+        }
+        detailClosing = false;
+        detailClosingId = null;
+        if (els.detail) els.detail.classList.remove('is-detail-closing');
+    }
+
+    /** 关闭详情：桌面内容先 140ms 退出动画再 clearSelection（列收起）；移动端等抽屉 220ms 滑出后再隐藏 scrim/清空。 */
+    function closeDetailAnimated(after) {
+        if (!els.detail) {
+            store.clearSelection();
+            if (after) after();
+            return;
+        }
+        if (!canAnimateDetail() || !els.detail.offsetParent) {
+            cancelDetailClose();
+            els.detail.classList.remove('is-detail-opening');
+            store.clearSelection();
+            if (after) after();
+            return;
+        }
+        if (detailClosing) return;
+        detailClosing = true;
+        detailClosingId = store.getUi().selectedId;
+        els.detail.classList.remove('is-detail-opening');
+        if (isMobileDetail()) {
+            /* 抽屉滑出：立即移除 open 触发 transform 过渡；scrim 保持到结束后再 hidden */
+            els.detail.classList.remove('is-open');
+            if (els.scrim) els.scrim.classList.remove('is-open');
+            detailAnimTimer = global.setTimeout(function () {
+                detailAnimTimer = null;
+                if (els.scrim) els.scrim.hidden = true;
+                detailClosing = false;
+                detailClosingId = null;
+                store.clearSelection();
+                if (after) after();
+            }, 230);
+        } else {
+            els.detail.classList.add('is-detail-closing');
+            detailAnimTimer = global.setTimeout(function () {
+                detailAnimTimer = null;
+                if (els.detail) els.detail.classList.remove('is-detail-closing');
+                detailClosing = false;
+                detailClosingId = null;
+                store.clearSelection();
+                if (after) after();
+            }, 150);
+        }
+    }
+
+    function syncDetailAnimation(ui) {
+        if (!els.detail) return;
+        if (!ui.selectedId) {
+            lastDetailAnimId = null;
+            return;
+        }
+        if (detailClosing && ui.selectedId !== detailClosingId) {
+            cancelDetailClose();
+        }
+        if (!detailClosing && ui.selectedId !== lastDetailAnimId) {
+            lastDetailAnimId = ui.selectedId;
+            playDetailOpen();
+        }
+    }
+
+    /** 任务被删除/彻底移除时，详情自动收起（trash 视图内查看已删除任务除外）。 */
+    function autoCloseMissingDetail(ui) {
+        if (!ui.selectedId || detailClosing) return;
+        var task = store.getTask(ui.selectedId);
+        if (!task) {
+            closeDetailAnimated();
+            return;
+        }
+        if (task.deletedAt && ui.view !== 'trash') closeDetailAnimated();
     }
 
     function syncDetailColumn(ui) {
@@ -2272,7 +2402,8 @@
                 global.requestAnimationFrame(function () { els.scrim.classList.add('is-open'); });
             } else {
                 els.scrim.classList.remove('is-open');
-                els.scrim.hidden = true;
+                /* 移动端关闭动画进行中：等抽屉滑出结束再 hidden（避免 scrim 先消失） */
+                if (!(detailClosing && mobile)) els.scrim.hidden = true;
             }
         }
     }
