@@ -30,3 +30,6 @@ backend/uploads/
 # Development-only (not shipped in the repository)
 docs/
 tools/
+
+# Local-only embedded email tool (not part of this repository)
+email/

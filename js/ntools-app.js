@@ -190,7 +190,6 @@
 
         if (updateHash) setHash(target);
         if (target === 'nchat') initChat();
-        if (target === 'email' && NC.emailTab && typeof NC.emailTab.activate === 'function') NC.emailTab.activate();
         if (target === 'todo' && NC.view && NC.view.todo && NC.view.todo.render) {
             /* 回到待办时刷新时间标签，确保跨分钟准确 */
             NC.view.todo.refreshTimes();
