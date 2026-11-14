@@ -113,6 +113,9 @@
             table.parentNode.insertBefore(wrap, table);
             wrap.appendChild(table);
         });
+        if (NC.mdEnhance && typeof NC.mdEnhance.enhance === 'function') {
+            NC.mdEnhance.enhance(el);
+        }
     }
 
     /* ------------------------------------------------------------------ *
@@ -318,6 +321,50 @@
         return details;
     }
 
+    function formatAttachmentSize(size) {
+        var n = Number(size) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB';
+        return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function downloadAttachment(attachment) {
+        try {
+            var blob = new Blob([attachment.text || ''], { type: attachment.type || 'text/plain;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = attachment.name || 'attachment.txt';
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 1200);
+        } catch (err) { /* ignore */ }
+    }
+
+    function renderAttachments(el, message) {
+        var list = Array.isArray(message.attachments) ? message.attachments : [];
+        if (!list.length) return;
+        var box = util.e('div', { class: 'chat-attachments', 'aria-label': '附件' });
+        list.forEach(function (attachment) {
+            if (!attachment || !attachment.name) return;
+            var button = util.e('button', {
+                type: 'button',
+                class: 'chat-attachment',
+                title: '下载附件：' + attachment.name,
+                'aria-label': '下载附件：' + attachment.name
+            });
+            button.appendChild(icons.el('file', 12));
+            button.appendChild(util.e('span', { class: 'chat-attachment__name', text: attachment.name }));
+            if (attachment.size) {
+                button.appendChild(util.e('span', { class: 'chat-attachment__size', text: formatAttachmentSize(attachment.size) }));
+            }
+            button.addEventListener('click', function () { downloadAttachment(attachment); });
+            box.appendChild(button);
+        });
+        if (box.children.length) el.appendChild(box);
+    }
+
     function renderUserContent(el, message) {
         el.textContent = '';
         var parts = Array.isArray(message.content) ? message.content : [];
@@ -355,6 +402,7 @@
             });
             el.appendChild(box);
         }
+        renderAttachments(el, message);
     }
 
     function renderAssistantContent(el, message) {

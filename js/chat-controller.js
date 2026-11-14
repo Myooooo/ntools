@@ -46,6 +46,22 @@
 
     function conversation() { return deps.conversation; }
 
+    /** 附件文本只在请求上下文中附加，不污染消息正文/气泡。 */
+    function contentForApi(message) {
+        if (!message) return '';
+        var attachments = Array.isArray(message.attachments) ? message.attachments : [];
+        if (!attachments.length) return message.content;
+        var extra = attachments.map(function (file) {
+            return '\n\n【附件：' + (file.name || '附件') + '】\n' + (file.text || '');
+        }).join('');
+        if (Array.isArray(message.content)) {
+            var parts = message.content.slice();
+            parts.push({ type: 'text', text: extra });
+            return parts;
+        }
+        return String(message.content || '') + extra;
+    }
+
     /** v3 新 API 始终从全局 store 取，避免组合根缓存了旧适配对象。 */
     function chatStore() {
         return (NC.store && NC.store.conversation) ? NC.store.conversation : conversation();
@@ -78,11 +94,19 @@
         }
         var parts = [];
         if (payload && payload.text) parts.push({ type: 'text', text: payload.text });
-        ((payload && payload.images) || []).forEach(function (url) {
+        var images = (payload && payload.images) || [];
+        if (images.length && config.capabilities && config.capabilities.vision === false) {
+            ui.toast('当前端点未开启图片输入，请移除图片或切换端点', { type: 'warn' });
+            return;
+        }
+        images.forEach(function (url) {
             parts.push({ type: 'image_url', image_url: { url: url } });
         });
+        if (!parts.length && payload && payload.files && payload.files.length) {
+            parts.push({ type: 'text', text: '请阅读以下附件。' });
+        }
         if (!parts.length) return;
-        var stored = conversation().append({ role: 'user', content: parts });
+        var stored = conversation().append({ role: 'user', content: parts, attachments: (payload && payload.files) || [] });
         if (!stored) {
             ui.toast('消息格式无效，未发送', { type: 'error' });
             return;
@@ -108,7 +132,7 @@
 
         var source = Array.isArray(opts.history) ? opts.history : conversation().messages;
         var history = source.map(function (message) {
-            return { role: message.role, content: message.content };
+            return { role: message.role, content: contentForApi(message) };
         });
         composer().setBusy(true);
         messages().setStreaming(true);
@@ -321,7 +345,7 @@
             return;
         }
         var history = context.map(function (message) {
-            return { role: message.role, content: message.content };
+            return { role: message.role, content: contentForApi(message) };
         });
         messages().renderAll(context);
         messages().setEmpty('');
@@ -399,6 +423,7 @@
                 var branch = conversation().append({
                     role: 'user',
                     content: parts,
+                    attachments: message.attachments || [],
                     parentId: message.parentId || null
                 });
                 if (!branch) {
@@ -407,7 +432,7 @@
                 }
                 var context = chatStore().getPathTo(branch.id);
                 var history = context.map(function (item) {
-                    return { role: item.role, content: item.content };
+                    return { role: item.role, content: contentForApi(item) };
                 });
                 renderConversation('');
                 runStream(settings().getConfig(), { parentId: branch.id, history: history });

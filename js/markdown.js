@@ -128,6 +128,9 @@
                 els.preview.appendChild(note);
             }
             postProcess();
+            if (NC.mdEnhance && typeof NC.mdEnhance.enhance === 'function') {
+                NC.mdEnhance.enhance(els.preview);
+            }
         } catch (err) {
             els.preview.textContent = '渲染失败：' + (err && err.message ? err.message : String(err));
         }

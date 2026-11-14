@@ -256,6 +256,29 @@
     }
 
     /** 保留合法 id（用于 store 内部可信数据）。外部数据请用 normalizeConversation。 */
+    function normalizeAttachments(raw) {
+        if (!Array.isArray(raw)) return [];
+        var out = [];
+        var total = 0;
+        raw.slice(0, 5).forEach(function (item) {
+            if (!util.isPlainObject(item)) return;
+            var name = text(item.name, 160).trim();
+            if (!name) return;
+            var body = text(item.text, 50000);
+            if (!body.trim()) return;
+            if (total + body.length > 100000) return;
+            total += body.length;
+            out.push({
+                id: id(item.id, 'file'),
+                name: name,
+                size: Math.max(0, Math.min(Number(item.size) || body.length, 2000000)),
+                type: text(item.type, 100),
+                text: body
+            });
+        });
+        return out;
+    }
+
     function normalizeMessage(raw) {
         if (!util.isPlainObject(raw)) return null;
         var role = raw.role;
@@ -268,6 +291,8 @@
         if (role === 'user') {
             message.content = normalizeUserContent(raw.content);
             if (!message.content.length) return null;
+            var attachments = normalizeAttachments(raw.attachments);
+            if (attachments.length) message.attachments = attachments;
         } else {
             message.content = text(raw.content, LIMITS.text);
             var reasoning = text(raw.reasoning, LIMITS.text);
@@ -336,6 +361,7 @@
         normalizeUserContent: normalizeUserContent,
         normalizeStats: normalizeStats,
         normalizeMessage: normalizeMessage,
+        normalizeAttachments: normalizeAttachments,
         normalizeConversation: normalizeConversation,
         normalizeBackup: normalizeBackup
     };

@@ -5,8 +5,10 @@
  * v3 变化：
  *  - 一个端点下可以有多条会话（session），会话有标题/时间/端点；
  *  - 消息从线性数组升级为树：parentId + selectedChildId，支持编辑/重新生成/版本切换；
- *  - 主存储 nchat-conversation.v3（过渡期 localStorage；旧 v2 键只读保留）；
- *  - 旧 nchat-conversation.v2 自动迁移：每个端点一条“旧会话”，线性消息补 parent 链。
+ *  - 主存储 IndexedDB（NC.chatDb，sessions 表）；IndexedDB 不可用时回退
+ *    nchat-conversation.v3 localStorage；
+ *  - 旧 nchat-conversation.v3 / v2 / v1 首次启动自动迁移到 IndexedDB，旧键只读保留；
+ *  - 旧 v2：每个端点一条“旧会话”，线性消息补 parent 链。
  *
  * 兼容：保持 messages getter、append/update/remove/truncateFrom/setMessages/clear/
  * switchConfig/exportBackup/importBackup/exportMarkdown/subscribe/saveNow 语义，
@@ -34,8 +36,13 @@
     var listeners = [];
     var lifecycleBound = false;
     var lastSig = '';
+    var db = null;
+    var ready = false;
+    var useLocal = false;
+    var initPromise = null;
+    var bootError = null;
 
-    var debouncedSave = util.debounce(function () { persist(); }, SAVE_DELAY);
+    var debouncedSave = util.debounce(function () { flush(); }, SAVE_DELAY);
 
     function schema() { return NC.schema && NC.schema.chat; }
 
@@ -272,27 +279,109 @@
         return doc;
     }
 
-    function load() {
+    /** 读取旧的 localStorage 数据（v3 / v2 / v1），用于一次性迁移。 */
+    function readLegacyDoc() {
         var saved = storage.get(KEY, null);
         if (saved && util.isPlainObject(saved)) {
-            state = normalizeDoc(saved);
-            return 'v3';
+            var doc = normalizeDoc(saved);
+            if (doc.sessions.length) return { doc: doc, source: 'v3' };
         }
         var v2 = storage.get(V2_KEY, null);
         if (v2) {
-            state = migrateFromV2(v2);
-            persist();
-            return 'v2';
+            var migrated = migrateFromV2(v2);
+            if (migrated.sessions.length) return { doc: migrated, source: 'v2' };
         }
         var legacy = storage.get(LEGACY_KEY, null);
         if (legacy) {
-            state = migrateFromV2(legacy);
-            persist();
-            return 'v1';
+            var migratedLegacy = migrateFromV2(legacy);
+            if (migratedLegacy.sessions.length) return { doc: migratedLegacy, source: 'v1' };
         }
-        state = { version: VERSION, activeByEndpoint: Object.create(null), sessions: [] };
-        persist();
-        return 'empty';
+        return { doc: { version: VERSION, activeByEndpoint: Object.create(null), sessions: [] }, source: 'none' };
+    }
+
+    function loadLocalFallback() {
+        var legacy = readLegacyDoc();
+        state = legacy.doc;
+        if (!state.sessions.length) {
+            state = { version: VERSION, activeByEndpoint: Object.create(null), sessions: [] };
+        }
+    }
+
+    function applyLoadedSessions(sessions, activeMap, source) {
+        var doc = { version: VERSION, activeByEndpoint: Object.create(null), sessions: [] };
+        (sessions || []).forEach(function (raw) {
+            var session = normalizeSession(raw);
+            if (session) doc.sessions.push(session);
+        });
+        if (util.isPlainObject(activeMap)) {
+            Object.keys(activeMap).forEach(function (key) {
+                if (typeof activeMap[key] === 'string') doc.activeByEndpoint[key] = activeMap[key];
+            });
+        }
+        state = doc;
+        if (source) bootError = null;
+    }
+
+    function ensureActiveMap() {
+        state.sessions.forEach(function (session) {
+            if (!state.activeByEndpoint[session.endpointId]) {
+                state.activeByEndpoint[session.endpointId] = session.id;
+            }
+        });
+    }
+
+    function finishBoot() {
+        ready = true;
+        ensureActiveMap();
+        currentConfigId = currentConfigId || 'default';
+        var session = ensureSessionForEndpoint(currentConfigId);
+        currentSessionId = session ? session.id : null;
+        if (currentSessionId) state.activeByEndpoint[currentConfigId] = currentSessionId;
+        lastSig = '';
+        notify('init');
+        return visibleMessages(currentSession());
+    }
+
+    function bootWithLocal() {
+        useLocal = true;
+        db = null;
+        loadLocalFallback();
+        return finishBoot();
+    }
+
+    function boot(configId) {
+        currentConfigId = configId || currentConfigId || 'default';
+        if (!NC.chatDb || typeof NC.chatDb.open !== 'function') {
+            return Promise.resolve(bootWithLocal());
+        }
+        return NC.chatDb.open().then(function () {
+            db = NC.chatDb;
+            return db.getAllSessions();
+        }).then(function (sessions) {
+            return db.getMeta('activeByEndpoint').then(function (activeMap) {
+                // 没有任何 IDB 会话时，从旧 localStorage 迁移一次。
+                if (!sessions || !sessions.length) {
+                    var legacy = readLegacyDoc();
+                    if (legacy.doc.sessions.length) {
+                        return db.replaceAllSessions(legacy.doc.sessions).then(function () {
+                            return db.setMeta('activeByEndpoint', legacy.doc.activeByEndpoint).then(function () {
+                                applyLoadedSessions(legacy.doc.sessions, legacy.doc.activeByEndpoint, legacy.source);
+                                return true;
+                            });
+                        });
+                    }
+                }
+                applyLoadedSessions(sessions, activeMap, 'idb');
+                return true;
+            });
+        }).then(function () {
+            // 迁移后 active 可能为空；确保当前端点会话。
+            return finishBoot();
+        }).catch(function (err) {
+            bootError = err;
+            events.emit('conversation:storage-fallback', { reason: err && err.message ? err.message : String(err) });
+            return bootWithLocal();
+        });
     }
 
     /* ------------------------------------------------------------------ *
@@ -306,7 +395,7 @@
         };
     }
 
-    function persist() {
+    function persistLocal() {
         try {
             var result = storage.set(KEY, snapshot());
             if (result && result.ok === false) {
@@ -317,7 +406,36 @@
         }
     }
 
+    function persist() {
+        if (useLocal) {
+            persistLocal();
+            return;
+        }
+        scheduleSave();
+    }
+
     function scheduleSave() { debouncedSave(); }
+
+    function flush() {
+        if (useLocal) {
+            persistLocal();
+            return Promise.resolve(true);
+        }
+        if (!ready || !db) return Promise.resolve(false);
+        var sessions = state.sessions;
+        var active = clone(state.activeByEndpoint);
+        return db.replaceAllSessions(sessions).then(function () {
+            return db.setMeta('activeByEndpoint', active);
+        }).then(function () {
+            lastSig = '';
+            return true;
+        }).catch(function (err) {
+            events.emit('conversation:save-failed', {
+                reason: err && (err.name === 'QuotaExceededError') ? 'quota' : 'exception'
+            });
+            return false;
+        });
+    }
 
     function notify(reason, extra) {
         var payload = {
@@ -460,19 +578,21 @@
         if (!lifecycleBound) {
             lifecycleBound = true;
             if (global.addEventListener) {
-                global.addEventListener('pagehide', saveNow);
+                global.addEventListener('pagehide', function () { saveNow(); });
                 global.addEventListener('storage', function (event) {
-                    if (event && event.key === KEY) reload();
+                    if (event && (event.key === KEY || event.key === 'nchat-db-namespace.v1')) reload();
                 });
             }
         }
-        if (!state.sessions.length) load();
+        if (initPromise) return initPromise;
         currentConfigId = configId || currentConfigId || 'default';
-        var session = ensureSessionForEndpoint(currentConfigId);
-        if (session) currentSessionId = session.id;
-        if (!currentSessionId) return [];
-        notify('init');
-        return visibleMessages(currentSession());
+        initPromise = Promise.resolve(boot(currentConfigId));
+        return initPromise;
+    }
+
+    function whenReady() {
+        if (ready) return Promise.resolve(true);
+        return initPromise ? initPromise.then(function () { return true; }) : Promise.reject(new Error('conversation not initialized'));
     }
 
     function getState() {
@@ -679,21 +799,31 @@
     }
 
     function saveNow() {
-        if (debouncedSave && debouncedSave.flush) {
-            try { debouncedSave.flush(); } catch (err) { persist(); }
-        } else {
-            persist();
+        if (debouncedSave && debouncedSave.cancel) {
+            try { debouncedSave.cancel(); } catch (err) { /* ignore */ }
         }
+        return flush();
     }
 
     function reload() {
-        load();
-        if (currentConfigId) {
-            var session = ensureSessionForEndpoint(currentConfigId);
-            if (session) currentSessionId = session.id;
+        if (!ready) return messages();
+        var endpoint = currentConfigId;
+        if (!db) {
+            loadLocalFallback();
+            finishBoot();
+            notify('external');
+            return messages();
         }
-        notify('external');
-        return messages();
+        return db.getAllSessions().then(function (sessions) {
+            return db.getMeta('activeByEndpoint').then(function (activeMap) {
+                applyLoadedSessions(sessions, activeMap, 'external');
+                currentConfigId = endpoint || currentConfigId || 'default';
+                var session = ensureSessionForEndpoint(currentConfigId);
+                currentSessionId = session ? session.id : null;
+                notify('external');
+                return messages();
+            });
+        }).catch(function () { return messages(); });
     }
 
     function exportBackup() {
@@ -754,6 +884,11 @@
             } else {
                 content = typeof message.content === 'string' ? message.content : '';
             }
+            if (message.attachments && message.attachments.length) {
+                content += (content ? '\n\n' : '') + message.attachments.map(function (file) {
+                    return '[附件：' + (file.name || '附件') + ']';
+                }).join('\n');
+            }
             lines.push('## ' + role);
             lines.push('');
             lines.push(content);
@@ -770,6 +905,15 @@
         V2_KEY: V2_KEY,
         VERSION: VERSION,
         init: init,
+        whenReady: whenReady,
+        isReady: function () { return ready; },
+        getStorageInfo: function () {
+            return {
+                mode: useLocal ? 'localStorage' : 'indexedDB',
+                ready: ready,
+                error: bootError ? String(bootError.message || bootError) : null
+            };
+        },
         getState: getState,
         get messages() { return messages(); },
         subscribe: subscribe,

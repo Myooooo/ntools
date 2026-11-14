@@ -62,6 +62,7 @@
             apiKey: '',
             modelId: 'gpt-4o',
             apiFormat: 'openai',
+            capabilities: normalizeCapabilities(),
             chatSystemPrompt: '',
             temperature: 1,
             topP: 0.95,
@@ -75,6 +76,17 @@
     function normalizeApiFormat(value) {
         var text = value == null ? '' : String(value).trim().toLowerCase();
         return text === 'bocai' ? 'bocai' : 'openai';
+    }
+
+    /** 端点能力：缺省保持旧行为（图片可用），其余能力默认关闭。 */
+    function normalizeCapabilities(value) {
+        var src = (value && typeof value === 'object') ? value : {};
+        return {
+            vision: src.vision !== false,
+            files: src.files === true,
+            search: src.search === true,
+            readUrl: src.readUrl === true
+        };
     }
 
     function str(value, fallback) {
@@ -121,6 +133,7 @@
         if ('apiKey' in src) profile.apiKey = trimStr(src.apiKey, '', 2048);
         if ('modelId' in src) profile.modelId = trimStr(src.modelId, '', 120);
         if ('apiFormat' in src) profile.apiFormat = normalizeApiFormat(src.apiFormat);
+        if ('capabilities' in src) profile.capabilities = normalizeCapabilities(src.capabilities);
         if ('chatSystemPrompt' in src) profile.chatSystemPrompt = trimStr(src.chatSystemPrompt, '', 20000);
         if ('temperature' in src) profile.temperature = clampNum(src.temperature, profile.temperature, 0, 2);
         if ('topP' in src) profile.topP = clampNum(src.topP, profile.topP, 0, 2);
@@ -139,6 +152,7 @@
             apiKey: trimStr(src.apiKey, '', 2048),
             modelId: trimStr(src.modelId, 'gpt-4o', 120),
             apiFormat: normalizeApiFormat(src.apiFormat || src.api_format || 'openai'),
+            capabilities: normalizeCapabilities(src.capabilities),
             chatSystemPrompt: trimStr(src.chatSystemPrompt || src.systemPrompt || '', '', 20000),
             temperature: clampNum(src.temperature, 1, 0, 2),
             topP: clampNum(src.topP != null ? src.topP : src.top_p, 0.95, 0, 2),
@@ -516,6 +530,7 @@
             apiKey: profile.apiKey,
             modelId: profile.modelId,
             apiFormat: normalizeApiFormat(profile.apiFormat),
+            capabilities: normalizeCapabilities(profile.capabilities),
             sessionId: profile.id,
             systemPrompt: profile.chatSystemPrompt || '',
             enableAdvanced: true,

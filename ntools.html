@@ -43,8 +43,10 @@
     <!-- 页面模块：原生聊天（去掉 iframe） -->
     <script defer src="js/sse.js"></script>
     <script defer src="js/api.js"></script>
+    <script defer src="js/chat-db.js"></script>
     <script defer src="js/conversation-store.js"></script>
     <script defer src="js/settings-store.js"></script>
+    <script defer src="js/markdown-enhance.js"></script>
     <script defer src="js/message-view.js"></script>
     <script defer src="js/composer.js"></script>
     <script defer src="js/settings-view.js"></script>
@@ -118,7 +120,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" title="版本">v5.0</span>
+            <span class="tools-rail__version" title="版本">v5.1</span>
         </div>
     </aside>
 
@@ -494,6 +496,7 @@
 
                     <footer id="input-area-container" class="chat-composer">
                         <div id="image-preview-container" class="chat-previews" aria-label="待发送图片" hidden></div>
+                        <div id="file-preview-container" class="chat-file-previews" aria-label="待发送附件" hidden></div>
                         <div class="chat-composer__row">
                             <input type="file" id="image-input" accept="image/*" multiple hidden>
                             <button id="upload-btn" class="chat-icon-btn chat-icon-btn--soft" type="button" title="上传图片" aria-label="上传图片">

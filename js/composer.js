@@ -19,12 +19,17 @@
     var MAX_IMAGES = 5;
     var MAX_EDGE = 1024;
     var JPEG_QUALITY = 0.8;
+    var MAX_FILES = 3;
+    var MAX_FILE_CHARS = 50000;
+    var MAX_TOTAL_FILE_CHARS = 100000;
 
     var options = {};
     var state = {
         busy: false,
         composing: false,
         images: [],
+        files: [],
+        capabilities: { vision: true, files: false },
         enteringId: null,
         leaving: Object.create(null)
     };
@@ -32,6 +37,37 @@
 
     function schema() {
         return NC.schema && NC.schema.chat;
+    }
+
+    function visionEnabled() {
+        return !state.capabilities || state.capabilities.vision !== false;
+    }
+
+    function filesEnabled() {
+        return !!(state.capabilities && state.capabilities.files);
+    }
+
+    function isTextFile(file) {
+        var type = String(file && file.type || '').toLowerCase();
+        if (type.indexOf('text/') === 0) return true;
+        if (type === 'application/json' || type === 'application/xml' || type === 'application/x-yaml') return true;
+        return /\.(txt|md|markdown|json|csv|log|ya?ml|xml|html?|css|js|ts|tsx|jsx|py|java|go|rs|sh|ini|conf)$/i.test(file && file.name || '');
+    }
+
+    function formatBytes(size) {
+        var n = Number(size) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10240 ? 1 : 0) + ' KB';
+        return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function readTextFile(file) {
+        return new Promise(function (resolve, reject) {
+            var reader = new FileReader();
+            reader.onload = function () { resolve(String(reader.result || '')); };
+            reader.onerror = function () { reject(new Error('read-error')); };
+            reader.readAsText(file);
+        });
     }
 
     function maxImages() {
@@ -78,6 +114,35 @@
             el.previews.appendChild(item);
         });
         el.previews.hidden = state.images.length === 0;
+    }
+
+    function renderFilePreviews() {
+        if (!el.files) return;
+        el.files.textContent = '';
+        state.files.forEach(function (file) {
+            var chip = util.e('span', { class: 'chat-file-chip', dataset: { id: file.id } });
+            chip.appendChild(util.e('span', { class: 'chat-file-chip__icon' }, [icons.el('file', 13)]));
+            var meta = util.e('span', { class: 'chat-file-chip__meta' });
+            meta.appendChild(util.e('span', { class: 'chat-file-chip__name', text: file.name }));
+            meta.appendChild(util.e('span', { class: 'chat-file-chip__size', text: formatBytes(file.size) }));
+            chip.appendChild(meta);
+            var remove = util.e('button', {
+                type: 'button',
+                class: 'chat-file-chip__remove',
+                title: '移除附件',
+                'aria-label': '移除附件：' + file.name
+            }, [icons.el('x', 11)]);
+            remove.addEventListener('click', function () { removeFile(file.id); });
+            chip.appendChild(remove);
+            el.files.appendChild(chip);
+        });
+        el.files.hidden = state.files.length === 0;
+    }
+
+    function removeFile(id) {
+        var key = String(id);
+        state.files = state.files.filter(function (file) { return String(file.id) !== key; });
+        renderFilePreviews();
     }
 
     function removeImage(id) {
@@ -155,24 +220,80 @@
         });
     }
 
-    function addImageFiles(fileList) {
+    function addFiles(fileList) {
         var files = Array.prototype.slice.call(fileList || []);
         if (!files.length) return;
         var images = files.filter(function (file) { return /^image\//.test(file.type || ''); });
-        if (!images.length) {
-            if (typeof options.onError === 'function') options.onError('请选择图片文件');
-            return;
+        var docs = files.filter(function (file) { return !/^image\//.test(file.type || ''); });
+
+        if (images.length && !visionEnabled()) {
+            ui.toast('当前端点未开启图片输入', { type: 'warn' });
         }
-        var room = maxImages() - state.images.length;
-        if (room <= 0) {
-            ui.alert('图片数量超出限制', '最多上传 ' + maxImages() + ' 张图片，请先移除已选图片。');
-            return;
+        if (docs.length && !filesEnabled()) {
+            ui.toast('当前端点未开启文件附件', { type: 'warn' });
         }
-        if (images.length > room) {
-            ui.alert('图片数量超出限制', '最多上传 ' + maxImages() + ' 张图片，已自动保留前 ' + room + ' 张。');
-            images = images.slice(0, room);
+        images = visionEnabled() ? images : [];
+        docs = filesEnabled() ? docs : [];
+
+        // 文本附件：只读入本地文本，发送时作为上下文附加，不直接上传二进制
+        var docRoom = MAX_FILES - state.files.length;
+        if (docs.length && docRoom <= 0) {
+            ui.alert('附件数量超出限制', '最多添加 ' + MAX_FILES + ' 个文件附件，请先移除已选附件。');
+            docs = [];
         }
+        if (docs.length > docRoom) {
+            ui.alert('附件数量超出限制', '最多添加 ' + MAX_FILES + ' 个文件附件，已自动保留前 ' + docRoom + ' 个。');
+            docs = docs.slice(0, Math.max(0, docRoom));
+        }
+        var totalChars = state.files.reduce(function (sum, file) { return sum + (file.text || '').length; }, 0);
         var chain = Promise.resolve();
+        docs.forEach(function (file) {
+            chain = chain.then(function () {
+                if (!isTextFile(file)) {
+                    if (typeof options.onError === 'function') options.onError('仅支持文本类附件：' + (file.name || ''));
+                    return;
+                }
+                if (file.size > 600 * 1024) {
+                    ui.alert('附件过大', '「' + (file.name || '附件') + '」超过 600KB，请精简后再试。');
+                    return;
+                }
+                return readTextFile(file).then(function (text) {
+                    var body = String(text || '').slice(0, MAX_FILE_CHARS);
+                    if (!body.trim()) {
+                        if (typeof options.onError === 'function') options.onError('附件内容为空：' + (file.name || ''));
+                        return;
+                    }
+                    var room = MAX_TOTAL_FILE_CHARS - totalChars;
+                    if (room <= 0) {
+                        ui.alert('附件总长度超限', '文本附件合计最多 ' + MAX_TOTAL_FILE_CHARS + ' 字符。');
+                        return;
+                    }
+                    body = body.slice(0, room);
+                    totalChars += body.length;
+                    var attachment = {
+                        id: util.uid('file'),
+                        name: String(file.name || '附件').slice(0, 160),
+                        size: file.size || body.length,
+                        type: file.type || '',
+                        text: body
+                    };
+                    state.files.push(attachment);
+                    renderFilePreviews();
+                }).catch(function () {
+                    if (typeof options.onError === 'function') options.onError('附件读取失败：' + (file.name || ''));
+                });
+            });
+        });
+
+        var roomImages = maxImages() - state.images.length;
+        if (images.length && roomImages <= 0) {
+            ui.alert('图片数量超出限制', '最多上传 ' + maxImages() + ' 张图片，请先移除已选图片。');
+            images = [];
+        }
+        if (images.length > roomImages) {
+            ui.alert('图片数量超出限制', '最多上传 ' + maxImages() + ' 张图片，已自动保留前 ' + roomImages + ' 张。');
+            images = images.slice(0, Math.max(0, roomImages));
+        }
         images.forEach(function (file) {
             chain = chain.then(function () {
                 return compressImage(file).then(function (dataUrl) {
@@ -191,7 +312,7 @@
         if (!el.file) return;
         var files = Array.prototype.slice.call(el.file.files || []);
         el.file.value = '';
-        addImageFiles(files);
+        addFiles(files);
     }
 
     function bindDropAndPaste() {
@@ -208,7 +329,7 @@
             el.inputArea.addEventListener('drop', function (event) {
                 if (!event.dataTransfer || !event.dataTransfer.files || !event.dataTransfer.files.length) return;
                 event.preventDefault();
-                addImageFiles(event.dataTransfer.files);
+                addFiles(event.dataTransfer.files);
             });
         }
         if (el.textarea) {
@@ -217,15 +338,47 @@
                 if (!data) return;
                 var files = [];
                 Array.prototype.forEach.call(data.items || [], function (item) {
-                    if (item && item.kind === 'file' && /^image\//.test(item.type || '')) {
-                        var file = item.getAsFile();
-                        if (file) files.push(file);
-                    }
+                    if (!item || item.kind !== 'file') return;
+                    var file = item.getAsFile();
+                    if (!file) return;
+                    if (/^image\//.test(item.type || '') || filesEnabled()) files.push(file);
                 });
                 if (!files.length) return;
                 event.preventDefault();
-                addImageFiles(files);
+                addFiles(files);
             });
+        }
+    }
+
+    function setCapabilities(caps) {
+        state.capabilities = {
+            vision: !caps || caps.vision !== false,
+            files: !!(caps && caps.files)
+        };
+        var canUpload = state.capabilities.vision || state.capabilities.files;
+        if (el.upload) {
+            el.upload.disabled = !canUpload;
+            el.upload.classList.toggle('is-disabled', !canUpload);
+            var uploadTitle = '当前端点未开启图片/文件输入';
+            if (state.capabilities.vision && state.capabilities.files) uploadTitle = '上传图片或文本附件';
+            else if (state.capabilities.vision) uploadTitle = '上传图片';
+            else if (state.capabilities.files) uploadTitle = '上传文本附件';
+            el.upload.setAttribute('title', uploadTitle);
+            el.upload.setAttribute('aria-disabled', canUpload ? 'false' : 'true');
+        }
+        if (el.file) {
+            var accepts = [];
+            if (state.capabilities.vision) accepts.push('image/*');
+            if (state.capabilities.files) accepts.push('.txt,.md,.markdown,.json,.csv,.log,.yml,.yaml,.xml');
+            el.file.setAttribute('accept', accepts.join(','));
+        }
+        if (!state.capabilities.vision) {
+            state.images = [];
+            renderPreviews();
+        }
+        if (!state.capabilities.files) {
+            state.files = [];
+            renderFilePreviews();
         }
     }
 
@@ -247,11 +400,14 @@
         var text = el.textarea ? el.textarea.value : '';
         text = text.replace(/\r\n/g, '\n').trim();
         var images = state.images.map(function (image) { return image.dataUrl; });
-        if (!text && !images.length) {
+        var files = state.files.map(function (file) {
+            return { id: file.id, name: file.name, size: file.size, type: file.type, text: file.text };
+        });
+        if (!text && !images.length && !files.length) {
             if (el.textarea) el.textarea.focus();
             return;
         }
-        if (typeof options.onSend === 'function') options.onSend({ text: text, images: images });
+        if (typeof options.onSend === 'function') options.onSend({ text: text, images: images, files: files });
     }
 
     function onKeyDown(event) {
@@ -264,7 +420,9 @@
     function clear() {
         if (el.textarea) el.textarea.value = '';
         state.images = [];
+        state.files = [];
         renderPreviews();
+        renderFilePreviews();
         autoGrow();
         focus();
     }
@@ -301,6 +459,7 @@
         el.upload = document.getElementById('upload-btn');
         el.file = document.getElementById('image-input');
         el.previews = document.getElementById('image-preview-container');
+        el.files = document.getElementById('file-preview-container');
         if (!el.textarea || !el.send) return;
 
         el.send.addEventListener('click', handleSendOrStop);
@@ -321,6 +480,7 @@
         }
         bindDropAndPaste();
         renderPreviews();
+        renderFilePreviews();
         autoGrow();
         updatePlaceholder();
         if (el.inputArea && global.ResizeObserver) {
@@ -338,14 +498,25 @@
     NC.view.composer = {
         init: init,
         setBusy: setBusy,
+        setCapabilities: setCapabilities,
         clear: clear,
         focus: focus,
         setValue: setValue,
         getValue: function () { return el.textarea ? el.textarea.value : ''; },
         getImages: function () { return state.images.map(function (image) { return image.dataUrl; }); },
+        getFiles: function () {
+            return state.files.map(function (file) {
+                return { id: file.id, name: file.name, size: file.size, type: file.type, text: file.text };
+            });
+        },
+        clearFiles: function () {
+            state.files = [];
+            renderFilePreviews();
+        },
         removeImage: removeImage,
         handleSendOrStop: handleSendOrStop,
-        addFiles: function (files) { addImageFiles(files); },
+        addFiles: addFiles,
+        removeFile: removeFile,
         get stagedImages() { return state.images.slice(); }
     };
 })(window);

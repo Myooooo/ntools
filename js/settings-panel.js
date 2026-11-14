@@ -312,6 +312,7 @@
             apiKey: profile.apiKey,
             modelId: profile.modelId,
             apiFormat: profile.apiFormat === 'bocai' ? 'bocai' : 'openai',
+            capabilities: profile.capabilities,
             chatSystemPrompt: profile.chatSystemPrompt,
             temperature: profile.temperature,
             topP: profile.topP
@@ -365,6 +366,14 @@
         form.appendChild(field('API 格式', apiFormat,
             'openai 保持标准请求字段；bocai 会附加稳定 sessionId，且不支持图片输入'));
         form.appendChild(field('API Key', keyWrap, '仅保存在本机 localStorage'));
+        var caps = profile.capabilities || { vision: true, files: false, search: false, readUrl: false };
+        var capsWrap = util.e('div', { class: 'sp-capabilities' });
+        capsWrap.appendChild(switchField('图片输入', caps.vision !== false, function (v) { caps.vision = !!v; }));
+        capsWrap.appendChild(switchField('文件附件', caps.files === true, function (v) { caps.files = !!v; }));
+        var capsField = field('端点能力', capsWrap, '关闭图片输入后 nChat 会禁用图片选择/拖拽/粘贴；文件附件按文本发送');
+        capsField.classList.add('sp-form-full');
+        form.appendChild(capsField);
+
         var promptField = field('聊天系统提示词', prompt, '只对 nChat 生效；Todo AI 使用独立提示词');
         promptField.classList.add('sp-form-full');
         form.appendChild(promptField);
@@ -410,6 +419,7 @@
                     apiKey: apiKey.value,
                     modelId: modelId.value,
                     apiFormat: apiFormat.value,
+                    capabilities: caps,
                     chatSystemPrompt: prompt.value,
                     temperature: temp,
                     topP: topP
@@ -585,9 +595,12 @@
 
         var nowRow = util.e('div', { class: 'sp-row' });
         nowRow.appendChild(util.e('span', { class: 'sp-row__label', text: '本地存储' }));
+        var chatStorage = NC.store.conversation && NC.store.conversation.getStorageInfo
+            ? NC.store.conversation.getStorageInfo()
+            : null;
         var storageText = NC.storage.memoryMode()
             ? '不可用（内存模式，关闭页面后数据丢失）'
-            : '可用（localStorage）';
+            : (chatStorage && chatStorage.mode === 'indexedDB' ? '可用（IndexedDB）' : '可用（localStorage）');
         nowRow.appendChild(util.e('span', { class: 'sp-row__value' + (NC.storage.memoryMode() ? ' is-error' : ''), text: storageText }));
         rows.appendChild(nowRow);
 
@@ -698,7 +711,7 @@
         [['版本', 'v' + (NC.version || '2.0.0')],
             ['浏览器内核', 'Chromium ' + ((NC.compat && NC.compat.features.chromeVersion) || '未知')],
             ['运行协议', (global.location && global.location.protocol) || ''],
-            ['存储模式', NC.storage.memoryMode() ? '内存模式' : 'localStorage']
+            ['存储模式', NC.storage.memoryMode() ? '内存模式' : 'localStorage / IndexedDB']
         ].forEach(function (item) {
             var row = util.e('div', { class: 'sp-row' });
             row.appendChild(util.e('span', { class: 'sp-row__label', text: item[0] }));

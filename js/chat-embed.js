@@ -25,6 +25,8 @@
     var WELCOME = '你好，有什么可以帮你？';
 
     var initialized = false;
+    var initializing = false;
+    var ready = false;
     var store = null;
     var adapter = null;
     var conversation = null;
@@ -46,6 +48,7 @@
      * ------------------------------------------------------------------ */
     function init() {
         if (initialized) return true;
+        if (initializing) return true;
         var app = document.getElementById('chat-app');
         var container = document.getElementById('chat-container');
         if (!app || !container) return false;
@@ -55,6 +58,7 @@
             return false;
         }
 
+        initializing = true;
         store = NC.store.llm;
         adapter = NC.store.settings;
         conversation = NC.store.conversation;
@@ -69,15 +73,45 @@
             adapter.init();
             if (promptSheet && typeof promptSheet.init === 'function') promptSheet.init();
             currentProfileId = store.getState().currentProfileId || null;
-            conversation.init(currentProfileId || 'chat-default');
+            showLoading();
         } catch (err) {
             console.error('[NC] chatEmbed 初始化失败：', err);
+            initializing = false;
             return false;
         }
 
+        Promise.resolve(conversation.init(currentProfileId || 'chat-default'))
+            .then(finishInit)
+            .catch(function (err) {
+                console.error('[NC] chatEmbed 存储初始化失败：', err);
+                initializing = false;
+                var box = document.getElementById('chat-container');
+                if (box) box.textContent = '会话存储初始化失败，请刷新页面重试。';
+            });
+        return true;
+    }
+
+    function showLoading() {
+        var box = document.getElementById('chat-container');
+        if (!box) return;
+        box.textContent = '';
+        var loading = util.e('div', {
+            class: 'chat-loading',
+            role: 'status',
+            'aria-live': 'polite'
+        }, [
+            util.e('span', { class: 'chat-loading__spinner', 'aria-hidden': 'true' }),
+            util.e('span', { text: '正在加载会话…' })
+        ]);
+        box.appendChild(loading);
+    }
+
+    function finishInit() {
+        if (initialized) return;
         initMessages();
         initComposer();
         initController();
+        applyCapabilities();
         initSessions();
         buildGuide();
         bindToolbar();
@@ -94,8 +128,13 @@
                 duration: 4200
             });
         }
+        var storageInfo = conversation.getStorageInfo ? conversation.getStorageInfo() : null;
+        if (storageInfo && storageInfo.mode === 'localStorage') {
+            ui.toast('IndexedDB 不可用，会话暂存于 localStorage', { type: 'warn', duration: 4200 });
+        }
         initialized = true;
-        return true;
+        ready = true;
+        initializing = false;
     }
 
     /* ------------------------------------------------------------------ *
@@ -122,6 +161,12 @@
 
     function refreshSessions() {
         if (NC.chatSessions && typeof NC.chatSessions.refresh === 'function') NC.chatSessions.refresh();
+    }
+
+    function applyCapabilities() {
+        if (!composer || typeof composer.setCapabilities !== 'function') return;
+        var profile = currentProfile();
+        composer.setCapabilities(profile ? profile.capabilities : null);
     }
 
     function cacheDom() {
@@ -415,6 +460,7 @@
         clearStagedImages();
         conversation.switchConfig(currentProfileId);
         if (NC.chatSessions && typeof NC.chatSessions.refresh === 'function') NC.chatSessions.refresh();
+        applyCapabilities();
         controller.renderConversation(WELCOME);
         renderProfiles();
         updateGuide();
@@ -480,6 +526,7 @@
         });
         events.on('llm:changed', function () {
             renderProfiles();
+            applyCapabilities();
             updateGuide();
         });
         events.on('conversation:save-failed', function (payload) {
@@ -490,7 +537,9 @@
     }
 
     function clearStagedImages() {
-        if (!composer || typeof composer.removeImage !== 'function') return;
+        if (!composer) return;
+        if (typeof composer.clearFiles === 'function') composer.clearFiles();
+        if (typeof composer.removeImage !== 'function') return;
         var images = composer.stagedImages || [];
         images.forEach(function (image) {
             if (image && image.id != null) composer.removeImage(image.id);
@@ -512,7 +561,7 @@
      * ------------------------------------------------------------------ */
     NC.chatEmbed = {
         init: init,
-        isReady: function () { return initialized; },
+        isReady: function () { return initialized && ready; },
         getCurrentProfileId: function () { return currentProfileId; },
         openSettings: openSettings,
         refreshProfiles: function () {

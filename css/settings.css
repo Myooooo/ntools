@@ -1483,3 +1483,15 @@ html[data-theme="light"] .sp-range__input::-moz-range-track {
         min-height: 0;
     }
 }
+
+/* 端点能力开关（v5.1） */
+.sp-capabilities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 22px;
+    padding: 2px 0;
+}
+
+.sp-capabilities .nc-switch {
+    min-height: 26px;
+}

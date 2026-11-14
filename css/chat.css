@@ -2085,3 +2085,192 @@ html[data-lite="true"] #chat-profile-select + .nc-select__trigger {
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
+
+/* v5.1：文本附件预览与消息附件 */
+.chat-file-previews {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+    max-width: 1000px;
+    margin: 0 auto 2px;
+    padding: 6px 4px 2px;
+}
+
+.chat-file-previews[hidden] { display: none; }
+
+.chat-file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 260px;
+    min-height: 30px;
+    padding: 4px 5px 4px 8px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-2);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-xs);
+}
+
+.chat-file-chip__icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    color: var(--nc-text-3);
+}
+
+.chat-file-chip__meta {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.chat-file-chip__name {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-file-chip__size {
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+}
+
+.chat-file-chip__remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--nc-radius-xs);
+    color: var(--nc-text-3);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .chat-file-chip__remove:hover {
+        color: var(--nc-danger);
+        background: var(--nc-surface-3);
+    }
+}
+
+/* 消息内附件 */
+.chat-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 8px;
+}
+
+.chat-attachment {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 240px;
+    padding: 3px 7px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-xs);
+    background: var(--nc-surface-2);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-2xs);
+    text-align: left;
+}
+
+.chat-attachment__name {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-attachment__size {
+    color: var(--nc-text-3);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .chat-attachment:hover {
+        border-color: var(--nc-border-strong);
+        color: var(--nc-text);
+    }
+}
+
+/* v5.1：数学公式 / 代码块复制 */
+.math-inline {
+    display: inline;
+    white-space: nowrap;
+}
+
+.math-block {
+    display: block;
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin: 8px 0;
+    padding: 2px 0;
+}
+
+.math-inline.is-error,
+.math-block.is-error {
+    color: var(--nc-danger);
+    font-family: var(--nc-font-mono);
+    white-space: pre-wrap;
+}
+
+.chat-code {
+    position: relative;
+}
+
+.chat-code__copy {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    height: 24px;
+    padding: 0 8px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-xs);
+    background: var(--nc-surface-2);
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    opacity: 0;
+    transition: opacity var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.chat-code:hover .chat-code__copy,
+.chat-code:focus-within .chat-code__copy,
+.chat-code__copy.is-copied {
+    opacity: 1;
+}
+
+.chat-code__copy:hover {
+    color: var(--nc-text);
+}
+
+@media (hover: none) {
+    .chat-code__copy {
+        opacity: 1;
+    }
+}
+
+/* v5.1：用户蓝色气泡内的操作图标保持反色对比 */
+.chat-msg--user .chat-msg__action {
+    color: rgba(255, 255, 255, 0.76);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .chat-msg--user .chat-msg__action:hover:not(:disabled) {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.14);
+    }
+}
+
+.chat-msg--user .chat-msg__action:focus-visible {
+    color: #ffffff;
+    outline-color: rgba(255, 255, 255, 0.7);
+}
+
+.chat-msg--user .chat-msg__action:disabled {
+    color: rgba(255, 255, 255, 0.35);
+}
