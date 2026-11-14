@@ -1,0 +1,286 @@
+/* ==========================================================================
+ * chat-sessions.css — nChat 会话栏 / 会话头 / 移动抽屉
+ * ========================================================================== */
+
+.chat-layout,
+.chat-app--embed {
+    min-height: 0;
+}
+
+.chat-sessions {
+    display: flex;
+    flex: 0 0 260px;
+    flex-direction: column;
+    width: 260px;
+    min-height: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--nc-border);
+    background: var(--nc-surface);
+    transition:
+        width var(--nc-dur-panel) var(--nc-ease-drawer),
+        flex-basis var(--nc-dur-panel) var(--nc-ease-drawer),
+        border-color var(--nc-dur) var(--nc-ease);
+}
+
+.chat-app.is-sessions-collapsed .chat-sessions {
+    width: 0;
+    flex-basis: 0;
+    border-right-color: transparent;
+}
+
+.chat-sessions__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    height: 48px;
+    padding: 0 8px 0 16px;
+    border-bottom: 1px solid var(--nc-border-faint);
+}
+
+.chat-sessions__label {
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-xs);
+    letter-spacing: 0.04em;
+}
+
+.chat-new-session {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex: 0 0 auto;
+    height: 34px;
+    margin: 10px 12px 8px;
+    padding: 0 10px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-2);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-md);
+    text-align: left;
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease), border-color var(--nc-dur-fast) var(--nc-ease);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .chat-new-session:hover {
+        color: var(--nc-text);
+        border-color: var(--nc-border-strong);
+        background: var(--nc-surface-3);
+    }
+}
+
+.chat-new-session .nc-icon {
+    color: var(--nc-accent);
+}
+
+.chat-sessions__list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 2px 8px 12px;
+}
+
+.chat-session-group {
+    padding-top: 10px;
+}
+
+.chat-session-group__label {
+    padding: 0 8px 5px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    letter-spacing: 0.04em;
+}
+
+.chat-session-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 34px;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-2);
+}
+
+.chat-session-row.is-active {
+    background: var(--nc-accent-faint);
+    color: var(--nc-text);
+}
+
+.chat-session-row.is-active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--nc-accent);
+}
+
+.chat-session-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    height: 34px;
+    padding: 0 6px 0 10px;
+    overflow: hidden;
+    color: inherit;
+    font-size: var(--nc-fs-md);
+    text-align: left;
+}
+
+.chat-session-item__title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.chat-session-item__time {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    font-variant-numeric: tabular-nums;
+}
+
+.chat-session-more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    margin-right: 4px;
+    border-radius: var(--nc-radius-xs);
+    color: var(--nc-text-3);
+    opacity: 0;
+}
+
+.chat-session-row:hover .chat-session-more,
+.chat-session-row:focus-within .chat-session-more,
+.chat-session-row.is-active .chat-session-more {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .chat-session-more {
+        opacity: 1;
+    }
+}
+
+.chat-session-empty {
+    padding: 22px 12px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-sm);
+    line-height: 1.6;
+}
+
+.chat-sessions-scrim {
+    display: none;
+}
+
+.chat-workspace {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.chat-sessions-toggle {
+    flex: 0 0 auto;
+}
+
+.chat-session-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    height: 38px;
+    padding: 0 12px 0 24px;
+    border-bottom: 1px solid var(--nc-border-faint);
+    background: var(--nc-surface);
+}
+
+.chat-session-title {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    font-weight: 500;
+    letter-spacing: 0.002em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 桌面收起后会话头也保持窄；移动端由抽屉覆盖 */
+@media (max-width: 900px) {
+    .chat-sessions {
+        position: absolute;
+        z-index: calc(var(--nc-z-modal) - 10);
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: min(286px, 84vw);
+        flex-basis: auto;
+        border-right-color: var(--nc-border-strong);
+        box-shadow: var(--nc-shadow-3);
+        transform: translateX(-102%);
+        transition: transform var(--nc-dur-panel) var(--nc-ease-drawer);
+    }
+
+    .chat-app.is-sessions-open .chat-sessions {
+        transform: translateX(0);
+    }
+
+    .chat-app.is-sessions-collapsed .chat-sessions {
+        width: min(286px, 84vw);
+        flex-basis: auto;
+        border-right-color: var(--nc-border-strong);
+    }
+
+    .chat-sessions-scrim {
+        position: absolute;
+        z-index: calc(var(--nc-z-modal) - 11);
+        inset: 0;
+        display: block;
+        background: var(--nc-overlay);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--nc-dur-panel) var(--nc-ease-out);
+    }
+
+    .chat-app.is-sessions-open .chat-sessions-scrim {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .chat-session-head {
+        padding-left: 16px;
+    }
+}
+
+html[data-lite="true"] .chat-sessions,
+html[data-lite="true"] .chat-sessions-scrim {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chat-sessions,
+    .chat-sessions-scrim {
+        transition: none;
+    }
+}
+
+/* 会话栏与工作区横向排布 */
+.chat-app.chat-app--embed {
+    flex-direction: row;
+}
+
+.chat-app.chat-app--embed {
+    position: relative;
+}

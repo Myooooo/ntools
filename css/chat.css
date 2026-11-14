@@ -2044,3 +2044,44 @@ html[data-lite="true"] #chat-profile-select + .nc-select__trigger {
 .chat-toolbar__left > .nc-select-wrap > #chat-profile-select:focus-visible + .nc-select__trigger {
     box-shadow: 0 0 0 3px var(--nc-accent-faint);
 }
+
+/* v5：消息分支版本切换 */
+.chat-versions {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    height: 24px;
+    margin-right: 2px;
+    border: 1px solid var(--nc-border-faint);
+    border-radius: var(--nc-radius-xs);
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+}
+
+.chat-versions__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 22px;
+    border-radius: var(--nc-radius-xs);
+    color: var(--nc-text-3);
+}
+
+.chat-versions__btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .chat-versions__btn:not(:disabled):hover {
+        color: var(--nc-text);
+        background: var(--nc-surface-3);
+    }
+}
+
+.chat-versions__label {
+    padding: 0 2px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}

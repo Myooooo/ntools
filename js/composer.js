@@ -155,10 +155,8 @@
         });
     }
 
-    function onFilesChanged() {
-        if (!el.file) return;
-        var files = Array.prototype.slice.call(el.file.files || []);
-        el.file.value = '';
+    function addImageFiles(fileList) {
+        var files = Array.prototype.slice.call(fileList || []);
         if (!files.length) return;
         var images = files.filter(function (file) { return /^image\//.test(file.type || ''); });
         if (!images.length) {
@@ -187,6 +185,48 @@
                 });
             });
         });
+    }
+
+    function onFilesChanged() {
+        if (!el.file) return;
+        var files = Array.prototype.slice.call(el.file.files || []);
+        el.file.value = '';
+        addImageFiles(files);
+    }
+
+    function bindDropAndPaste() {
+        if (el.inputArea) {
+            ['dragenter', 'dragover'].forEach(function (name) {
+                el.inputArea.addEventListener(name, function (event) {
+                    if (!event.dataTransfer) return;
+                    var types = Array.prototype.slice.call(event.dataTransfer.types || []);
+                    if (types.indexOf('Files') === -1) return;
+                    event.preventDefault();
+                    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+                });
+            });
+            el.inputArea.addEventListener('drop', function (event) {
+                if (!event.dataTransfer || !event.dataTransfer.files || !event.dataTransfer.files.length) return;
+                event.preventDefault();
+                addImageFiles(event.dataTransfer.files);
+            });
+        }
+        if (el.textarea) {
+            el.textarea.addEventListener('paste', function (event) {
+                var data = event.clipboardData;
+                if (!data) return;
+                var files = [];
+                Array.prototype.forEach.call(data.items || [], function (item) {
+                    if (item && item.kind === 'file' && /^image\//.test(item.type || '')) {
+                        var file = item.getAsFile();
+                        if (file) files.push(file);
+                    }
+                });
+                if (!files.length) return;
+                event.preventDefault();
+                addImageFiles(files);
+            });
+        }
     }
 
     function setBusy(busy) {
@@ -279,6 +319,7 @@
                 if (button) removeImage(button.getAttribute('data-id'));
             });
         }
+        bindDropAndPaste();
         renderPreviews();
         autoGrow();
         updatePlaceholder();
@@ -304,7 +345,7 @@
         getImages: function () { return state.images.map(function (image) { return image.dataUrl; }); },
         removeImage: removeImage,
         handleSendOrStop: handleSendOrStop,
-        addFiles: onFilesChanged,
+        addFiles: function (files) { addImageFiles(files); },
         get stagedImages() { return state.images.slice(); }
     };
 })(window);

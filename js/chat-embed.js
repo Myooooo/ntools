@@ -78,6 +78,7 @@
         initMessages();
         initComposer();
         initController();
+        initSessions();
         buildGuide();
         bindToolbar();
         bindLlmEvents();
@@ -95,6 +96,32 @@
         }
         initialized = true;
         return true;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 会话栏（v5）
+     * ------------------------------------------------------------------ */
+    function initSessions() {
+        if (!NC.chatSessions || typeof NC.chatSessions.init !== 'function') return;
+        NC.chatSessions.init({
+            onSelect: function (sessionId) {
+                if (!sessionId) return;
+                if (controller && typeof controller.isStreaming === 'function' && controller.isStreaming()) {
+                    controller.stop();
+                }
+                if (sessionId !== conversation.getState().sessionId) {
+                    conversation.selectSession(sessionId);
+                }
+                controller.renderConversation(WELCOME);
+                if (NC.chatSessions.refreshTitle) NC.chatSessions.refreshTitle();
+                if (composer && typeof composer.focus === 'function') composer.focus();
+            }
+        });
+        if (NC.chatSessions.refreshTitle) NC.chatSessions.refreshTitle();
+    }
+
+    function refreshSessions() {
+        if (NC.chatSessions && typeof NC.chatSessions.refresh === 'function') NC.chatSessions.refresh();
     }
 
     function cacheDom() {
@@ -387,6 +414,7 @@
         flashSwitching();
         clearStagedImages();
         conversation.switchConfig(currentProfileId);
+        if (NC.chatSessions && typeof NC.chatSessions.refresh === 'function') NC.chatSessions.refresh();
         controller.renderConversation(WELCOME);
         renderProfiles();
         updateGuide();
@@ -453,6 +481,11 @@
         events.on('llm:changed', function () {
             renderProfiles();
             updateGuide();
+        });
+        events.on('conversation:save-failed', function (payload) {
+            if (payload && payload.reason === 'quota') {
+                ui.toast('本地存储空间不足，最近的消息可能未保存；请导出备份并清理旧会话。', { type: 'error', duration: 5200 });
+            }
         });
     }
 

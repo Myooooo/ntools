@@ -45,6 +45,11 @@
     }
 
     function conversation() { return deps.conversation; }
+
+    /** v3 新 API 始终从全局 store 取，避免组合根缓存了旧适配对象。 */
+    function chatStore() {
+        return (NC.store && NC.store.conversation) ? NC.store.conversation : conversation();
+    }
     function messages() { return deps.messages; }
     function composer() { return deps.composer; }
 
@@ -88,7 +93,8 @@
         runStream(config);
     }
 
-    function runStream(config) {
+    function runStream(config, options) {
+        var opts = options || {};
         stream.active = true;
         stream.added = false;
         stream.draft = null;
@@ -96,10 +102,12 @@
         stream.startedAt = Date.now();
         stream.firstTokenAt = 0;
         stream.thinkStart = 0;
+        stream.branchParentId = Object.prototype.hasOwnProperty.call(opts, 'parentId') ? opts.parentId : undefined;
         stream.controller = new AbortController();
         stream.flush = util.throttle(renderDraft, 60);
 
-        var history = conversation().messages.map(function (message) {
+        var source = Array.isArray(opts.history) ? opts.history : conversation().messages;
+        var history = source.map(function (message) {
             return { role: message.role, content: message.content };
         });
         composer().setBusy(true);
@@ -229,7 +237,9 @@
             finalMessage.reasoning = reasoning;
             finalMessage.reasoningTime = reasoningTime;
         }
-        conversation().append(finalMessage);
+        var appendPayload = finalMessage;
+        if (stream.branchParentId !== undefined) appendPayload.parentId = stream.branchParentId;
+        conversation().append(appendPayload);
         messages().update(draft.id, {
             content: content,
             reasoning: finalMessage.reasoning || null,
@@ -239,6 +249,10 @@
             streaming: false
         });
         conversation().saveNow();
+        if (stream.branchParentId !== undefined) {
+            // 分支回复完成后重新渲染，显示版本切换器与新分支路径
+            renderConversation('');
+        }
         stream.draft = null;
         stream.added = false;
         composer().focus();
@@ -298,31 +312,30 @@
         var index = indexOfMessage(id);
         if (index === -1) return;
         var target = list[index];
-        var truncateIndex = target.role === 'user' ? index + 1 : index;
-        var removed = list.length - truncateIndex;
-        var start = function () {
-            conversation().truncateFrom(truncateIndex);
-            renderConversation('');
-            runStream(settings().getConfig());
-        };
-        if (removed > 0) {
-            ui.confirm('重新生成将删除该消息之后的 ' + removed + ' 条消息，且无法恢复。是否继续？', {
-                title: '重新生成',
-                confirmText: '重新生成',
-                danger: true
-            }).then(function (ok) { if (ok) start(); });
-        } else {
-            start();
+        // 重新生成不删除旧回答：在目标节点下方新增一个助手分支；
+        // 若目标是用户消息，则在该用户消息下新增回答。
+        var parentId = target.role === 'user' ? target.id : (target.parentId || null);
+        var context = parentId ? chatStore().getPathTo(parentId) : [];
+        if (parentId && (!context.length || context[context.length - 1].id !== parentId)) {
+            ui.toast('无法定位该消息的上下文', { type: 'warn' });
+            return;
         }
+        var history = context.map(function (message) {
+            return { role: message.role, content: message.content };
+        });
+        messages().renderAll(context);
+        messages().setEmpty('');
+        messages().clearErrors();
+        runStream(settings().getConfig(), { parentId: parentId, history: history });
     }
 
     function deleteMessage(id) {
         if (stream.active) return;
-        var snapshot = conversation().messages.slice();
+        var snapshot = chatStore().getAllMessages ? chatStore().getAllMessages() : conversation().messages.slice();
         var result = conversation().remove(id);
         if (!result.ok) return;
-        messages().remove(id);
-        ui.toast('消息已删除', {
+        renderConversation('');
+        ui.toast('消息及后续分支已删除', {
             type: 'info',
             duration: 6500,
             action: {
@@ -375,34 +388,40 @@
                 ui.toast('消息内容不能为空', { type: 'warn' });
                 return;
             }
-            var later = list.length - index - 1;
-            var apply = function () {
-                if (isUser) {
-                    var parts = (Array.isArray(message.content) ? message.content : []).map(function (part) {
-                        return part.type === 'text' ? { type: 'text', text: value } : part;
-                    });
-                    if (!parts.some(function (part) { return part.type === 'text'; })) {
-                        parts.unshift({ type: 'text', text: value });
-                    }
-                    conversation().update(id, { content: parts });
-                    messages().update(id, { content: parts });
-                    conversation().truncateFrom(index + 1);
-                    renderConversation('');
-                    runStream(settings().getConfig());
-                } else {
-                    conversation().update(id, { content: value });
-                    messages().update(id, { content: value });
-                    conversation().saveNow();
+            if (isUser) {
+                // 编辑用户消息 = 在原父节点下新建一个用户分支，旧分支保留
+                var parts = (Array.isArray(message.content) ? message.content : []).map(function (part) {
+                    return part.type === 'text' ? { type: 'text', text: value } : part;
+                });
+                if (!parts.some(function (part) { return part.type === 'text'; })) {
+                    parts.unshift({ type: 'text', text: value });
                 }
-            };
-            if (later > 0) {
-                ui.confirm('编辑后需要基于新内容重新生成，该消息之后的 ' + later + ' 条消息会被删除。是否继续？', {
-                    title: '编辑消息',
-                    confirmText: '保存并继续',
-                    danger: true
-                }).then(function (ok) { if (ok) apply(); });
+                var branch = conversation().append({
+                    role: 'user',
+                    content: parts,
+                    parentId: message.parentId || null
+                });
+                if (!branch) {
+                    ui.toast('无法创建消息分支', { type: 'error' });
+                    return;
+                }
+                var context = chatStore().getPathTo(branch.id);
+                var history = context.map(function (item) {
+                    return { role: item.role, content: item.content };
+                });
+                renderConversation('');
+                runStream(settings().getConfig(), { parentId: branch.id, history: history });
             } else {
-                apply();
+                // 编辑助手内容 = 同一父节点下新建助手分支，不重新请求
+                conversation().append({
+                    role: 'assistant',
+                    content: value,
+                    parentId: message.parentId || null,
+                    reasoning: message.reasoning || '',
+                    reasoningTime: message.reasoningTime,
+                    stats: message.stats
+                });
+                renderConversation('');
             }
         });
     }
@@ -445,14 +464,14 @@
             danger: true
         }).then(function (ok) {
             if (!ok) return;
-            var snapshot = conversation().messages.slice();
+            var snapshot = chatStore().getAllMessages ? chatStore().getAllMessages() : conversation().messages.slice();
             var result = conversation().importBackup(text);
             if (!result.ok) {
                 ui.toast('恢复失败：' + (result.reason || '未知错误'), { type: 'error' });
                 return;
             }
             renderConversation('');
-            ui.toast('对话已恢复（' + result.messages.length + ' 条消息）', {
+            ui.toast('对话已恢复（' + ((result.messages && result.messages.length) || result.imported || 0) + ' 条消息）', {
                 type: 'success',
                 duration: 6000,
                 action: {
@@ -479,7 +498,7 @@
             ui.toast('请先停止当前生成', { type: 'warn' });
             return;
         }
-        var snapshot = conversation().messages.slice();
+        var snapshot = chatStore().getAllMessages ? chatStore().getAllMessages() : conversation().messages.slice();
         ui.confirm('确定要清除当前对话吗？本地保存的会话记录也会被清空。', {
             title: '清除对话',
             confirmText: '清除',

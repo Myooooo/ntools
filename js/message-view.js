@@ -178,10 +178,43 @@
         return wrap;
     }
 
+    function buildVersionControls(message) {
+        var store = NC.store && NC.store.conversation;
+        if (!store || typeof store.getVersions !== 'function') return null;
+        var versions = store.getVersions(message.id);
+        if (!versions || !versions.ids || versions.ids.length < 2) return null;
+        var wrap = util.e('div', { class: 'chat-versions', role: 'group', 'aria-label': '切换回复版本' });
+        var prev = util.e('button', {
+            type: 'button',
+            class: 'chat-versions__btn',
+            title: '上一版本',
+            'aria-label': '上一版本',
+            'data-action': 'version-prev'
+        });
+        prev.appendChild(icons.el('chevron-left', 14));
+        if (versions.index <= 0) { prev.disabled = true; }
+        var label = util.e('span', { class: 'chat-versions__label', text: (versions.index + 1) + ' / ' + versions.ids.length });
+        var next = util.e('button', {
+            type: 'button',
+            class: 'chat-versions__btn',
+            title: '下一版本',
+            'aria-label': '下一版本',
+            'data-action': 'version-next'
+        });
+        next.appendChild(icons.el('chevron-right', 14));
+        if (versions.index >= versions.ids.length - 1) { next.disabled = true; }
+        wrap.appendChild(prev);
+        wrap.appendChild(label);
+        wrap.appendChild(next);
+        return wrap;
+    }
+
     function buildFooter(message) {
         var footer = util.e('div', { class: 'chat-msg__actions' });
         var statsWrap = buildStatsButton(message);
         if (statsWrap) footer.appendChild(statsWrap);
+        var versionWrap = buildVersionControls(message);
+        if (versionWrap) footer.appendChild(versionWrap);
         footer.appendChild(createIconButton('copy', 'copy', '复制', false));
         footer.appendChild(createIconButton('refresh', 'regenerate', '重新生成', true));
         footer.appendChild(createIconButton('edit', 'edit', '编辑', true));
@@ -504,6 +537,19 @@
             });
             return;
         }
+        if (action === 'version-prev' || action === 'version-next') {
+            var store = NC.store && NC.store.conversation;
+            if (!store || typeof store.getVersions !== 'function') return;
+            var versions = store.getVersions(id);
+            if (!versions || !versions.ids || versions.ids.length < 2) return;
+            var nextIndex = versions.index + (action === 'version-prev' ? -1 : 1);
+            if (nextIndex < 0 || nextIndex >= versions.ids.length) return;
+            store.selectVersion(versions.ids[nextIndex]);
+            if (NC.chat && NC.chat.controller) {
+                NC.chat.controller.renderConversation('');
+            }
+            return;
+        }
         var callbackMap = {
             regenerate: options.onRegenerate,
             edit: options.onEdit,
@@ -817,6 +863,13 @@
         container.addEventListener('scroll', util.throttle(updateFollow, 90));
 
         util.delegate(container, 'click', '.chat-msg__action', function (event, button) {
+            var article = button.closest('.chat-msg');
+            var id = article && article.getAttribute('data-id');
+            var action = button.getAttribute('data-action');
+            if (id && action) handleAction(action, id, button);
+        });
+
+        util.delegate(container, 'click', '.chat-versions__btn', function (event, button) {
             var article = button.closest('.chat-msg');
             var id = article && article.getAttribute('data-id');
             var action = button.getAttribute('data-action');

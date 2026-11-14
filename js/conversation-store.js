@@ -1,15 +1,16 @@
 /**
- * conversation-store.js — 会话状态 + 持久化（按 configId 分会话）
- * 经典脚本，依赖 core.js、storage.js、schema-chat.js。挂载到 NC.store.conversation。
+ * conversation-store.js — nChat v3 会话/消息树存储（保留 v2 API 兼容）
+ * 经典脚本，依赖 core.js、storage.js、schema-chat.js。挂载：NC.store.conversation
  *
- * 存储键：nchat-conversation.v2
- * 形状：{version:2, sessions:{[configId]:{messages:[],updatedAt}}}
- * 迁移：旧键 nchat-conversation（消息数组）→ 当前 configId 会话；旧键只读保留，
- *       同时把原始字符串备份到 nchat-conversation.v1_backup。
+ * v3 变化：
+ *  - 一个端点下可以有多条会话（session），会话有标题/时间/端点；
+ *  - 消息从线性数组升级为树：parentId + selectedChildId，支持编辑/重新生成/版本切换；
+ *  - 主存储 nchat-conversation.v3（过渡期 localStorage；旧 v2 键只读保留）；
+ *  - 旧 nchat-conversation.v2 自动迁移：每个端点一条“旧会话”，线性消息补 parent 链。
  *
- * 配额策略：先写；若 QuotaExceeded，则从最旧会话/最旧消息开始把图片数据替换为占位文本
- *          后重试（最多 3 轮），并发出 conversation:degraded；仍失败则发 save-failed，
- *          当前页面仍可用（NC.storage 会保留内存副本）。
+ * 兼容：保持 messages getter、append/update/remove/truncateFrom/setMessages/clear/
+ * switchConfig/exportBackup/importBackup/exportMarkdown/subscribe/saveNow 语义，
+ * 让现有 chat-embed/controller/message-view 可以渐进接入。
  */
 (function (global) {
     'use strict';
@@ -19,182 +20,653 @@
     var events = NC.events;
     var storage = NC.storage;
 
-    var KEY = 'nchat-conversation.v2';
+    var KEY = 'nchat-conversation.v3';
+    var V2_KEY = 'nchat-conversation.v2';
     var LEGACY_KEY = 'nchat-conversation';
-    var LEGACY_BACKUP_KEY = 'nchat-conversation.v1_backup';
-    var VERSION = 2;
-    var SAVE_DELAY = 350;
+    var VERSION = 3;
+    var SAVE_DELAY = 300;
+    var MAX_SESSIONS = 100;
+    var MAX_MESSAGES = 1000;
 
-    var state = { version: VERSION, sessions: Object.create(null) };
+    var state = { version: VERSION, activeByEndpoint: Object.create(null), sessions: [] };
     var currentConfigId = null;
+    var currentSessionId = null;
     var listeners = [];
     var lifecycleBound = false;
+    var lastSig = '';
 
     var debouncedSave = util.debounce(function () { persist(); }, SAVE_DELAY);
 
-    function schema() {
-        return NC.schema && NC.schema.chat;
+    function schema() { return NC.schema && NC.schema.chat; }
+
+    function clone(value) {
+        if (schema() && schema().clone) return schema().clone(value);
+        try { return JSON.parse(JSON.stringify(value)); } catch (err) { return value; }
+    }
+
+    function endpointName(id) {
+        try {
+            var llm = NC.store && NC.store.llm;
+            if (llm && typeof llm.getProfile === 'function') {
+                var profile = llm.getProfile(id);
+                if (profile && profile.name) return profile.name;
+            }
+        } catch (err) { /* ignore */ }
+        return '旧会话';
+    }
+
+    function deriveTitle(messages, fallback) {
+        for (var i = 0; i < messages.length; i += 1) {
+            var message = messages[i];
+            if (message.role !== 'user') continue;
+            var text = '';
+            if (Array.isArray(message.content)) {
+                text = message.content.filter(function (part) { return part && part.type === 'text'; })
+                    .map(function (part) { return part.text || ''; }).join(' ');
+            } else {
+                text = typeof message.content === 'string' ? message.content : '';
+            }
+            text = text.replace(/\s+/g, ' ').trim();
+            if (text) return text.length > 26 ? text.slice(0, 26) + '…' : text;
+        }
+        return fallback || '新对话';
+    }
+
+    function genId(prefix) {
+        return util.uid(prefix || 's') + '_' + Math.random().toString(36).slice(2, 7);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 消息树归一化 / 可见路径
+     * ------------------------------------------------------------------ */
+    function normalizeTree(rawMessages) {
+        var list = Array.isArray(rawMessages) ? rawMessages.slice(0, MAX_MESSAGES) : [];
+        var schemaChat = schema();
+        var out = [];
+        var ids = Object.create(null);
+        var previousId = null;
+        list.forEach(function (raw) {
+            var message = schemaChat ? schemaChat.normalizeMessage(raw) : raw;
+            if (!message || !message.role) return;
+            if (ids[message.id]) message.id = util.uid('msg');
+            ids[message.id] = true;
+            var parent = raw && typeof raw.parentId === 'string' ? raw.parentId : null;
+            if (parent && !ids[parent]) parent = previousId;
+            if (message.role === 'assistant' && !parent && previousId) parent = previousId;
+            message.parentId = parent || null;
+            message.selectedChildId = null;
+            out.push(message);
+            previousId = message.id;
+        });
+        // 保证每个父节点的 selectedChildId 指向最后一个孩子（没有显式选择时）
+        var lastChild = Object.create(null);
+        var firstChild = Object.create(null);
+        out.forEach(function (message) {
+            if (!message.parentId) return;
+            firstChild[message.parentId] = firstChild[message.parentId] || message.id;
+            lastChild[message.parentId] = message.id;
+        });
+        var rawSelected = Object.create(null);
+        list.forEach(function (raw) {
+            if (raw && typeof raw.id === 'string' && typeof raw.selectedChildId === 'string') {
+                rawSelected[raw.id] = raw.selectedChildId;
+            }
+        });
+        out.forEach(function (message) {
+            var selected = rawSelected[message.id];
+            var valid = selected && ids[selected] && out.some(function (item) {
+                return item.id === selected && item.parentId === message.id;
+            });
+            message.selectedChildId = valid ? selected : (lastChild[message.id] || null);
+        });
+        return out;
+    }
+
+    function childrenMap(session) {
+        var map = Object.create(null);
+        session.messages.forEach(function (message) {
+            var key = message.parentId || '';
+            if (!map[key]) map[key] = [];
+            map[key].push(message);
+        });
+        return map;
+    }
+
+    function visibleMessages(session) {
+        if (!session) return [];
+        var map = childrenMap(session);
+        var roots = map[''] || [];
+        if (!roots.length) return [];
+        var current = roots[0];
+        if (session.selectedRootId) {
+            roots.some(function (root) {
+                if (root.id === session.selectedRootId) { current = root; return true; }
+                return false;
+            });
+        }
+        var out = [];
+        var guard = 0;
+        var visited = Object.create(null);
+        while (current && !visited[current.id] && guard < MAX_MESSAGES) {
+            guard += 1;
+            visited[current.id] = true;
+            out.push(current);
+            var children = map[current.id] || [];
+            if (!children.length) break;
+            var chosen = null;
+            if (current.selectedChildId) {
+                for (var i = 0; i < children.length; i += 1) {
+                    if (children[i].id === current.selectedChildId) { chosen = children[i]; break; }
+                }
+            }
+            current = chosen || children[children.length - 1];
+        }
+        return out;
+    }
+
+    function allMessages(session) { return session ? session.messages.slice() : []; }
+
+    function versionsOf(session, id) {
+        if (!session) return [];
+        var target = null;
+        session.messages.forEach(function (message) { if (message.id === id) target = message; });
+        if (!target) return [];
+        return session.messages.filter(function (message) { return message.parentId === target.parentId; });
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 会话归一化 / 迁移
+     * ------------------------------------------------------------------ */
+    function normalizeSession(raw, fallbackEndpoint) {
+        if (!util.isPlainObject(raw)) return null;
+        var messages = normalizeTree(raw.messages);
+        var roots = messages.filter(function (message) { return !message.parentId; });
+        var selectedRootId = typeof raw.selectedRootId === 'string' ? raw.selectedRootId : (roots.length ? roots[0].id : null);
+        var id = typeof raw.id === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(raw.id) ? raw.id : genId('s');
+        var createdAt = util.isFiniteNum(raw.createdAt) ? raw.createdAt : Date.now();
+        var updatedAt = util.isFiniteNum(raw.updatedAt) ? raw.updatedAt : createdAt;
+        var title = typeof raw.title === 'string' && raw.title.trim()
+            ? raw.title.trim().slice(0, 80)
+            : deriveTitle(messages, '新对话');
+        return {
+            id: id,
+            title: title,
+            endpointId: typeof raw.endpointId === 'string' && raw.endpointId ? raw.endpointId : (fallbackEndpoint || 'default'),
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            selectedRootId: selectedRootId,
+            messages: messages
+        };
     }
 
     function normalizeDoc(raw) {
-        var doc = { version: VERSION, sessions: Object.create(null) };
+        var doc = { version: VERSION, activeByEndpoint: Object.create(null), sessions: [] };
+        if (!util.isPlainObject(raw)) return doc;
+        if (util.isPlainObject(raw.activeByEndpoint)) {
+            Object.keys(raw.activeByEndpoint).forEach(function (key) {
+                var value = raw.activeByEndpoint[key];
+                if (typeof value === 'string') doc.activeByEndpoint[key] = value;
+            });
+        }
+        if (Array.isArray(raw.sessions)) {
+            raw.sessions.slice(0, MAX_SESSIONS).forEach(function (item) {
+                var session = normalizeSession(item);
+                if (session) doc.sessions.push(session);
+            });
+        }
+        return doc;
+    }
+
+    function migrateFromV2(raw) {
+        var doc = { version: VERSION, activeByEndpoint: Object.create(null), sessions: [] };
+        var sessions = raw && util.isPlainObject(raw.sessions) ? raw.sessions : null;
         var schemaChat = schema();
-        if (util.isPlainObject(raw) && util.isPlainObject(raw.sessions)) {
-            Object.keys(raw.sessions).forEach(function (configId) {
-                var session = raw.sessions[configId];
-                if (!util.isPlainObject(session)) return;
-                var messages = schemaChat
-                    ? schemaChat.normalizeConversation(session.messages)
-                    : [];
-                doc.sessions[configId] = {
-                    messages: messages,
-                    updatedAt: util.isFiniteNum(session.updatedAt) ? session.updatedAt : Date.now()
-                };
+        if (sessions) {
+            Object.keys(sessions).forEach(function (configId) {
+                var old = sessions[configId];
+                if (!util.isPlainObject(old)) return;
+                var messages = schemaChat ? schemaChat.normalizeConversation(old.messages) : [];
+                // 线性消息补 parent 链
+                messages.forEach(function (message, index) {
+                    message.parentId = index > 0 ? messages[index - 1].id : null;
+                    message.selectedChildId = null;
+                });
+                messages.forEach(function (message, index) {
+                    if (index < messages.length - 1) message.selectedChildId = messages[index + 1].id;
+                });
+                var session = normalizeSession({
+                    id: genId('s'),
+                    title: deriveTitle(messages, '旧会话 · ' + endpointName(configId)),
+                    endpointId: configId,
+                    createdAt: old.updatedAt || Date.now(),
+                    updatedAt: old.updatedAt || Date.now(),
+                    messages: messages
+                });
+                if (session) {
+                    doc.sessions.push(session);
+                    doc.activeByEndpoint[configId] = session.id;
+                }
             });
         } else if (Array.isArray(raw)) {
-            // 兼容极端情况下写坏了形状的旧数据
-            var legacyMessages = schemaChat ? schemaChat.normalizeConversation(raw) : [];
-            if (legacyMessages.length) {
-                doc.sessions.__legacy__ = { messages: legacyMessages, updatedAt: Date.now() };
+            var legacy = schemaChat ? schemaChat.normalizeConversation(raw) : [];
+            legacy.forEach(function (message, index) {
+                message.parentId = index > 0 ? legacy[index - 1].id : null;
+                message.selectedChildId = null;
+            });
+            legacy.forEach(function (message, index) {
+                if (index < legacy.length - 1) message.selectedChildId = legacy[index + 1].id;
+            });
+            if (legacy.length) {
+                var sessionL = normalizeSession({
+                    id: genId('s'),
+                    title: deriveTitle(legacy, '旧会话'),
+                    endpointId: 'default',
+                    messages: legacy
+                });
+                if (sessionL) {
+                    doc.sessions.push(sessionL);
+                    doc.activeByEndpoint.default = sessionL.id;
+                }
             }
         }
         return doc;
     }
 
-    function ensureSession(configId) {
-        var id = configId || currentConfigId || 'default';
-        if (!state.sessions[id]) {
-            state.sessions[id] = { messages: [], updatedAt: Date.now() };
+    function load() {
+        var saved = storage.get(KEY, null);
+        if (saved && util.isPlainObject(saved)) {
+            state = normalizeDoc(saved);
+            return 'v3';
         }
-        return state.sessions[id];
+        var v2 = storage.get(V2_KEY, null);
+        if (v2) {
+            state = migrateFromV2(v2);
+            persist();
+            return 'v2';
+        }
+        var legacy = storage.get(LEGACY_KEY, null);
+        if (legacy) {
+            state = migrateFromV2(legacy);
+            persist();
+            return 'v1';
+        }
+        state = { version: VERSION, activeByEndpoint: Object.create(null), sessions: [] };
+        persist();
+        return 'empty';
     }
 
-    function currentSession() {
-        return ensureSession(currentConfigId);
-    }
-
-    function touch() {
-        currentSession().updatedAt = Date.now();
-    }
-
-    function messages() {
-        return currentSession().messages;
-    }
-
+    /* ------------------------------------------------------------------ *
+     * 持久化 / 通知
+     * ------------------------------------------------------------------ */
     function snapshot() {
-        return messages().slice();
+        return {
+            version: VERSION,
+            activeByEndpoint: clone(state.activeByEndpoint),
+            sessions: clone(state.sessions)
+        };
     }
+
+    function persist() {
+        try {
+            var result = storage.set(KEY, snapshot());
+            if (result && result.ok === false) {
+                events.emit('conversation:save-failed', { reason: result.quota ? 'quota' : 'unknown' });
+            }
+        } catch (err) {
+            events.emit('conversation:save-failed', { reason: 'exception' });
+        }
+    }
+
+    function scheduleSave() { debouncedSave(); }
 
     function notify(reason, extra) {
         var payload = {
             reason: reason,
             configId: currentConfigId,
-            messages: snapshot(),
-            sessionCount: Object.keys(state.sessions).length
+            sessionId: currentSessionId,
+            messages: visibleMessages(currentSession()),
+            session: summaryOf(currentSession()),
+            sessions: getSessions()
         };
         if (extra) {
             Object.keys(extra).forEach(function (key) { payload[key] = extra[key]; });
         }
+        var sig = currentSessionId + '|' + (payload.messages.length) + '|' + (payload.session ? payload.session.updatedAt : 0) + '|' + reason;
+        if (sig === lastSig && reason !== 'init') return;
+        lastSig = sig;
         listeners.slice().forEach(function (fn) {
             try { fn(payload); } catch (err) { console.error('[NC] conversation subscriber error:', err); }
         });
         events.emit('conversation:changed', payload);
     }
 
-    function scheduleSave() {
-        debouncedSave();
+    /* ------------------------------------------------------------------ *
+     * 会话操作
+     * ------------------------------------------------------------------ */
+    function currentSession() {
+        for (var i = 0; i < state.sessions.length; i += 1) {
+            if (state.sessions[i].id === currentSessionId) return state.sessions[i];
+        }
+        return null;
     }
 
-    /** 配额降级：从最旧会话/最旧消息开始清理图片数据，最多清理 20 处。 */
-    function degradeImages() {
-        var removed = 0;
-        var configIds = Object.keys(state.sessions);
-        for (var i = 0; i < configIds.length && removed < 20; i += 1) {
-            var session = state.sessions[configIds[i]];
-            for (var j = 0; j < session.messages.length && removed < 20; j += 1) {
-                var message = session.messages[j];
-                if (message.role !== 'user' || !Array.isArray(message.content)) continue;
-                for (var k = 0; k < message.content.length && removed < 20; k += 1) {
-                    var part = message.content[k];
-                    if (part && part.type === 'image_url') {
-                        message.content[k] = { type: 'text', text: '[图片已清理以节省本地空间]' };
-                        removed += 1;
-                    }
-                }
+    function summaryOf(session) {
+        if (!session) return null;
+        return {
+            id: session.id,
+            title: session.title,
+            endpointId: session.endpointId,
+            createdAt: session.createdAt,
+            updatedAt: session.updatedAt,
+            messageCount: session.messages.length
+        };
+    }
+
+    function getSessions() {
+        return state.sessions
+            .filter(function (session) { return session.endpointId === currentConfigId; })
+            .sort(function (a, b) { return b.updatedAt - a.updatedAt; })
+            .map(summaryOf);
+    }
+
+    function getAllSessions() {
+        return state.sessions.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).map(summaryOf);
+    }
+
+    function createSession(options) {
+        var opts = options || {};
+        var endpointId = opts.endpointId || currentConfigId || 'default';
+        var session = {
+            id: genId('s'),
+            title: opts.title || '新对话',
+            endpointId: endpointId,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            messages: []
+        };
+        state.sessions.unshift(session);
+        if (state.sessions.length > MAX_SESSIONS) state.sessions.length = MAX_SESSIONS;
+        currentConfigId = endpointId;
+        currentSessionId = session.id;
+        state.activeByEndpoint[endpointId] = session.id;
+        persist();
+        notify('session:create', { session: summaryOf(session) });
+        return summaryOf(session);
+    }
+
+    function selectSession(id) {
+        var target = null;
+        state.sessions.forEach(function (session) { if (session.id === id) target = session; });
+        if (!target) return false;
+        currentSessionId = target.id;
+        currentConfigId = target.endpointId;
+        state.activeByEndpoint[currentConfigId] = target.id;
+        persist();
+        notify('session:select');
+        return true;
+    }
+
+    function deleteSession(id) {
+        var index = -1;
+        state.sessions.forEach(function (session, i) { if (session.id === id) index = i; });
+        if (index === -1) return false;
+        var removed = state.sessions[index];
+        state.sessions.splice(index, 1);
+        var remaining = state.sessions.filter(function (session) { return session.endpointId === removed.endpointId; })
+            .sort(function (a, b) { return b.updatedAt - a.updatedAt; });
+        if (currentSessionId === id) {
+            if (remaining.length) {
+                currentSessionId = remaining[0].id;
+                state.activeByEndpoint[removed.endpointId] = currentSessionId;
+            } else {
+                var created = createSession({ endpointId: removed.endpointId });
+                currentSessionId = created.id;
             }
         }
-        if (removed) {
-            events.emit('conversation:degraded', { removed: removed });
+        persist();
+        notify('session:delete', { id: id });
+        return true;
+    }
+
+    function renameSession(id, title) {
+        var target = null;
+        state.sessions.forEach(function (session) { if (session.id === id) target = session; });
+        if (!target) return false;
+        var next = typeof title === 'string' ? title.trim().slice(0, 80) : '';
+        if (!next) return false;
+        target.title = next;
+        target.updatedAt = Date.now();
+        persist();
+        notify('session:rename', { id: id, title: next });
+        return true;
+    }
+
+    function ensureSessionForEndpoint(endpointId) {
+        var sessions = state.sessions.filter(function (session) { return session.endpointId === endpointId; });
+        if (sessions.length) {
+            var activeId = state.activeByEndpoint[endpointId];
+            var active = sessions.filter(function (session) { return session.id === activeId; })[0];
+            if (active) return active;
+            return sessions.sort(function (a, b) { return b.updatedAt - a.updatedAt; })[0];
         }
-        return removed > 0;
+        var created = createSession({ endpointId: endpointId });
+        return currentSession();
     }
 
-    function persist() {
-        var result = null;
-        for (var attempt = 0; attempt < 4; attempt += 1) {
-            result = storage.set(KEY, state);
-            if (result && result.ok) {
-                events.emit('conversation:saved', { bytes: result.bytes || 0, memoryMode: !!result.memoryMode });
-                return true;
-            }
-            if (!result || !result.quota) break;
-            if (!degradeImages()) break;
-        }
-        events.emit('conversation:save-failed', {
-            key: KEY,
-            quota: !!(result && result.quota),
-            error: (result && result.error) || null,
-            memoryMode: !storage.available
-        });
-        return false;
-    }
-
-    function saveNow() {
-        debouncedSave.cancel();
-        return persist();
-    }
-
-    function bindLifecycle() {
-        if (lifecycleBound) return;
-        lifecycleBound = true;
-        global.addEventListener('pagehide', function () { saveNow(); });
-        global.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'hidden') saveNow();
-        });
-    }
-
+    /* ------------------------------------------------------------------ *
+     * 旧 API：消息 / 端点
+     * ------------------------------------------------------------------ */
     function init(configId) {
-        currentConfigId = configId || null;
-        var rawDoc = storage.get(KEY, null);
-        var migrated = false;
-        if (rawDoc != null) {
-            state = normalizeDoc(rawDoc);
-        } else {
-            state = { version: VERSION, sessions: Object.create(null) };
-            var legacyRaw = storage.getRaw(LEGACY_KEY);
-            if (legacyRaw != null) {
-                storage.setRaw(LEGACY_BACKUP_KEY, legacyRaw);
-                var legacyData = util.parseJSON(legacyRaw, null);
-                var legacyMessages = Array.isArray(legacyData) && schema()
-                    ? schema().normalizeConversation(legacyData)
-                    : [];
-                if (legacyMessages.length) {
-                    state.sessions[currentConfigId || 'legacy'] = {
-                        messages: legacyMessages,
-                        updatedAt: Date.now()
-                    };
-                    migrated = true;
-                }
+        if (!lifecycleBound) {
+            lifecycleBound = true;
+            if (global.addEventListener) {
+                global.addEventListener('pagehide', saveNow);
+                global.addEventListener('storage', function (event) {
+                    if (event && event.key === KEY) reload();
+                });
             }
         }
-        if (!currentConfigId) {
-            var ids = Object.keys(state.sessions);
-            currentConfigId = ids.length ? ids[0] : 'default';
+        if (!state.sessions.length) load();
+        currentConfigId = configId || currentConfigId || 'default';
+        var session = ensureSessionForEndpoint(currentConfigId);
+        if (session) currentSessionId = session.id;
+        if (!currentSessionId) return [];
+        notify('init');
+        return visibleMessages(currentSession());
+    }
+
+    function getState() {
+        return {
+            version: VERSION,
+            configId: currentConfigId,
+            sessionId: currentSessionId,
+            session: summaryOf(currentSession()),
+            sessions: getSessions(),
+            messages: visibleMessages(currentSession())
+        };
+    }
+
+    function messages() { return visibleMessages(currentSession()); }
+
+    function append(input) {
+        var session = currentSession();
+        if (!session) return null;
+        var schemaChat = schema();
+        var message = schemaChat ? schemaChat.normalizeMessage(input) : input;
+        if (!message || !session.messages.length && message.role === 'assistant') return null;
+        var explicitParent = input && Object.prototype.hasOwnProperty.call(input, 'parentId')
+            ? input.parentId
+            : undefined;
+        if (explicitParent === undefined) {
+            var visible = visibleMessages(session);
+            explicitParent = visible.length ? visible[visible.length - 1].id : null;
         }
-        ensureSession(currentConfigId);
-        bindLifecycle();
-        if (migrated) saveNow();
-        return snapshot();
+        if (explicitParent) {
+            var parent = null;
+            session.messages.forEach(function (item) { if (item.id === explicitParent) parent = item; });
+            if (!parent) explicitParent = null;
+        }
+        message.parentId = explicitParent || null;
+        message.selectedChildId = null;
+        if (!message.parentId) session.selectedRootId = message.id;
+        // 助手消息的父节点（用户消息）选中这个新回答
+        var parentMessage = null;
+        session.messages.forEach(function (item) { if (item.id === explicitParent) parentMessage = item; });
+        if (parentMessage) {
+            parentMessage.selectedChildId = message.id;
+            parentMessage.updatedAt = Date.now();
+        }
+        session.messages.push(message);
+        if (session.messages.length > MAX_MESSAGES) session.messages = session.messages.slice(-MAX_MESSAGES);
+        session.updatedAt = Date.now();
+        if (!session.title || session.title === '新对话') {
+            session.title = deriveTitle(session.messages, session.title);
+        }
+        state.activeByEndpoint[session.endpointId] = session.id;
+        scheduleSave();
+        notify('message:append', { id: message.id });
+        return clone(message);
+    }
+
+    function findMessage(id) {
+        var session = currentSession();
+        if (!session) return null;
+        var found = null;
+        session.messages.forEach(function (message) { if (message.id === id) found = message; });
+        return found;
+    }
+
+    function update(id, patch) {
+        var message = findMessage(id);
+        if (!message) return null;
+        var next = patch || {};
+        ['content', 'reasoning', 'reasoningTime', 'stats', 'status', 'error', 'usage', 'model', 'thinking', 'search', 'latestReminder', 'attachments'].forEach(function (key) {
+            if (Object.prototype.hasOwnProperty.call(next, key)) message[key] = next[key];
+        });
+        message.updatedAt = Date.now();
+        var session = currentSession();
+        if (session) session.updatedAt = Date.now();
+        scheduleSave();
+        notify('message:update', { id: id });
+        return clone(message);
+    }
+
+    function remove(id) {
+        var session = currentSession();
+        if (!session) return { ok: false };
+        var removed = Object.create(null);
+        removed[id] = true;
+        // 收集子树：反复扫描父链
+        var changed = true;
+        while (changed) {
+            changed = false;
+            session.messages.forEach(function (message) {
+                if (message.parentId && removed[message.parentId] && !removed[message.id]) {
+                    removed[message.id] = true;
+                    changed = true;
+                }
+            });
+        }
+        var parent = null;
+        session.messages.forEach(function (message) { if (removed[message.id]) parent = message.parentId || parent; });
+        var before = session.messages.length;
+        session.messages = session.messages.filter(function (message) { return !removed[message.id]; });
+        if (parent) {
+            var parentMessage = null;
+            session.messages.forEach(function (message) { if (message.id === parent) parentMessage = message; });
+            if (parentMessage) {
+                var siblings = session.messages.filter(function (message) { return message.parentId === parent; });
+                parentMessage.selectedChildId = siblings.length ? siblings[siblings.length - 1].id : null;
+            }
+        } else {
+            var roots = session.messages.filter(function (message) { return !message.parentId; });
+            if (roots.length) session.selectedRootId = roots[roots.length - 1].id;
+        }
+        if (session.messages.length === before) return { ok: false };
+        session.updatedAt = Date.now();
+        scheduleSave();
+        notify('message:remove', { id: id });
+        return { ok: true };
+    }
+
+    function truncateFrom(index) {
+        var visible = messages();
+        var target = visible[index];
+        if (!target) return;
+        remove(target.id);
+    }
+
+    function setMessages(list) {
+        var session = currentSession();
+        if (!session) return false;
+        var normalized = normalizeTree(list);
+        session.messages = normalized;
+        var roots = normalized.filter(function (message) { return !message.parentId; });
+        session.selectedRootId = roots.length ? roots[0].id : null;
+        session.updatedAt = Date.now();
+        scheduleSave();
+        notify('messages:set');
+        return true;
+    }
+
+    function clear() {
+        var session = currentSession();
+        if (!session) return false;
+        session.messages = [];
+        session.updatedAt = Date.now();
+        scheduleSave();
+        notify('clear');
+        return true;
+    }
+
+    function selectVersion(id) {
+        var session = currentSession();
+        var target = findMessage(id);
+        if (!session || !target) return false;
+        var parent = target.parentId || null;
+        if (parent) {
+            var parentMessage = findMessage(parent);
+            if (parentMessage) parentMessage.selectedChildId = id;
+        } else {
+            session.selectedRootId = id;
+        }
+        session.updatedAt = Date.now();
+        scheduleSave();
+        notify('version:select', { id: id });
+        return true;
+    }
+
+    function getVersions(id) {
+        var session = currentSession();
+        if (!session) return { ids: [], index: -1 };
+        var target = findMessage(id);
+        if (!target) return { ids: [], index: -1 };
+        var siblings = session.messages.filter(function (message) {
+            if (target.parentId) return message.parentId === target.parentId;
+            return !message.parentId;
+        });
+        var ids = siblings.map(function (message) { return message.id; });
+        return { ids: ids, index: ids.indexOf(id) };
+    }
+
+    function getPathTo(id) {
+        var visible = messages();
+        var out = [];
+        for (var i = 0; i < visible.length; i += 1) {
+            out.push(visible[i]);
+            if (visible[i].id === id) break;
+        }
+        return out;
+    }
+
+    function switchConfig(configId) {
+        currentConfigId = configId || currentConfigId || 'default';
+        var session = ensureSessionForEndpoint(currentConfigId);
+        currentSessionId = session ? session.id : null;
+        state.activeByEndpoint[currentConfigId] = currentSessionId;
+        persist();
+        notify('config:switch');
+        return messages();
     }
 
     function subscribe(fn) {
@@ -206,144 +678,79 @@
         };
     }
 
-    function getState() {
-        var session = currentSession();
-        return {
-            configId: currentConfigId,
-            messages: session.messages.slice(),
-            updatedAt: session.updatedAt,
-            sessionCount: Object.keys(state.sessions).length
-        };
-    }
-
-    function append(message) {
-        var schemaChat = schema();
-        var normalized = schemaChat ? schemaChat.normalizeMessage(message) : message;
-        if (!normalized) return null;
-        currentSession().messages.push(normalized);
-        touch();
-        scheduleSave();
-        notify('append', { message: normalized });
-        return normalized;
-    }
-
-    function update(id, patch) {
-        var list = currentSession().messages;
-        var index = -1;
-        for (var i = 0; i < list.length; i += 1) {
-            if (list[i].id === id) { index = i; break; }
+    function saveNow() {
+        if (debouncedSave && debouncedSave.flush) {
+            try { debouncedSave.flush(); } catch (err) { persist(); }
+        } else {
+            persist();
         }
-        if (index === -1) return null;
-        var message = list[index];
-        if (!patch || typeof patch !== 'object') return message;
-        if (typeof patch.content === 'string' || Array.isArray(patch.content)) message.content = patch.content;
-        if (typeof patch.reasoning === 'string') message.reasoning = patch.reasoning;
-        if (patch.stats && typeof patch.stats === 'object') message.stats = patch.stats;
-        touch();
-        scheduleSave();
-        notify('update', { message: message });
-        return message;
     }
 
-    function remove(id) {
-        var list = currentSession().messages;
-        for (var i = 0; i < list.length; i += 1) {
-            if (list[i].id === id) {
-                var removed = list.splice(i, 1)[0];
-                touch();
-                scheduleSave();
-                notify('remove', { message: removed, index: i });
-                return { ok: true, index: i, message: removed };
-            }
+    function reload() {
+        load();
+        if (currentConfigId) {
+            var session = ensureSessionForEndpoint(currentConfigId);
+            if (session) currentSessionId = session.id;
         }
-        return { ok: false };
-    }
-
-    function truncateFrom(index) {
-        var list = currentSession().messages;
-        var start = Math.max(0, Math.min(index, list.length));
-        var removed = list.splice(start);
-        if (removed.length) {
-            touch();
-            scheduleSave();
-            notify('truncate', { fromIndex: start, removed: removed.length });
-        }
-        return removed;
-    }
-
-    /** 整体替换（撤销/导入使用）；外部消息 id 重新生成。 */
-    function setMessages(list) {
-        var schemaChat = schema();
-        var normalized = schemaChat && Array.isArray(list)
-            ? schemaChat.normalizeConversation(list)
-            : [];
-        currentSession().messages = normalized;
-        touch();
-        scheduleSave();
-        notify('replace', { messages: normalized });
-        return snapshot();
-    }
-
-    function clear() {
-        currentSession().messages = [];
-        touch();
-        notify('clear');
-        saveNow();
-    }
-
-    function switchConfig(configId) {
-        if (!configId || configId === currentConfigId) return snapshot();
-        saveNow();
-        currentConfigId = configId;
-        ensureSession(configId);
-        notify('switch');
-        return snapshot();
+        notify('external');
+        return messages();
     }
 
     function exportBackup() {
-        var schemaChat = schema();
+        var session = currentSession();
         return {
             version: VERSION,
-            app: 'nChat',
-            timestamp: new Date().toISOString(),
-            configId: currentConfigId,
-            conversation: schemaChat ? schemaChat.clone(snapshot()) : snapshot()
+            app: 'nTools',
+            exportedAt: new Date().toISOString(),
+            session: summaryOf(session),
+            messages: clone(session ? session.messages : [])
         };
     }
 
     function importBackup(raw) {
         var schemaChat = schema();
-        var result = schemaChat
-            ? schemaChat.normalizeBackup(raw)
-            : { ok: false, messages: [], rejected: 0, reason: '校验模块未加载' };
-        if (!result.ok) return result;
-        currentSession().messages = result.messages;
-        touch();
-        saveNow();
-        notify('import', { messages: result.messages });
-        return result;
+        var data = raw;
+        if (typeof raw === 'string') data = util.parseJSON(raw, null);
+        var list = null;
+        if (Array.isArray(data)) list = data;
+        else if (util.isPlainObject(data)) {
+            if (Array.isArray(data.messages)) list = data.messages;
+            else if (Array.isArray(data.conversation)) list = data.conversation;
+        }
+        if (!list) return { ok: false, reason: '无效的备份文件格式' };
+        var normalized = schemaChat ? schemaChat.normalizeConversation(list) : list;
+        if (!normalized.length) return { ok: false, reason: '备份中没有可用消息' };
+        normalized.forEach(function (message, index) {
+            message.parentId = index > 0 ? normalized[index - 1].id : null;
+            message.selectedChildId = index < normalized.length - 1 ? normalized[index + 1].id : null;
+        });
+        var session = currentSession();
+        if (!session) {
+            var created = createSession();
+            session = currentSession();
+        }
+        session.messages = normalized;
+        if (!session.title || session.title === '新对话') session.title = deriveTitle(normalized, session.title);
+        session.updatedAt = Date.now();
+        persist();
+        notify('import');
+        return { ok: true, imported: normalized.length, messages: normalized };
     }
 
-    /** 导出 Markdown 文本（文件名由调用方生成）。 */
     function exportMarkdown() {
+        var session = currentSession();
         var lines = [];
-        lines.push('# nChat Conversation');
+        lines.push('# ' + (session ? session.title : 'nChat 对话'));
         lines.push('');
-        lines.push('**Time:** ' + new Date().toLocaleString());
-        lines.push('');
-        lines.push('---');
-        lines.push('');
-        snapshot().forEach(function (message) {
-            var role = message.role === 'user' ? '👤 User' : '🤖 Assistant';
+        visibleMessages(session).forEach(function (message) {
+            var role = message.role === 'user' ? 'User' : 'Assistant';
             var content = '';
-            if (message.role === 'user' && Array.isArray(message.content)) {
-                var text = '';
-                var images = 0;
-                message.content.forEach(function (part) {
-                    if (part.type === 'text') text += part.text;
-                    else if (part.type === 'image_url') images += 1;
-                });
-                content = text + (images ? '\n\n*[Sent ' + images + ' images]*' : '');
+            if (Array.isArray(message.content)) {
+                var texts = message.content.filter(function (part) { return part && part.type === 'text'; })
+                    .map(function (part) { return part.text || ''; });
+                content = texts.join('\n');
+                var images = message.content.filter(function (part) { return part && part.type === 'image_url'; }).length;
+                if (images) content += (content ? '\n' : '') + '[' + images + ' images]';
             } else {
                 content = typeof message.content === 'string' ? message.content : '';
             }
@@ -357,23 +764,10 @@
         return lines.join('\n');
     }
 
-    /** 从存储重新加载（跨标签页/外部修改时使用）。 */
-    function reload() {
-        var rawDoc = storage.get(KEY, null);
-        state = normalizeDoc(rawDoc);
-        if (!currentConfigId) {
-            var ids = Object.keys(state.sessions);
-            currentConfigId = ids.length ? ids[0] : 'default';
-        }
-        ensureSession(currentConfigId);
-        notify('external');
-        return snapshot();
-    }
-
     NC.store = NC.store || {};
     NC.store.conversation = {
         KEY: KEY,
-        LEGACY_KEY: LEGACY_KEY,
+        V2_KEY: V2_KEY,
         VERSION: VERSION,
         init: init,
         getState: getState,
@@ -390,6 +784,19 @@
         exportBackup: exportBackup,
         importBackup: importBackup,
         exportMarkdown: exportMarkdown,
-        reload: reload
+        reload: reload,
+        /* v3 会话 API */
+        getSessions: getSessions,
+        getAllSessions: getAllSessions,
+        getActiveSession: function () { return summaryOf(currentSession()); },
+        createSession: createSession,
+        selectSession: selectSession,
+        deleteSession: deleteSession,
+        renameSession: renameSession,
+        selectVersion: selectVersion,
+        getVersions: getVersions,
+        getPathTo: getPathTo,
+        getVisibleMessages: function () { return messages(); },
+        getAllMessages: function () { return allMessages(currentSession()); }
     };
 })(window);

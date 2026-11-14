@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/tools.css">
     <link rel="stylesheet" href="css/chat.css">
+    <link rel="stylesheet" href="css/chat-sessions.css">
     <link rel="stylesheet" href="css/settings.css">
     <link rel="stylesheet" href="css/rail.css">
     <link rel="stylesheet" href="css/timeline.css">
@@ -48,6 +49,7 @@
     <script defer src="js/composer.js"></script>
     <script defer src="js/settings-view.js"></script>
     <script defer src="js/chat-controller.js"></script>
+    <script defer src="js/chat-sessions.js"></script>
     <script defer src="js/chat-embed.js"></script>
     <!-- 页面模块：Todo 专项 -->
     <script defer src="js/schema-todo.js"></script>
@@ -116,7 +118,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" title="版本">v4.10</span>
+            <span class="tools-rail__version" title="版本">v5.0</span>
         </div>
     </aside>
 
@@ -428,8 +430,26 @@
             <!-- ---------------- Tab 5：nChat（原生嵌入） ---------------- -->
             <section class="tools-page tools-page--nchat" id="page-nchat" data-panel="nchat" data-page="nchat" aria-label="nChat 聊天" hidden>
                 <div class="chat-app chat-app--embed" id="chat-app">
+                    <aside class="chat-sessions" id="chat-sessions" aria-label="会话列表">
+                        <div class="chat-sessions__top">
+                            <span class="chat-sessions__label">会话</span>
+                            <button id="chat-sessions-collapse" class="nc-btn nc-btn--icon nc-btn--sm" type="button" title="收起会话列表" aria-label="收起会话列表">
+                                <span data-icon="chevron-left" data-icon-size="16"></span>
+                            </button>
+                        </div>
+                        <button class="chat-new-session" id="chat-new-session" type="button">
+                            <span data-icon="plus" data-icon-size="15"></span>
+                            <span>新对话</span>
+                        </button>
+                        <div class="chat-sessions__list" id="chat-sessions-list" role="list"></div>
+                    </aside>
+                    <div class="chat-sessions-scrim" id="chat-sessions-scrim" hidden></div>
+                    <div class="chat-workspace">
                     <header class="chat-toolbar chat-toolbar--embed">
                         <div class="chat-toolbar__left">
+                            <button id="chat-sessions-toggle-btn" class="nc-btn nc-btn--icon nc-btn--sm chat-sessions-toggle" type="button" title="会话列表" aria-label="打开会话列表" aria-expanded="true">
+                                <span data-icon="panel-left" data-icon-size="16"></span>
+                            </button>
                             <span class="chat-profile-dot" id="chat-profile-dot" aria-hidden="true"></span>
                             <select id="chat-profile-select" class="nc-select chat-profile-select" aria-label="模型端点"></select>
                             <span class="chat-profile-meta" id="chat-profile-meta"></span>
@@ -460,6 +480,13 @@
                         </div>
                     </header>
 
+                    <div class="chat-session-head">
+                        <div class="chat-session-title" id="chat-session-title">新对话</div>
+                        <button id="chat-session-rename-btn" class="nc-btn nc-btn--icon nc-btn--sm" type="button" title="重命名会话" aria-label="重命名会话">
+                            <span data-icon="edit" data-icon-size="15"></span>
+                        </button>
+                    </div>
+
                     <main id="chat-container" class="chat-main" role="log" aria-label="对话" aria-live="off" tabindex="0"></main>
                     <button id="jump-bottom-btn" class="chat-jump" type="button" title="回到底部" aria-label="回到底部" hidden>
                         <span data-icon="arrow-down" data-icon-size="18"></span>
@@ -483,6 +510,7 @@
                             </button>
                         </div>
                     </footer>
+                    </div>
                 </div>
 
                 <div id="image-lightbox" class="chat-lightbox" role="dialog" aria-modal="true" aria-label="图片预览" hidden>
