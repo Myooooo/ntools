@@ -357,6 +357,9 @@
                                 <span data-icon="plus" data-icon-size="15"></span>
                                 <span>新建</span>
                             </button>
+                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-db-btn" aria-label="笔记库操作" title="笔记库操作" aria-haspopup="menu">
+                                <span data-icon="more" data-icon-size="15"></span>
+                            </button>
                             <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-side-close" aria-label="关闭笔记列表" title="关闭列表">
                                 <span data-icon="chevron-left" data-icon-size="15"></span>
                             </button>
@@ -417,6 +420,7 @@
                         <div class="notes-palette__list" id="notes-palette-list" role="listbox"></div>
                     </div>
                 </div>
+                <input type="file" id="notes-import-file" accept=".json,application/json" hidden>
                 <div class="tool-module-note" id="notes-module-note" hidden></div>
             </section>
 

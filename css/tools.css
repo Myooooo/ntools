@@ -902,6 +902,16 @@
     border: 1px dashed var(--nc-border-strong);
 }
 
+.notes-graph {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-top: 4px;
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface);
+    cursor: pointer;
+}
+
 .notes-link-row {
     display: block;
     width: 100%;

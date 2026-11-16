@@ -616,6 +616,7 @@
         els.infoBody.textContent = '';
         els.infoBody.appendChild(renderMeta(note));
         els.infoBody.appendChild(renderOutline(note));
+        els.infoBody.appendChild(renderGraph(note));
         if (note) {
             els.infoBody.appendChild(linkSection('反向链接', store.backlinks(note.id), '还没有笔记链接到这里'));
             els.infoBody.appendChild(linkSection('出链', store.outlinks(note.id), '还没有链接到其它笔记'));
@@ -840,6 +841,242 @@
         } catch (err) {
             toast('导出失败：' + (err && err.message ? err.message : err), 'error');
         }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 导出 / 导入（单篇、整库 JSON、整库 ZIP）
+     * ------------------------------------------------------------------ */
+    function downloadBlob(blob, filename) {
+        try {
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            global.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+            return true;
+        } catch (err) {
+            toast('下载失败：' + (err && err.message ? err.message : err), 'error');
+            return false;
+        }
+    }
+
+    function stampName(ext) {
+        var d = new Date();
+        var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+        return 'ntools-notes-' + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) +
+            '-' + pad(d.getHours()) + pad(d.getMinutes()) + '.' + ext;
+    }
+
+    function exportAllJson() {
+        return store.flush().then(function () {
+            var bundle = store.exportBundle();
+            var text = JSON.stringify(bundle, null, 2);
+            downloadBlob(new Blob([text], { type: 'application/json;charset=utf-8' }), stampName('json'));
+            toast('已导出 ' + bundle.notes.length + ' 篇笔记（JSON）', 'success');
+        });
+    }
+
+    function exportAllZip() {
+        if (!NC.zip) { toast('打包模块未加载', 'error'); return; }
+        return store.flush().then(function () {
+            var bundle = store.exportBundle();
+            var used = Object.create(null);
+            var files = bundle.notes.map(function (note) {
+                var base = (note.title || '未命名笔记').replace(/[\\/:*?"<>|]/g, '_');
+                var name = base + '.md';
+                var n = 2;
+                while (used[name]) { name = base + '-' + n + '.md'; n += 1; }
+                used[name] = 1;
+                return { name: name, data: note.content || '' };
+            });
+            files.push({ name: '_ntools-notes.json', data: JSON.stringify(bundle, null, 2) });
+            var bytes = NC.zip.build(files);
+            downloadBlob(new Blob([bytes], { type: 'application/zip' }), stampName('zip'));
+            toast('已导出 ' + bundle.notes.length + ' 篇（ZIP）', 'success');
+        });
+    }
+
+    function importJsonFile(file) {
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+            var raw = String(reader.result || '');
+            var parsed = null;
+            try {
+                parsed = NC.schema.notes.parseImport(raw);
+            } catch (err) {
+                toast('导入失败：无法解析 JSON', 'error');
+                return;
+            }
+            if (!parsed || !parsed.doc) {
+                toast('导入失败：不是有效的笔记备份', 'error');
+                return;
+            }
+            var incoming = parsed.doc.notes.length;
+            var existing = store.quickSwitch('').length;
+            NC.ui.confirm(
+                '导入 ' + incoming + ' 篇笔记（当前 ' + existing + ' 篇）。\n' +
+                '确定会替换当前全部笔记，替换前会自动快照，可用撤销恢复。',
+                { confirmText: '替换导入', danger: true }
+            ).then(function (ok) {
+                if (!ok) return;
+                store.importVault(raw, { mode: 'replace' }).then(function (res) {
+                    if (res && res.ok) toast('已导入 ' + res.added + ' 篇', 'success');
+                    else toast('导入未完成：' + ((res && res.reason) || '未知原因'), 'error');
+                    state.trashView = false;
+                    state.filter = '';
+                    if (els.filter) els.filter.value = '';
+                    refresh();
+                });
+            });
+        };
+        reader.onerror = function () { toast('读取文件失败', 'error'); };
+        reader.readAsText(file);
+    }
+
+    function openLibraryMenu() {
+        var items = [
+            { label: '导入笔记（JSON）…', icon: 'upload', onSelect: function () { if (els.importFile) els.importFile.click(); } },
+            { label: '导出全部（JSON）', icon: 'download', onSelect: exportAllJson },
+            { label: '导出全部（ZIP）', icon: 'download', onSelect: exportAllZip }
+        ];
+        var trashCount = 0;
+        store.quickSwitch('').forEach(function (item) {
+            var note = store.getNote(item.id);
+            if (note && note.deletedAt) trashCount += 1;
+        });
+        if (trashCount) {
+            items.push({
+                label: '清空回收站（' + trashCount + '）',
+                icon: 'trash',
+                danger: true,
+                onSelect: function () {
+                    NC.ui.confirm('彻底删除回收站里的 ' + trashCount + ' 篇笔记？清空前的自动快照仍可恢复。',
+                        { confirmText: '清空回收站', danger: true }).then(function (ok) {
+                        if (!ok) return;
+                        var removed = store.clearTrash();
+                        toast('已清空 ' + removed + ' 篇', 'success');
+                    });
+                }
+            });
+        }
+        NC.ui.openMenu(els.dbBtn, items);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 局部关系图（±1 跳，确定性径向布局，不做力导向）
+     * ------------------------------------------------------------------ */
+    function renderGraph(note) {
+        var box = document.createElement('div');
+        box.className = 'notes-section';
+        var title = document.createElement('div');
+        title.className = 'notes-section__title';
+        title.textContent = '关系图';
+        box.appendChild(title);
+        if (!note) return box;
+
+        var neighbours = [];
+        var seen = Object.create(null);
+        store.outlinks(note.id).concat(store.backlinks(note.id)).forEach(function (item) {
+            if (!item.id || item.id === note.id || seen[item.id]) return;
+            seen[item.id] = 1;
+            neighbours.push(item);
+        });
+        neighbours = neighbours.slice(0, 12);
+
+        if (!neighbours.length) {
+            var empty = document.createElement('div');
+            empty.className = 'notes-meta-row';
+            empty.textContent = '还没有关联笔记';
+            box.appendChild(empty);
+            return box;
+        }
+
+        var canvas = document.createElement('canvas');
+        canvas.className = 'notes-graph';
+        canvas.width = 480;
+        canvas.height = 360;
+        canvas.setAttribute('role', 'img');
+        canvas.setAttribute('aria-label', '当前笔记的关系图');
+        box.appendChild(canvas);
+
+        var ctx = canvas.getContext ? canvas.getContext('2d') : null;
+        if (!ctx) return box;
+
+        var styles = global.getComputedStyle ? global.getComputedStyle(document.documentElement) : null;
+        var color = function (name, fallback) {
+            var value = styles ? styles.getPropertyValue(name) : '';
+            return (value && value.trim()) || fallback;
+        };
+        var accent = color('--nc-accent', '#6ea8fe');
+        var text3 = color('--nc-text-3', '#7f8c9b');
+        var surface = color('--nc-surface', '#131922');
+        var border = color('--nc-border-strong', 'rgba(255,255,255,.14)');
+
+        var w = canvas.width;
+        var h = canvas.height;
+        var cx = w / 2;
+        var cy = h / 2;
+        var radius = Math.min(w, h) / 2 - 46;
+        var points = neighbours.map(function (item, index) {
+            var angle = (Math.PI * 2 * index) / neighbours.length - Math.PI / 2;
+            return { id: item.id, title: item.title, x: cx + Math.cos(angle) * radius, y: cy + Math.sin(angle) * radius };
+        });
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = border;
+        points.forEach(function (point) {
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(point.x, point.y);
+            ctx.stroke();
+        });
+
+        ctx.font = '20px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        points.forEach(function (point) {
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 15, 0, Math.PI * 2);
+            ctx.fillStyle = surface;
+            ctx.fill();
+            ctx.strokeStyle = accent;
+            ctx.stroke();
+            ctx.fillStyle = text3;
+            var label = point.title.length > 8 ? point.title.slice(0, 7) + '…' : point.title;
+            ctx.fillText(label, point.x, point.y + 26);
+        });
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, 20, 0, Math.PI * 2);
+        ctx.fillStyle = accent;
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '600 20px system-ui, sans-serif';
+        var own = note.title.length > 6 ? note.title.slice(0, 5) + '…' : note.title;
+        ctx.fillText(own, cx, cy + 28);
+
+        canvas.addEventListener('click', function (event) {
+            var rect = canvas.getBoundingClientRect();
+            var scaleX = canvas.width / rect.width;
+            var scaleY = canvas.height / rect.height;
+            var x = (event.clientX - rect.left) * scaleX;
+            var y = (event.clientY - rect.top) * scaleY;
+            for (var i = 0; i < points.length; i += 1) {
+                var dx = x - points[i].x;
+                var dy = y - points[i].y;
+                if (dx * dx + dy * dy <= 24 * 24) {
+                    selectNote(points[i].id);
+                    return;
+                }
+            }
+        });
+        return box;
     }
 
     /* ------------------------------------------------------------------ *
@@ -1251,6 +1488,14 @@
         bound = true;
 
         if (els.newBtn) els.newBtn.addEventListener('click', newNote);
+        if (els.dbBtn) els.dbBtn.addEventListener('click', openLibraryMenu);
+        if (els.importFile) {
+            els.importFile.addEventListener('change', function () {
+                var file = els.importFile.files && els.importFile.files[0];
+                els.importFile.value = '';
+                importJsonFile(file);
+            });
+        }
 
         if (els.filter) {
             var filterTimer = null;
@@ -1440,6 +1685,8 @@
         els.sideClose = $('notes-side-close');
         els.scrim = $('notes-scrim');
         els.moduleNote = $('notes-module-note');
+        els.dbBtn = $('notes-db-btn');
+        els.importFile = $('notes-import-file');
         els.palette = $('notes-palette');
         els.paletteInput = $('notes-palette-input');
         els.paletteList = $('notes-palette-list');

@@ -332,6 +332,7 @@
         'js/notes-index.js',
         'js/notes-db.js',
         'js/notes-store.js',
+        'js/zip.js',
         'js/notes-view.js'
     ];
     var notesBundlePromise = null;
