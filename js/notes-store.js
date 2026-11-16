@@ -512,7 +512,8 @@
             db().deleteNote(id).catch(function () { /* ignore */ });
         });
         rebuildIndex();
-        notify('trash:clear', { removed: ids.length });
+        var pruned = pruneOrphanFiles();
+        notify('trash:clear', { removed: ids.length, pruned: pruned });
         return ids.length;
     }
 
@@ -649,6 +650,35 @@
             state.fileUrls.set(id, url);
             return url;
         }).catch(function () { return null; });
+    }
+
+    /** 删除没有任何笔记（含回收站）引用的图片，返回清理数量 */
+    function pruneOrphanFiles() {
+        if (state.mode !== 'idb' || !state.files.size) return 0;
+        var s = schema();
+        if (!s) return 0;
+        var referenced = Object.create(null);
+        state.notes.forEach(function (note) {
+            s.parseLinks(note.content || '').forEach(function (link) {
+                if (link.isEmbed && link.target) referenced[link.target.toLowerCase()] = 1;
+            });
+        });
+        var removed = 0;
+        state.files.forEach(function (record, key) {
+            if (referenced[key]) return;
+            state.files.delete(key);
+            state.fileUrls.delete(record.id);
+            db().deleteFile(record.id).catch(function () { /* ignore */ });
+            removed += 1;
+        });
+        if (removed) persistFileIndex();
+        return removed;
+    }
+
+    function fileStats() {
+        var bytes = 0;
+        state.files.forEach(function (record) { bytes += record.size || 0; });
+        return { count: state.files.size, bytes: bytes };
     }
 
     function revokeFileUrls() {
@@ -910,6 +940,8 @@
         headings: headings,
         resolveTitle: resolveTitle,
         addImage: addImage,
+        pruneOrphanFiles: pruneOrphanFiles,
+        fileStats: fileStats,
         resolveFile: resolveFile,
         getFileUrl: getFileUrl,
         exportBundle: exportBundle,

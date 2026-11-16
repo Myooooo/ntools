@@ -292,6 +292,11 @@
         });
     }
 
+    function getAllFiles() {
+        if (mode !== 'idb') return Promise.resolve([]);
+        return getAllFrom(STORES.files);
+    }
+
     function getFile(id) {
         if (mode !== 'idb') return Promise.resolve(null);
         return tx(STORES.files, false, function (store) {
@@ -344,6 +349,7 @@
         getMeta: getMeta,
         setMeta: setMeta,
         putFile: putFile,
+        getAllFiles: getAllFiles,
         getFile: getFile,
         deleteFile: deleteFile,
         clearAll: clearAll

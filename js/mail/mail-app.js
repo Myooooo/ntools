@@ -308,6 +308,20 @@
         notifyParent({ type: 'ntools-email-save', ok: false, storage: false });
         return false;
       }
+      // 冲突守卫：库里的 revision 比内存高，说明别的窗口写过，拒绝静默覆盖
+      try {
+        const storedRaw = localStorage.getItem(STORAGE_KEY_DOC);
+        if (storedRaw) {
+          const stored = JSON.parse(storedRaw);
+          if (stored && typeof stored.revision === 'number' && stored.revision > (state.revision || 0)) {
+            state.saveError = true;
+            showToast('数据已被其他窗口更新，本次修改未保存。请刷新本页后再改。', 'error');
+            notifyParent({ type: 'ntools-email-save', ok: false, conflict: true, revision: stored.revision });
+            return false;
+          }
+        }
+      } catch (err) { /* 读不到就按无冲突处理 */ }
+
       const nextRevision = (state.revision || 0) + 1;
       const doc = {
         schemaVersion: DOC_VERSION,
@@ -877,15 +891,17 @@
       }
       applyTheme(theme);
 
-      const toggle = document.getElementById('theme-toggle-btn');
-      if (toggle && EMBEDDED) toggle.hidden = true;   // 主题由主应用统一控制
 
       window.addEventListener('message', function (event) {
         const data = event.data;
         if (!data || typeof data !== 'object' || data.type !== 'ntools-theme') return;
         themeLockedByParent = true;
-        applyTheme(data.theme === 'light' ? 'light' : 'dark');
-        document.documentElement.setAttribute('data-lite', data.lite === true ? 'true' : 'false');
+        var nextTheme = data.theme === 'light' ? 'light' : 'dark';
+        var nextLite = data.lite === true;
+        applyTheme(nextTheme);
+        document.documentElement.setAttribute('data-lite', nextLite ? 'true' : 'false');
+        /* 回报一次，便于主应用/e2e 确认主题与 Lite 都已生效 */
+        notifyParent({ type: 'ntools-email-theme', theme: nextTheme, lite: nextLite });
       });
 
       if (EMBEDDED) {
@@ -896,32 +912,12 @@
 
     function applyTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
-      notifyParent({ type: 'ntools-email-theme', theme: theme });
       if (!EMBEDDED && !themeLockedByParent) {
         try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* ignore */ }
       }
-      const btn = document.getElementById('theme-toggle-btn');
-      if (btn) {
-        const icon = btn.querySelector('i[data-icon]');
-        const label = document.getElementById('theme-toggle-label');
-        if (theme === 'dark') {
-          if (icon) icon.setAttribute('data-icon', 'sun');
-          if (label) label.textContent = '浅色';
-          btn.title = '切换至浅色模式';
-        } else {
-          if (icon) icon.setAttribute('data-icon', 'moon');
-          if (label) label.textContent = '深色';
-          btn.title = '切换至深色模式';
-        }
-        renderIcons(btn);
-      }
+
     }
 
-    function toggleTheme() {
-      const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-      applyTheme(current === 'dark' ? 'light' : 'dark');
-      showToast('已切换至' + (current === 'dark' ? '浅色' : '深色') + '模式', 'info');
-    }
 
     /* ==================== 记录增删改 ==================== */
     // 打开“添加邮箱”弹窗（批量文本导入 + 单条添加）

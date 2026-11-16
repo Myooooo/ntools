@@ -216,7 +216,7 @@
     padding-bottom: 14px;
 }
 
-.tools-page:not([data-page="todo"]):not(.tools-page--nchat) {
+.tools-page:not([data-page="todo"]):not(.tools-page--nchat):not(.tools-page--notes) {
     overflow-y: auto;
     overscroll-behavior: contain;
 }
@@ -524,6 +524,15 @@
  * ========================================================================== */
 .tools-page--notes {
     position: relative;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+}
+
+/* 笔记页铺满内容区：去掉工作台外框的圆角与边距 */
+.tools-page--notes .notes-shell {
+    border: 0;
+    border-radius: 0;
 }
 
 .notes-shell {

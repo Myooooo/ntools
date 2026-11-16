@@ -22,7 +22,7 @@
     var statusTimer = null;
     var releaseTrap = null;
     var previousFocus = null;
-    var currentSection = 'profiles';
+    var currentSection = 'general';
     var editingProfileId = null;
     var sections = [];
     var built = false;
@@ -46,13 +46,32 @@
 
     function sectionMeta() {
         return [
-            { id: 'profiles', title: '模型端点', desc: '聊天与 Todo AI 共用的 OpenAI 兼容端点', icon: 'layers' },
-            { id: 'todo-ai', title: 'Todo AI', desc: '文本识别提示词与采样参数', icon: 'sparkles' },
             { id: 'general', title: '通用', desc: '主题、Light 性能模式、上下班时间', icon: 'settings' },
+            { id: 'profiles', title: 'AI 端点', desc: '聊天与 Todo AI 共用的 OpenAI 兼容端点', icon: 'layers' },
+            { id: 'todo', title: '待办', desc: 'Todo AI 识别与列表行为', icon: 'check-circle' },
+            { id: 'notes', title: '笔记', desc: '笔记库、双向链接与保存策略', icon: 'file' },
+            { id: 'email', title: '邮件', desc: '邮箱维护工具与数据', icon: 'mail' },
+            { id: 'qr', title: '二维码', desc: '二维码生成的默认参数', icon: 'grid' },
+            { id: 'image', title: '图片', desc: '图片压缩与格式转换', icon: 'image' },
+            { id: 'nchat', title: 'nChat', desc: '聊天界面与消息行为', icon: 'command' },
             { id: 'data', title: '数据', desc: '导入导出与本地数据清理', icon: 'download' },
             { id: 'about', title: '关于', desc: '版本、兼容性与快捷键', icon: 'info' }
         ].concat(sections);
     }
+
+    /* 模块占位：暂无配置项也保留入口，避免"设置里找不到某个模块" */
+    var MODULE_TABS = ['notes', 'email', 'qr', 'image', 'nchat'];
+    var MODULE_NOTES = {
+        notes: '笔记的保存、链接与备份策略已经按最优默认值运行：300ms 防抖落盘、写后校验、' +
+            '失败自动重试、破坏性操作前自动快照，旧 Markdown 草稿会自动迁移。' +
+            '全库可在「数据」里导出（含图片），或在笔记页侧栏「⋮」单独导出 JSON / ZIP。',
+        email: '邮箱数据保存在单文档 ntools.email.v1，写后校验、导入先预览；' +
+            '页面主题与 Lite 模式由主应用统一下发。备份与恢复在邮件页「备份恢复」里，' +
+            '也会包含在「数据 → 导出全部」中。',
+        qr: '二维码工具目前无需配置：纠错级别、尺寸与下载格式在页面内随用随选。',
+        image: '图片工具目前无需配置：压缩质量与目标格式在页面内选择。',
+        nchat: '聊天界面暂无可配置项：模型与采样参数在「AI 端点」里配置，消息与会话行为使用默认值。'
+    };
 
     /* ------------------------------------------------------------------ *
      * 基础组件
@@ -475,6 +494,99 @@
     /* ------------------------------------------------------------------ *
      * 分区：Todo AI
      * ------------------------------------------------------------------ */
+    /** 待办 tab：模块说明 + 原有 Todo AI 设置 */
+    function renderTodoModule(container) {
+        var head = util.e('div', { class: 'sp-section-head' });
+        var info = util.e('div', {});
+        info.appendChild(util.e('h2', { class: 'sp-section-title', text: '待办' }));
+        info.appendChild(util.e('p', {
+            class: 'sp-section-desc',
+            text: '列表、回收站与快捷键使用默认值；下列配置只影响「从文本识别任务」。'
+        }));
+        head.appendChild(info);
+        container.appendChild(head);
+        renderTodoAi(container);
+    }
+
+    /** 模块占位 tab（笔记 / 邮件 / 二维码 / 图片 / nChat） */
+    function renderModuleTab(container, id) {
+        var meta = sectionMeta().filter(function (item) { return item.id === id; })[0] || {};
+        var head = util.e('div', { class: 'sp-section-head' });
+        var info = util.e('div', {});
+        info.appendChild(util.e('h2', { class: 'sp-section-title', text: meta.title || id }));
+        info.appendChild(util.e('p', { class: 'sp-section-desc', text: meta.desc || '' }));
+        head.appendChild(info);
+        container.appendChild(head);
+
+        var card = util.e('div', { class: 'sp-data-card' });
+        card.appendChild(util.e('div', { class: 'sp-data-card__title', text: '暂无可配置项' }));
+        card.appendChild(util.e('div', {
+            class: 'sp-data-card__desc',
+            text: MODULE_NOTES[id] || '该模块当前使用默认行为，保留此入口以便后续扩展。'
+        }));
+
+        var actions = util.e('div', { class: 'sp-data-card__actions' });
+        if (id === 'notes') {
+            actions.appendChild(button('打开笔记', {
+                small: true,
+                icon: 'file',
+                onClick: function () { close(); if (NC.switchTab) NC.switchTab('md', true); }
+            }));
+            actions.appendChild(button('查看笔记存储用量', {
+                small: true,
+                ghost: true,
+                icon: 'info',
+                onClick: function () { reportNotesUsage(card); }
+            }));
+        } else if (id === 'email') {
+            actions.appendChild(button('打开邮件', {
+                small: true,
+                icon: 'mail',
+                onClick: function () { close(); if (NC.switchTab) NC.switchTab('email', true); }
+            }));
+            actions.appendChild(button('查看邮件数据量', {
+                small: true,
+                ghost: true,
+                icon: 'info',
+                onClick: function () { reportEmailUsage(card); }
+            }));
+        }
+        if (actions.children.length) card.appendChild(actions);
+        container.appendChild(card);
+    }
+
+    function appendInfoLine(card, text) {
+        var line = util.e('div', { class: 'sp-row' });
+        line.appendChild(util.e('span', { class: 'sp-row__label', text: '当前' }));
+        line.appendChild(util.e('span', { class: 'sp-row__value', text: text }));
+        card.appendChild(line);
+    }
+
+    function reportNotesUsage(card) {
+        var notesStore = NC.store && NC.store.notes;
+        if (!notesStore || !notesStore.saveState) {
+            appendInfoLine(card, '笔记模块尚未加载（打开一次「笔记」页后再看）');
+            return;
+        }
+        var state = {};
+        try { state = notesStore.saveState() || {}; } catch (err) { state = {}; }
+        var count = 0;
+        try { count = notesStore.quickSwitch('').length; } catch (err) { count = 0; }
+        appendInfoLine(card, count + ' 篇 · 存储 ' + (state.mode === 'idb' ? 'IndexedDB' : 'localStorage 降级') +
+            (state.readOnly ? ' · 只读镜像' : ''));
+    }
+
+    function reportEmailUsage(card) {
+        var raw = null;
+        try { raw = global.localStorage.getItem('ntools.email.v1'); } catch (err) { raw = null; }
+        if (!raw) { appendInfoLine(card, '还没有邮件数据'); return; }
+        var doc = null;
+        try { doc = JSON.parse(raw); } catch (err) { doc = null; }
+        var groups = doc && Array.isArray(doc.groups) ? doc.groups.length : 0;
+        var emails = doc && Array.isArray(doc.emails) ? doc.emails.length : 0;
+        appendInfoLine(card, emails + ' 个邮箱 · ' + groups + ' 个分组 · ' + Math.round(raw.length / 1024) + ' KB');
+    }
+
     function renderTodoAi(container) {
         var doc = store().getState();
         var todoAi = doc.todoAi;
@@ -620,6 +732,152 @@
     /* ------------------------------------------------------------------ *
      * 分区：数据
      * ------------------------------------------------------------------ */
+    /* ---------------- 笔记数据辅助 ---------------- */
+    function ensureNotesReady(cb) {
+        var notesStore = NC.store && NC.store.notes;
+        if (notesStore && notesStore.isReady && notesStore.isReady()) { cb(notesStore); return; }
+        if (typeof NC.loadNotesBundle !== 'function') { cb(null); return; }
+        toast('正在准备笔记数据…', 'info');
+        NC.loadNotesBundle().then(function () {
+            if (NC.store.notes && NC.store.notes.init) NC.store.notes.init();
+            var wait = function (tries) {
+                var ready = NC.store.notes && NC.store.notes.isReady && NC.store.notes.isReady();
+                if (ready || tries <= 0) { cb(ready ? NC.store.notes : null); return; }
+                setTimeout(function () { wait(tries - 1); }, 120);
+            };
+            wait(40);
+        }, function () { cb(null); });
+    }
+
+    function exportNotes(kind) {
+        ensureNotesReady(function (notesStore) {
+            if (!notesStore) { toast('笔记模块加载失败', 'error'); return; }
+            if (kind === 'zip') {
+                if (!NC.zip) { toast('打包模块未加载', 'error'); return; }
+                var bundle = notesStore.exportBundle();
+                var files = (bundle.notes || []).map(function (note) {
+                    return { name: (note.title || '未命名') + '.md', data: note.content || '' };
+                });
+                files.push({ name: '_ntools-notes.json', data: JSON.stringify(bundle, null, 2) });
+                notesStore.flush().then(function () {
+                    return NC.notesDb && NC.notesDb.getAllFiles ? NC.notesDb.getAllFiles() : [];
+                }).then(function (records) {
+                    var images = (records || []).filter(function (r) { return r && r.blob && r.name; });
+                    return Promise.all(images.map(function (r) {
+                        if (!r.blob.arrayBuffer) return null;
+                        return r.blob.arrayBuffer().then(function (buf) {
+                            return { name: '图片/' + r.name, data: new Uint8Array(buf) };
+                        }).catch(function () { return null; });
+                    })).then(function (pairs) {
+                        var bytes = NC.zip.build(files.concat(pairs.filter(Boolean)));
+                        var ok = util.downloadBlob('ntools-notes-' + Date.now() + '.zip',
+                            new Blob([bytes], { type: 'application/zip' }), 'application/zip');
+                        if (ok) toast('已导出 ' + (bundle.notes || []).length + ' 篇笔记（含图片）', 'success');
+                        else toast('导出失败：浏览器阻止了下载', 'error');
+                    });
+                });
+                return;
+            }
+            notesStore.flush().then(function () {
+                var bundle = notesStore.exportBundle();
+                var ok = util.downloadBlob('ntools-notes-' + Date.now() + '.json',
+                    JSON.stringify(bundle, null, 2), 'application/json');
+                toast(ok ? '已导出 ' + (bundle.notes || []).length + ' 篇笔记' : '导出失败：浏览器阻止了下载', ok ? 'success' : 'error');
+            });
+        });
+    }
+
+    function importNotes() {
+        var inputEl = document.createElement('input');
+        inputEl.type = 'file';
+        inputEl.accept = '.json,application/json';
+        inputEl.addEventListener('change', function () {
+            var file = inputEl.files && inputEl.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function (event) {
+                var raw = String(event.target.result || '');
+                var parsed = null;
+                try { parsed = NC.schema.notes.parseImport(raw); } catch (err) { parsed = null; }
+                if (!parsed || !parsed.doc) { toast('不是有效的笔记备份', 'error'); return; }
+                ensureNotesReady(function (notesStore) {
+                    if (!notesStore) { toast('笔记模块加载失败', 'error'); return; }
+                    var current = 0;
+                    try { current = notesStore.quickSwitch('').length; } catch (err) { current = 0; }
+                    ui.confirm('将导入 ' + parsed.doc.notes.length + ' 篇笔记（当前 ' + current + ' 篇），覆盖现有笔记。导入前会自动快照。', {
+                        title: '导入笔记', confirmText: '覆盖导入', danger: true
+                    }).then(function (ok) {
+                        if (!ok) return;
+                        notesStore.importVault(raw, { mode: 'replace' }).then(function (res) {
+                            if (res && res.ok) {
+                                toast('已导入 ' + res.added + ' 篇', 'success');
+                                if (NC.view.notes && NC.view.notes.refresh) NC.view.notes.refresh();
+                                renderSection('data');
+                            } else {
+                                toast('导入未完成：' + ((res && res.reason) || '未知原因'), 'error');
+                            }
+                        });
+                    });
+                });
+            };
+            reader.onerror = function () { toast('读取文件失败', 'error'); };
+            reader.readAsText(file);
+        });
+        inputEl.click();
+    }
+
+    function renderNotesSnapshotList() {
+        var box = util.e('div', { class: 'sp-snap-list' });
+        var title = util.e('div', { class: 'sp-data-card__desc', text: '最近的笔记快照（导入 / 清空回收站前自动生成）' });
+        box.appendChild(title);
+        var durability = NC.durability;
+        if (!durability || !durability.snapshot) {
+            box.appendChild(util.e('div', { class: 'sp-hint', text: '快照模块未加载' }));
+            return box;
+        }
+        durability.snapshot.list('notes').then(function (items) {
+            if (!items || !items.length) {
+                box.appendChild(util.e('div', { class: 'sp-hint', text: '还没有快照（首次执行破坏性操作后生成）' }));
+                return;
+            }
+            items.forEach(function (item) {
+                var row = util.e('div', { class: 'sp-snap-row' });
+                row.appendChild(util.e('span', { class: 'sp-snap-row__time', text: util.formatDateTime(item.at) }));
+                var count = item.summary && util.isFiniteNum(item.summary.notes) ? item.summary.notes + ' 篇' : '';
+                row.appendChild(util.e('span', { class: 'sp-snap-row__meta', text: count }));
+                row.appendChild(button('恢复', {
+                    small: true, ghost: true,
+                    onClick: function () {
+                        ui.confirm('用这份快照覆盖当前全部笔记？当前状态会先自动再存一份快照。', {
+                            title: '恢复笔记快照', confirmText: '恢复', danger: true
+                        }).then(function (ok) {
+                            if (!ok) return;
+                            durability.snapshot.read('notes', item.slot).then(function (doc) {
+                                if (!doc || !Array.isArray(doc.notes)) { toast('快照不可用', 'error'); return; }
+                                ensureNotesReady(function (notesStore) {
+                                    if (!notesStore) { toast('笔记模块加载失败', 'error'); return; }
+                                    notesStore.importVault(doc, { mode: 'replace' }).then(function (res) {
+                                        if (res && res.ok) {
+                                            toast('已恢复 ' + res.added + ' 篇笔记', 'success');
+                                            if (NC.view.notes && NC.view.notes.refresh) NC.view.notes.refresh();
+                                            renderSection('data');
+                                        } else {
+                                            toast('恢复失败', 'error');
+                                        }
+                                    });
+                                });
+                            });
+                        });
+                    }
+                }));
+                box.appendChild(row);
+            });
+        }).catch(function () {
+            box.appendChild(util.e('div', { class: 'sp-hint', text: '快照读取失败' }));
+        });
+        return box;
+    }
+
     function renderData(container) {
         var head = util.e('div', { class: 'sp-section-head' });
         var info = util.e('div', {});
@@ -663,6 +921,48 @@
         }));
         card.appendChild(actions);
         container.appendChild(card);
+
+        /* ---- 笔记：导出 / 导入 / 附件清理 / 快照 ---- */
+        var notesCard = util.e('div', { class: 'sp-data-card' });
+        notesCard.appendChild(util.e('div', { class: 'sp-data-card__title', text: '笔记' }));
+        notesCard.appendChild(util.e('div', {
+            class: 'sp-data-card__desc',
+            text: '文本可导出 JSON；ZIP 会连同图片一起打包。导入为覆盖式，导入前自动快照。'
+        }));
+        var notesActions = util.e('div', { class: 'sp-data-card__actions' });
+        notesActions.appendChild(button('导出 JSON', {
+            small: true, icon: 'download',
+            onClick: function () { exportNotes('json'); }
+        }));
+        notesActions.appendChild(button('导出 ZIP（含图片）', {
+            small: true, icon: 'download',
+            onClick: function () { exportNotes('zip'); }
+        }));
+        notesActions.appendChild(button('导入笔记', {
+            small: true, icon: 'upload',
+            onClick: function () { importNotes(); }
+        }));
+        notesActions.appendChild(button('清理未引用图片', {
+            small: true, ghost: true, icon: 'trash',
+            onClick: function () {
+                withNotesStore(function () {
+                    var notesStore = NC.store && NC.store.notes;
+                    if (!notesStore || !notesStore.pruneOrphanFiles) { toast('笔记模块未加载', 'warn'); return; }
+                    var stats = notesStore.fileStats ? notesStore.fileStats() : { count: 0 };
+                    ui.confirm('删除没有被任何笔记引用的图片（当前共 ' + stats.count + ' 张）？此操作不可撤销。', {
+                        confirmText: '清理', danger: true
+                    }).then(function (ok) {
+                        if (!ok) return;
+                        var removed = notesStore.pruneOrphanFiles();
+                        toast(removed ? '已清理 ' + removed + ' 张未引用图片' : '没有需要清理的图片', 'success');
+                        renderSection('data');
+                    });
+                });
+            }
+        }));
+        notesCard.appendChild(notesActions);
+        notesCard.appendChild(renderNotesSnapshotList());
+        container.appendChild(notesCard);
 
         var chatCard = util.e('div', { class: 'sp-data-card' });
         chatCard.appendChild(util.e('div', { class: 'sp-data-card__title', text: '聊天记录' }));
@@ -886,11 +1186,25 @@
         NC.loadChatBundle().then(function () { fn(); }, function () { fn(); });
     }
 
-    function exportEverything() {
-        withChatStore(doExportEverything);
+    /** 笔记栈也是懒加载的：导出/导入前必须拉起来，否则会静默漏掉笔记 */
+    function withNotesStore(fn) {
+        var notesStore = NC.store && NC.store.notes;
+        if (notesStore && notesStore.isReady && notesStore.isReady()) return fn();
+        if (typeof NC.loadNotesBundle !== 'function') return fn();
+        NC.loadNotesBundle().then(function () {
+            if (NC.store.notes && NC.store.notes.init) NC.store.notes.init();
+            fn();
+        }, function () { fn(); });
     }
 
-    function doExportEverything() {
+    function exportEverything() {
+        withChatStore(function () {
+            withNotesStore(doExportEverything);
+        });
+    }
+
+    /** 收集全量备份负载（导出与测试共用一份逻辑，避免两处漂移） */
+    function collectBackup() {
         var payload = {
             app: 'nTools',
             kind: 'full-backup',
@@ -899,7 +1213,8 @@
             llm: store().exportAll({ includeKeys: false }),
             todo: null,
             chats: null,
-            email: null
+            email: null,
+            notes: null
         };
         if (NC.store.todo && typeof NC.store.todo.exportData === 'function') {
             try { payload.todo = NC.store.todo.exportData(); } catch (err) { payload.todo = null; }
@@ -908,7 +1223,14 @@
             try { payload.chats = NC.store.conversation.exportAllSessions(); } catch (err) { payload.chats = null; }
         }
         payload.email = readEmailData();
+        if (NC.store.notes && typeof NC.store.notes.exportBundle === 'function') {
+            try { payload.notes = NC.store.notes.exportBundle(); } catch (err) { payload.notes = null; }
+        }
+        return payload;
+    }
 
+    function doExportEverything() {
+        var payload = collectBackup();
         var json = JSON.stringify(payload, null, 2);
         var name = 'ntools-backup-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '') + '.json';
         var ok = util.downloadBlob(name, json, 'application/json');
@@ -921,7 +1243,8 @@
             });
             return;
         }
-        toast('已导出全量备份（不含密钥）', 'success');
+        var notesCount = payload.notes && payload.notes.notes ? payload.notes.notes.length : 0;
+        toast('已导出全量备份（不含密钥）' + (notesCount ? '，含笔记 ' + notesCount + ' 篇' : ''), 'success');
     }
 
     function importEverything() {
@@ -974,6 +1297,11 @@
             var g = (data.email.groups || []).length;
             var e = (data.email.emails || []).length;
             parts.push('邮件分组 ' + g + ' 个 / 地址 ' + e + ' 条');
+            hasAny = true;
+        }
+        if (data.notes && Array.isArray(data.notes.notes)) {
+            parts.push('笔记 ' + data.notes.notes.length + ' 篇' +
+                (data.notes.folders ? ' / 文件夹 ' + data.notes.folders.length : ''));
             hasAny = true;
         }
         if (data.llm) {
@@ -1031,13 +1359,31 @@
                 else failed.push('端点');
             } catch (err) { failed.push('端点'); }
         }
+        var restoreNotesThen = function (next) {
+            if (!data.notes || !Array.isArray(data.notes.notes)) { next(); return; }
+            withNotesStore(function () {
+                var notesStore = NC.store && NC.store.notes;
+                if (!notesStore || !notesStore.importVault) { failed.push('笔记'); next(); return; }
+                notesStore.importVault(data.notes, { mode: 'replace' }).then(function (res) {
+                    if (res && res.ok) done.push('笔记');
+                    else failed.push('笔记');
+                    if (NC.view && NC.view.notes && NC.view.notes.refresh) {
+                        try { NC.view.notes.refresh(); } catch (err) { /* ignore */ }
+                    }
+                    next();
+                }).catch(function () { failed.push('笔记'); next(); });
+            });
+        };
+
         var finishChats = function () {
-            toast(
-                '导入完成：' + (done.length ? done.join('、') : '无') +
-                (failed.length ? '；失败：' + failed.join('、') : ''),
-                failed.length ? 'warn' : 'success'
-            );
-            renderSection('data');
+            restoreNotesThen(function () {
+                toast(
+                    '导入完成：' + (done.length ? done.join('、') : '无') +
+                    (failed.length ? '；失败：' + failed.join('、') : ''),
+                    failed.length ? 'warn' : 'success'
+                );
+                renderSection('data');
+            });
         };
         if (data.chats && Array.isArray(data.chats.sessions) &&
             NC.store.conversation && NC.store.conversation.importAllSessions) {
@@ -1116,10 +1462,11 @@
         bodyEl.scrollTop = 0;
         var wrap = util.e('div', { class: 'sp-content' + (silent ? '' : ' nc-anim-in') });
         if (id === 'profiles') renderProfiles(wrap);
-        else if (id === 'todo-ai') renderTodoAi(wrap);
+        else if (id === 'todo') renderTodoModule(wrap);
         else if (id === 'general') renderGeneral(wrap);
         else if (id === 'data') renderData(wrap);
         else if (id === 'about') renderAbout(wrap);
+        else if (MODULE_TABS.indexOf(id) > -1) renderModuleTab(wrap, id);
         else {
             var custom = sections.filter(function (section) { return section.id === id; })[0];
             if (custom && custom.render) custom.render(wrap, { store: store(), ui: ui, toast: toast });
@@ -1188,7 +1535,7 @@
         sheet.hidden = false;
         requestAnimationFrame(function () { sheet.classList.add('is-open'); });
         open = true;
-        renderSection(sectionId || currentSection || 'profiles', { silent: true });
+        renderSection(sectionId || currentSection || 'general', { silent: true });
         releaseTrap = ui.trapFocus(sheet);
         setTimeout(function () {
             if (closeBtn) closeBtn.focus();
@@ -1222,7 +1569,7 @@
         store().subscribe(function () {
             if (!open) return;
             if (currentSection === 'profiles' && !editingProfileId) renderSection('profiles');
-            else if (currentSection === 'todo-ai') { /* 保持输入 */ }
+            else if (currentSection === 'todo') { /* 保持输入 */ }
         });
     }
 
@@ -1248,6 +1595,8 @@
         close: close,
         registerSection: registerSection,
         renderSection: renderSection,
-        isOpen: function () { return open; }
+        isOpen: function () { return open; },
+        collectBackup: collectBackup,
+        describeBackup: describeBackup
     };
 })(window);

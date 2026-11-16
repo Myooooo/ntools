@@ -553,3 +553,28 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--input-border); border-radius: 999px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--ink-muted); }
+
+  /* ---------- Lite（弱机性能模式，由主应用下发 html[data-lite]） ---------- */
+  html[data-lite="true"] *,
+  html[data-lite="true"] *::before,
+  html[data-lite="true"] *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+
+  html[data-lite="true"] .modal-mask {
+    backdrop-filter: none !important;
+  }
+
+  html[data-lite="true"] .boot-logo,
+  html[data-lite="true"] .btn,
+  html[data-lite="true"] .panel,
+  html[data-lite="true"] .card,
+  html[data-lite="true"] .modal {
+    box-shadow: none !important;
+  }
+
+  html[data-lite="true"] .boot-logo {
+    background: var(--brand);
+  }

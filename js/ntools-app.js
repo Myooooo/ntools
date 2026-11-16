@@ -248,6 +248,9 @@
         }
     }
 
+    /* 供设置面板等模块跳转 tab */
+    NC.switchTab = switchTab;
+
     function setHash(tab) {
         try {
             var next = '#' + tab;
@@ -368,6 +371,7 @@
     }
 
     NC.initNotes = initNotes;
+    NC.loadNotesBundle = loadNotesBundle;
 
     /* 供设置面板使用：导出/导入全量备份前，确保聊天栈已就绪 */
     NC.loadChatBundle = loadChatBundle;
@@ -679,9 +683,11 @@
             }
             if (data.type === 'ntools-email-save' && data.ok === false) {
                 showBanner(
-                    data.quota
-                        ? '邮件数据保存失败：本地存储空间不足，请先在邮件页导出备份。'
-                        : '邮件数据保存失败，最后一次修改可能未落盘。',
+                    data.conflict
+                        ? '邮件数据已被其他窗口更新，本窗口的修改未保存；请点「重试加载」刷新邮件页后再改。'
+                        : (data.quota
+                            ? '邮件数据保存失败：本地存储空间不足，请先在邮件页导出备份。'
+                            : '邮件数据保存失败，最后一次修改可能未落盘。'),
                     { persistent: true }
                 );
             }

@@ -1021,9 +1021,23 @@
                 return { name: name, data: note.content || '' };
             });
             files.push({ name: '_ntools-notes.json', data: JSON.stringify(bundle, null, 2) });
-            var bytes = NC.zip.build(files);
-            downloadBlob(new Blob([bytes], { type: 'application/zip' }), stampName('zip'));
-            toast('已导出 ' + bundle.notes.length + ' 篇（ZIP）', 'success');
+            var db = NC.notesDb;
+            var listFiles = (db && typeof db.getAllFiles === 'function') ? db.getAllFiles() : Promise.resolve([]);
+            return listFiles.then(function (records) {
+                var images = (records || []).filter(function (rec) { return rec && rec.blob && rec.name; });
+                return Promise.all(images.map(function (rec) {
+                    if (!rec.blob.arrayBuffer) return null;
+                    return rec.blob.arrayBuffer().then(function (buffer) {
+                        return { name: '图片/' + rec.name, data: new Uint8Array(buffer) };
+                    }).catch(function () { return null; });
+                })).then(function (pairs) {
+                    var entries = files.concat(pairs.filter(Boolean));
+                    var bytes = NC.zip.build(entries);
+                    downloadBlob(new Blob([bytes], { type: 'application/zip' }), stampName('zip'));
+                    toast('已导出 ' + bundle.notes.length + ' 篇' +
+                        (pairs.length ? ' + ' + pairs.length + ' 张图片' : '') + '（ZIP）', 'success');
+                });
+            });
         });
     }
 
@@ -1069,7 +1083,7 @@
         var items = [
             { label: '导入笔记（JSON）…', icon: 'upload', onSelect: function () { if (els.importFile) els.importFile.click(); } },
             { label: '导出全部（JSON）', icon: 'download', onSelect: exportAllJson },
-            { label: '导出全部（ZIP）', icon: 'download', onSelect: exportAllZip }
+            { label: '导出全部（ZIP，含图片）', icon: 'download', onSelect: exportAllZip }
         ];
         var trashCount = 0;
         store.quickSwitch('').forEach(function (item) {
