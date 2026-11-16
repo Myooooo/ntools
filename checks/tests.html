@@ -529,6 +529,37 @@
             eq(NC.schema.notes.parseImport(null).doc, null);
         });
 
+        t('schema.notes', 'linkContextAt：[[ 触发与查询词', function () {
+            var f = NC.schema.notes.linkContextAt;
+            var text = '前文 [[季度';
+            var ctx = f(text, text.length);
+            assert(!!ctx, '应识别为链接补全');
+            eq(ctx.type, 'link');
+            eq(ctx.query, '季度');
+            eq(text.slice(ctx.start, ctx.end), '[[季度');
+        });
+        t('schema.notes', 'linkContextAt：已闭合 / 带别名 / 跨行不算', function () {
+            var f = NC.schema.notes.linkContextAt;
+            var closed = 'a [[已完成]] b';
+            eq(f(closed, closed.length), null, '闭合后不再补全');
+            var alias = 'a [[标题|别名';
+            eq(f(alias, alias.length), null, '别名内不补全');
+            var multi = 'a [[标题\n下一行';
+            eq(f(multi, multi.length), null, '跨行不补全');
+        });
+        t('schema.notes', 'linkContextAt：# 标签补全与边界', function () {
+            var f = NC.schema.notes.linkContextAt;
+            var text = '正文 #工作';
+            var ctx = f(text, text.length);
+            assert(!!ctx);
+            eq(ctx.type, 'tag');
+            eq(ctx.query, '工作');
+            var glued = 'abc#def';
+            eq(f(glued, glued.length), null, '紧贴字母的 # 不是标签');
+            var heading = '# 标题';
+            eq(f(heading, heading.length), null, '标题井号后跟空格不算标签');
+        });
+
         /* ---------------- notes-index（链接与检索） ---------------- */
         function makeNotesIndex(list) {
             return NC.notesIndex.build(NC.schema.notes.normalizeVault({ notes: list }).doc.notes);

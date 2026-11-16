@@ -281,6 +281,44 @@
         return out;
     }
 
+    /**
+     * 光标上下文：判断插入点是否处在 `[[…` 或 `#…` 的输入中，供自动补全用。
+     * @returns {{type:'link'|'tag', query:string, start:number, end:number}|null}
+     *          start/end 是**替换区间**（含 `[[` / `#`）
+     */
+    function linkContextAt(text, caret) {
+        var source = String(text == null ? '' : text);
+        var pos = Math.max(0, Math.min(typeof caret === 'number' ? caret : source.length, source.length));
+        /* 只在同一行内找触发符，跨行不补全 */
+        var lineStart = source.lastIndexOf('\n', pos - 1) + 1;
+        var before = source.slice(lineStart, pos);
+
+        var open = before.lastIndexOf('[[');
+        if (open > -1) {
+            var inner = before.slice(open + 2);
+            /* 已经闭合或含分隔符就不算在输入中 */
+            if (inner.indexOf(']]') === -1 && inner.indexOf('|') === -1 && inner.indexOf('\n') === -1) {
+                return {
+                    type: 'link',
+                    query: inner.trim(),
+                    start: lineStart + open,
+                    end: pos
+                };
+            }
+        }
+
+        var hash = before.lastIndexOf('#');
+        if (hash > -1) {
+            var tag = before.slice(hash + 1);
+            var boundary = hash === 0 ? '' : before.charAt(hash - 1);
+            if (/[\s(（[【>,，。；;:：、]/.test(boundary) &&
+                tag.indexOf(' ') === -1 && tag.indexOf('#') === -1) {
+                return { type: 'tag', query: tag, start: lineStart + hash, end: pos };
+            }
+        }
+        return null;
+    }
+
     /* ------------------------------------------------------------------ *
      * 大纲 / 标题提取
      * ------------------------------------------------------------------ */
@@ -562,6 +600,7 @@
         maskCode: maskCode,
         parseLinks: parseLinks,
         parseTags: parseTags,
+        linkContextAt: linkContextAt,
         extractHeadings: extractHeadings,
         firstHeadingTitle: firstHeadingTitle,
         tokenize: tokenize,

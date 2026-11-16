@@ -576,6 +576,7 @@
     function outlinks(id) { return state.index ? indexer().outlinks(state.index, id) : []; }
     function tags() { return state.index ? indexer().tagList(state.index) : []; }
     function brokenLinks() { return state.index ? indexer().brokenLinks(state.index) : []; }
+    function unresolved(id) { return state.index ? indexer().unresolvedTitles(state.index, id) : []; }
     function headings(id) {
         return (state.index && state.index.headings.get(id)) || [];
     }
@@ -824,6 +825,7 @@
         outlinks: outlinks,
         tags: tags,
         brokenLinks: brokenLinks,
+        unresolved: unresolved,
         headings: headings,
         resolveTitle: resolveTitle,
         exportBundle: exportBundle,

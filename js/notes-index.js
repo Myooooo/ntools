@@ -213,6 +213,24 @@
         return set ? Array.from(set) : [];
     }
 
+    function unresolvedTitles(index, id) {
+        var set = index.outUnresolved.get(id);
+        if (!set) return [];
+        var links = index.links.get(id) || [];
+        var out = [];
+        set.forEach(function (lower) {
+            var display = lower;
+            for (var i = 0; i < links.length; i += 1) {
+                if (links[i].target && links[i].target.toLowerCase() === lower) {
+                    display = links[i].target;
+                    break;
+                }
+            }
+            out.push(display);
+        });
+        return out;
+    }
+
     function brokenLinks(index) {
         var out = [];
         index.unresolved.forEach(function (sources, titleLower) {
@@ -385,6 +403,7 @@
         backlinks: backlinks,
         outlinks: outlinks,
         unresolvedFor: unresolvedFor,
+        unresolvedTitles: unresolvedTitles,
         brokenLinks: brokenLinks,
         tagList: tagList,
         search: search,

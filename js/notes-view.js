@@ -59,6 +59,14 @@
         return span;
     }
 
+    function escapeHtml(text) {
+        return String(text == null ? '' : text)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function escapeAttr(text) { return escapeHtml(text).replace(/`/g, '&#96;'); }
+
     function setHidden(node, hidden) {
         if (!node) return;
         if (hidden) node.setAttribute('hidden', '');
@@ -88,6 +96,56 @@
     /* ------------------------------------------------------------------ *
      * Markdown 渲染（阶段 2 会在这里加 wikilink 扩展）
      * ------------------------------------------------------------------ */
+    var extensionsInstalled = false;
+
+    /** [[标题]] / [[标题|别名]] / [[标题#小节]] / ![[图片]] 渲染成可点击的 span */
+    function ensureMarkedExtensions() {
+        if (extensionsInstalled) return;
+        if (!global.marked || typeof global.marked.use !== 'function') return;
+        extensionsInstalled = true;
+        global.marked.use({
+            extensions: [{
+                name: 'noteWikiLink',
+                level: 'inline',
+                start: function (src) {
+                    var i = src.indexOf('[[');
+                    return i < 0 ? undefined : i;
+                },
+                tokenizer: function (src) {
+                    var match = /^(!?)\[\[([^\[\]\n]{1,300})\]\]/.exec(src);
+                    if (!match) return undefined;
+                    var inner = match[2];
+                    var alias = '';
+                    var anchor = '';
+                    var pipe = inner.indexOf('|');
+                    if (pipe > -1) { alias = inner.slice(pipe + 1).trim(); inner = inner.slice(0, pipe); }
+                    var hash = inner.indexOf('#');
+                    if (hash > -1) { anchor = inner.slice(hash + 1).trim(); inner = inner.slice(0, hash); }
+                    return {
+                        type: 'noteWikiLink',
+                        raw: match[0],
+                        target: inner.trim(),
+                        alias: alias,
+                        anchor: anchor,
+                        embed: match[1] === '!'
+                    };
+                },
+                renderer: function (token) {
+                    var label = token.alias || token.target || token.anchor || '';
+                    var resolvedId = (store && token.target) ? store.resolveTitle(token.target) : null;
+                    var cls = (token.embed ? 'note-embed' : 'note-link') + (resolvedId ? '' : ' is-unresolved');
+                    var hint = resolvedId ? '' : '未创建，点击新建';
+                    return '<span class="' + cls + '" role="link" tabindex="0"' +
+                        ' data-note="' + escapeAttr(token.target) + '"' +
+                        (token.anchor ? ' data-anchor="' + escapeAttr(token.anchor) + '"' : '') +
+                        (resolvedId ? ' data-id="' + escapeAttr(resolvedId) + '"' : '') +
+                        (hint ? ' title="' + escapeAttr(hint) + '"' : '') +
+                        '>' + escapeHtml(label) + '</span>';
+                }
+            }]
+        });
+    }
+
     function renderMarkdown(host, text) {
         if (!host) return;
         var source = String(text == null ? '' : text);
@@ -101,6 +159,7 @@
             truncated = true;
         }
         try {
+            ensureMarkedExtensions();
             if (global.marked && global.marked.setOptions) {
                 global.marked.setOptions({ gfm: true, breaks: true });
             }
@@ -389,12 +448,86 @@
         return box;
     }
 
+    function linkSection(title, items, emptyText, options) {
+        var opts = options || {};
+        var box = document.createElement('div');
+        box.className = 'notes-section';
+        var head = document.createElement('div');
+        head.className = 'notes-section__title';
+        head.textContent = title + (items.length ? ' · ' + items.length : '');
+        box.appendChild(head);
+        if (!items.length) {
+            var none = document.createElement('div');
+            none.className = 'notes-meta-row';
+            none.textContent = emptyText;
+            box.appendChild(none);
+            return box;
+        }
+        items.slice(0, 30).forEach(function (item) {
+            var row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'notes-link-row' + (opts.unresolved ? ' is-unresolved' : '');
+            row.textContent = item.title || '未命名';
+            row.addEventListener('click', function () {
+                if (opts.unresolved) openWikiLink(item.title, '');
+                else selectNote(item.id);
+            });
+            box.appendChild(row);
+        });
+        return box;
+    }
+
     function renderInfo() {
         if (!els.infoBody || !state.infoOpen) return;
         var note = store.getActiveNote();
         els.infoBody.textContent = '';
         els.infoBody.appendChild(renderMeta(note));
         els.infoBody.appendChild(renderOutline(note));
+        if (note) {
+            els.infoBody.appendChild(linkSection('反向链接', store.backlinks(note.id), '还没有笔记链接到这里'));
+            els.infoBody.appendChild(linkSection('出链', store.outlinks(note.id), '还没有链接到其它笔记'));
+            var unresolved = store.unresolved(note.id);
+            if (unresolved && unresolved.length) {
+                els.infoBody.appendChild(linkSection('未创建的链接', unresolved.map(function (title) {
+                    return { title: title };
+                }), '', { unresolved: true }));
+            }
+        }
+    }
+
+    function jumpToAnchor(anchorText) {
+        if (!anchorText || !els.preview) return;
+        if (state.mode !== 'read') {
+            state.mode = 'read';
+            applyMode();
+        }
+        var nodes = els.preview.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        for (var i = 0; i < nodes.length; i += 1) {
+            if ((nodes[i].textContent || '').trim() === anchorText) {
+                nodes[i].scrollIntoView({ block: 'start', behavior: 'smooth' });
+                return;
+            }
+        }
+    }
+
+    /** 打开 [[标题]]：不存在就地创建；可选跳到 #小节 */
+    function openWikiLink(title, anchorText) {
+        var target = String(title || '').trim();
+        if (!target) {
+            if (anchorText) jumpToAnchor(anchorText);
+            return;
+        }
+        var id = store.resolveTitle(target);
+        if (!id) {
+            var note = store.createNote({ title: target });
+            if (!note) return;
+            toast('已新建「' + note.title + '」', 'success');
+            id = note.id;
+        }
+        selectNote(id);
+        if (anchorText) {
+            global.setTimeout(function () { jumpToAnchor(anchorText); }, 60);
+        }
     }
 
     function jumpToHeading(head) {
@@ -477,6 +610,7 @@
     }
 
     function toggleMode(force) {
+        acHide();
         state.mode = typeof force === 'string' ? force : (state.mode === 'read' ? 'edit' : 'read');
         if (state.mode === 'read') commitNow();
         applyMode();
@@ -576,6 +710,190 @@
     }
 
     /* ------------------------------------------------------------------ *
+     * [[ 与 # 的自动补全
+     * ------------------------------------------------------------------ */
+    var ac = { open: false, items: [], index: 0, ctx: null, el: null };
+
+    function acHide() {
+        ac.open = false;
+        ac.items = [];
+        ac.index = 0;
+        ac.ctx = null;
+        if (ac.el && ac.el.parentNode) ac.el.parentNode.removeChild(ac.el);
+        ac.el = null;
+    }
+
+    function acBuildItems(ctx) {
+        if (!ctx) return [];
+        if (ctx.type === 'link') {
+            var list = store.quickSwitch(ctx.query).slice(0, 7).map(function (item) {
+                return { kind: 'note', label: item.title, title: item.title };
+            });
+            var exact = list.some(function (item) { return item.title.toLowerCase() === ctx.query.toLowerCase(); });
+            if (ctx.query && !exact) {
+                /* 有候选时把「新建」放最后，默认选中第一条已有笔记；没有候选时才放到第一位 */
+                var create = { kind: 'create', label: '新建「' + ctx.query + '」', title: ctx.query, hint: '新建笔记' };
+                if (list.length) list.push(create);
+                else list.push(create);
+            }
+            return list;
+        }
+        var query = ctx.query.toLowerCase();
+        return store.tags().filter(function (tag) {
+            return !query || tag.tag.toLowerCase().indexOf(query) > -1;
+        }).slice(0, 8).map(function (tag) {
+            return { kind: 'tag', label: '#' + tag.tag, tag: tag.tag, hint: String(tag.count) + ' 篇' };
+        });
+    }
+
+    function acPosition() {
+        if (!els.editor || !ac.el) return;
+        var caret = els.editor.selectionStart || 0;
+        var preview = caretCoordinates(els.editor, caret);
+        var host = els.body || els.editor.parentNode;
+        var width = ac.el.offsetWidth || 200;
+        var height = ac.el.offsetHeight || 0;
+        var left = Math.min(preview.left, Math.max(0, (host.clientWidth || 400) - width - 8));
+        var top = preview.top + preview.lineHeight;
+        if (els.editor.clientHeight && top + height > els.editor.clientHeight) {
+            top = Math.max(0, preview.top - height - 4);
+        }
+        ac.el.style.left = Math.max(0, left) + 'px';
+        ac.el.style.top = Math.max(0, top) + 'px';
+    }
+
+    /** 用镜像 div 量光标坐标（textarea 没有原生 API） */
+    function caretCoordinates(textarea, index) {
+        var style = global.getComputedStyle(textarea);
+        var mirror = document.createElement('div');
+        var props = ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
+            'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'borderTopWidth',
+            'borderLeftWidth', 'boxSizing', 'tabSize'];
+        mirror.style.position = 'absolute';
+        mirror.style.visibility = 'hidden';
+        mirror.style.top = '0';
+        mirror.style.left = '0';
+        mirror.style.whiteSpace = 'pre-wrap';
+        mirror.style.wordWrap = 'break-word';
+        mirror.style.width = textarea.clientWidth + 'px';
+        props.forEach(function (name) { mirror.style[name] = style[name]; });
+        mirror.textContent = textarea.value.slice(0, index);
+        var marker = document.createElement('span');
+        marker.textContent = textarea.value.slice(index) || '.';
+        mirror.appendChild(marker);
+        document.body.appendChild(mirror);
+        var lineHeight = parseFloat(style.lineHeight) || 20;
+        var rect = mirror.getBoundingClientRect();
+        var markRect = marker.getBoundingClientRect();
+        var left = markRect.left - rect.left;
+        var top = markRect.top - rect.top;
+        document.body.removeChild(mirror);
+
+        /* 转成相对 .notes-body 的坐标 */
+        var bodyEl = els.body || textarea.parentNode;
+        var bodyRect = bodyEl.getBoundingClientRect();
+        var areaRect = textarea.getBoundingClientRect();
+        return {
+            left: areaRect.left - bodyRect.left + left - textarea.scrollLeft,
+            top: areaRect.top - bodyRect.top + top - textarea.scrollTop,
+            lineHeight: lineHeight
+        };
+    }
+
+    function acRender() {
+        if (!ac.el) {
+            ac.el = document.createElement('div');
+            ac.el.className = 'notes-ac';
+            ac.el.setAttribute('role', 'listbox');
+            (els.body || els.editor.parentNode).appendChild(ac.el);
+        }
+        ac.el.textContent = '';
+        ac.items.forEach(function (item, index) {
+            var row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'notes-ac__item' + (index === ac.index ? ' is-active' : '');
+            row.setAttribute('role', 'option');
+            row.setAttribute('aria-selected', index === ac.index ? 'true' : 'false');
+            var label = document.createElement('span');
+            label.textContent = item.label;
+            row.appendChild(label);
+            if (item.hint) {
+                var hint = document.createElement('span');
+                hint.className = 'notes-ac__hint';
+                hint.textContent = item.hint;
+                row.appendChild(hint);
+            }
+            row.addEventListener('mousedown', function (event) {
+                event.preventDefault();     // 保持 textarea 焦点
+                acAccept(index);
+            });
+            ac.el.appendChild(row);
+        });
+        acPosition();
+    }
+
+    function acUpdate() {
+        if (!els.editor || !schema || typeof schema.linkContextAt !== 'function') return;
+        if (state.mode !== 'edit' || store.isReadOnly()) { acHide(); return; }
+        var value = els.editor.value;
+        var caret = els.editor.selectionStart || 0;
+        var ctx = schema.linkContextAt(value, caret);
+        if (!ctx) { acHide(); return; }
+        var items = acBuildItems(ctx);
+        if (!items.length) { acHide(); return; }
+        ac.open = true;
+        ac.ctx = ctx;
+        ac.items = items;
+        if (ac.index >= items.length) ac.index = 0;
+        acRender();
+    }
+
+    function acAccept(index) {
+        if (!ac.open || !ac.ctx) return;
+        var item = ac.items[typeof index === 'number' ? index : ac.index];
+        if (!item) return;
+        var ctx = ac.ctx;
+        var value = els.editor.value;
+        var insert;
+        if (item.kind === 'tag') insert = '#' + item.tag + ' ';
+        else insert = '[[' + item.title + ']] ';
+        els.editor.value = value.slice(0, ctx.start) + insert + value.slice(ctx.end);
+        var caret = ctx.start + insert.length;
+        els.editor.setSelectionRange(caret, caret);
+        acHide();
+        scheduleCommit();
+        renderStatus();
+        els.editor.focus();
+    }
+
+    function acKey(event) {
+        if (!ac.open) return false;
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            ac.index = (ac.index + 1) % ac.items.length;
+            acRender();
+            return true;
+        }
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            ac.index = (ac.index - 1 + ac.items.length) % ac.items.length;
+            acRender();
+            return true;
+        }
+        if (event.key === 'Enter' || event.key === 'Tab') {
+            event.preventDefault();
+            acAccept();
+            return true;
+        }
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            acHide();
+            return true;
+        }
+        return false;
+    }
+
+    /* ------------------------------------------------------------------ *
      * 事件绑定
      * ------------------------------------------------------------------ */
     function bindEvents() {
@@ -598,8 +916,18 @@
                 if (state.mode === 'read') { state.mode = 'edit'; applyMode(); }
                 scheduleCommit();
                 renderStatus();
+                acUpdate();
             });
-            els.editor.addEventListener('blur', commitNow);
+            els.editor.addEventListener('keydown', function (event) {
+                if (acKey(event)) return;
+                if (event.key === 'Escape') acHide();
+            });
+            els.editor.addEventListener('click', acUpdate);
+            els.editor.addEventListener('blur', function () {
+                commitNow();
+                global.setTimeout(acHide, 120);
+            });
+            els.editor.addEventListener('scroll', acPosition);
         }
 
         if (els.title) {
@@ -633,6 +961,22 @@
         if (els.sideClose) els.sideClose.addEventListener('click', function () { toggleSide(false); });
         if (els.scrim) els.scrim.addEventListener('click', function () { toggleSide(false); toggleInfo(false); });
 
+        if (els.preview) {
+            els.preview.addEventListener('click', function (event) {
+                var link = event.target && event.target.closest ? event.target.closest('[data-note]') : null;
+                if (!link) return;
+                event.preventDefault();
+                openWikiLink(link.getAttribute('data-note'), link.getAttribute('data-anchor') || '');
+            });
+            els.preview.addEventListener('keydown', function (event) {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                var link = event.target && event.target.closest ? event.target.closest('[data-note]') : null;
+                if (!link) return;
+                event.preventDefault();
+                openWikiLink(link.getAttribute('data-note'), link.getAttribute('data-anchor') || '');
+            });
+        }
+
         document.addEventListener('keydown', function (event) {
             var page = document.getElementById('page-md');
             if (!page || page.hasAttribute('hidden')) return;
@@ -665,6 +1009,7 @@
         els.filter = $('notes-filter');
         els.newBtn = $('notes-new-btn');
         els.title = $('notes-title');
+        els.body = $('notes-body');
         els.editor = $('notes-editor');
         els.preview = $('notes-preview');
         els.empty = $('notes-empty');

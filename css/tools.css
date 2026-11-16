@@ -820,6 +820,114 @@
     color: var(--nc-warning);
 }
 
+/* ---------- 双向链接与自动补全 ---------- */
+.note-link {
+    padding: 0 2px;
+    border-radius: 3px;
+    color: var(--nc-accent);
+    border-bottom: 1px solid var(--nc-accent-ring);
+    cursor: pointer;
+    transition: background-color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.note-link:hover {
+    background: var(--nc-accent-soft);
+}
+
+.note-link:focus-visible {
+    outline: 2px solid var(--nc-accent-ring);
+    outline-offset: 1px;
+}
+
+.note-link.is-unresolved {
+    color: var(--nc-text-3);
+    border-bottom-style: dashed;
+    border-bottom-color: var(--nc-border-strong);
+}
+
+.note-embed {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    border-radius: var(--nc-radius-xs, 4px);
+    background: var(--nc-surface-2);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-xs);
+}
+
+.note-embed.is-unresolved {
+    color: var(--nc-text-3);
+    border: 1px dashed var(--nc-border-strong);
+}
+
+.notes-link-row {
+    display: block;
+    width: 100%;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: var(--nc-radius-xs, 4px);
+    background: transparent;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-xs);
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.notes-link-row:hover {
+    background: var(--nc-surface-hover);
+    color: var(--nc-text);
+}
+
+.notes-link-row.is-unresolved {
+    color: var(--nc-text-3);
+    border-bottom: 1px dashed var(--nc-border-strong);
+    border-radius: 0;
+}
+
+.notes-ac {
+    position: absolute;
+    z-index: 8;
+    min-width: 180px;
+    max-width: 320px;
+    max-height: 232px;
+    padding: 4px;
+    overflow-y: auto;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-elevated);
+    box-shadow: var(--nc-shadow-3);
+}
+
+.notes-ac__item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: var(--nc-radius-xs, 4px);
+    background: transparent;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    text-align: left;
+    cursor: pointer;
+}
+
+.notes-ac__item.is-active {
+    background: var(--nc-accent-soft);
+    color: var(--nc-text);
+}
+
+.notes-ac__hint {
+    flex: 0 0 auto;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+}
+
 /* ---------- 右：信息面板 ---------- */
 .notes-info {
     display: flex;
