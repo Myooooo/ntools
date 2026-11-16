@@ -71,6 +71,7 @@
 <script defer src="../js/compat.js"></script>
 <script defer src="../js/icons.js"></script>
 <script defer src="../js/storage.js"></script>
+<script defer src="../js/durability.js"></script>
 <script defer src="../js/ui.js"></script>
 <script defer src="../js/theme.js"></script>
 </head>
@@ -633,6 +634,212 @@
                             detail: 'serviceWorker=' + hasSW + (fileProto ? '（file:// 不可用）' : ''),
                             hint: '项目不引入 Service Worker，无影响。'
                         };
+                    }
+                }
+            ]
+        });
+
+        /* ---------- v5.10 新增依赖 ---------- */
+        groups.push({
+            title: 'v5.10 新增依赖（数据韧性与按需加载）',
+            items: [
+                {
+                    name: 'IndexedDB 真实打开（聊天主存储）',
+                    run: function () {
+                        return new Promise(function (resolve) {
+                            if (!window.indexedDB) {
+                                resolve({
+                                    status: 'warn',
+                                    detail: 'indexedDB 不存在',
+                                    hint: '聊天会降级到 localStorage（约 5MB 上限），图片多的会话可能写不下。'
+                                });
+                                return;
+                            }
+                            var dbName = 'nc_compat_probe_' + Date.now();
+                            var settled = false;
+                            function finish(result) {
+                                if (settled) return;
+                                settled = true;
+                                try { window.indexedDB.deleteDatabase(dbName); } catch (err) { /* ignore */ }
+                                resolve(result);
+                            }
+                            setTimeout(function () {
+                                finish({
+                                    status: 'warn',
+                                    detail: '3 秒内未完成打开（可能被策略阻断或需要授权）',
+                                    hint: '这是计划里最关键的待验证项：若确认不可用，聊天只能走 localStorage 回退。'
+                                });
+                            }, 3000);
+                            var request;
+                            try {
+                                request = window.indexedDB.open(dbName, 1);
+                            } catch (err) {
+                                finish({ status: 'fail', detail: 'open() 抛异常：' + err.message, hint: '确认浏览器策略是否禁用本地存储。' });
+                                return;
+                            }
+                            request.onupgradeneeded = function (event) {
+                                try { event.target.result.createObjectStore('probe', { keyPath: 'id' }); } catch (err) { /* ignore */ }
+                            };
+                            request.onerror = function () {
+                                finish({
+                                    status: 'warn',
+                                    detail: '打开失败：' + (request.error && request.error.name || 'unknown'),
+                                    hint: 'file:// 下部分内核会禁用 IndexedDB；聊天将回退 localStorage。'
+                                });
+                            };
+                            request.onblocked = function () {
+                                finish({ status: 'warn', detail: '打开被阻塞', hint: '关闭其它已打开的工具页后重试。' });
+                            };
+                            request.onsuccess = function () {
+                                var db = request.result;
+                                var tx = null;
+                                try {
+                                    tx = db.transaction('probe', 'readwrite');
+                                    tx.objectStore('probe').put({ id: 'a', at: Date.now() });
+                                } catch (err) {
+                                    try { db.close(); } catch (e2) { /* ignore */ }
+                                    finish({ status: 'warn', detail: '写入事务失败：' + err.message, hint: '聊天会回退 localStorage。' });
+                                    return;
+                                }
+                                tx.oncomplete = function () {
+                                    try { db.close(); } catch (err) { /* ignore */ }
+                                    finish({ status: 'pass', detail: '可打开、可建表、可读写' });
+                                };
+                                tx.onerror = function () {
+                                    try { db.close(); } catch (err) { /* ignore */ }
+                                    finish({ status: 'warn', detail: '写入失败', hint: '聊天会回退 localStorage。' });
+                                };
+                            };
+                        });
+                    }
+                },
+                {
+                    name: 'sessionStorage（窗口身份，租约用）',
+                    run: function () {
+                        try {
+                            var key = '__nc_ss_probe__';
+                            window.sessionStorage.setItem(key, '1');
+                            var ok = window.sessionStorage.getItem(key) === '1';
+                            window.sessionStorage.removeItem(key);
+                            return ok
+                                ? { status: 'pass', detail: '可读写（刷新后标签页身份保持）' }
+                                : { status: 'warn', detail: '写入后读不到', hint: '会回退到 window.name，功能不受影响。' };
+                        } catch (err) {
+                            return {
+                                status: 'warn',
+                                detail: '被策略禁用（' + err.name + '）',
+                                hint: '已实现回退：改用 window.name 保持标签页身份，刷新不会误判为"另一个窗口"。'
+                            };
+                        }
+                    }
+                },
+                {
+                    name: 'window.name（sessionStorage 的回退身份）',
+                    run: function () {
+                        try {
+                            var mark = 'ntools-tab:probe';
+                            var before = window.name;
+                            window.name = mark;
+                            var ok = window.name === mark;
+                            window.name = before;
+                            return ok
+                                ? { status: 'pass', detail: '可写可读' }
+                                : { status: 'warn', detail: '写入后读不到', hint: '双窗口时可能频繁出现"只读镜像"，建议关闭多余窗口。' };
+                        } catch (err) {
+                            return { status: 'warn', detail: '不可用：' + err.name, hint: '租约会退化为随机身份。' };
+                        }
+                    }
+                },
+                {
+                    name: 'postMessage（邮件页握手 / 主题下发）',
+                    run: function () {
+                        return new Promise(function (resolve) {
+                            if (typeof window.postMessage !== 'function') {
+                                resolve({ status: 'fail', detail: '不存在', hint: '邮件页将无法完成握手，会显示"未加载"引导。' });
+                                return;
+                            }
+                            var done = false;
+                            function onMessage(event) {
+                                if (!event.data || event.data.type !== 'nc-compat-ping') return;
+                                if (done) return;
+                                done = true;
+                                window.removeEventListener('message', onMessage);
+                                resolve({ status: 'pass', detail: '消息可投递并回环' });
+                            }
+                            window.addEventListener('message', onMessage);
+                            try { window.postMessage({ type: 'nc-compat-ping' }, '*'); } catch (err) { /* ignore */ }
+                            setTimeout(function () {
+                                if (done) return;
+                                done = true;
+                                window.removeEventListener('message', onMessage);
+                                resolve({ status: 'warn', detail: '1 秒内未收到回环消息', hint: '邮件页可能无法完成握手。' });
+                            }, 1000);
+                        });
+                    }
+                },
+                {
+                    name: '动态注入脚本（按需加载链路）',
+                    run: function () {
+                        return new Promise(function (resolve) {
+                            if (typeof window.Promise !== 'function') {
+                                resolve({ status: 'fail', detail: 'Promise 缺失', hint: '按需加载不可用。' });
+                                return;
+                            }
+                            var script = document.createElement('script');
+                            var done = false;
+                            script.src = '../js/polyfills.js';
+                            script.async = true;
+                            script.onload = function () {
+                                if (done) return;
+                                done = true;
+                                resolve({ status: 'pass', detail: '同源脚本可动态加载（懒加载 / KaTeX / 二维码库依赖此能力）' });
+                            };
+                            script.onerror = function () {
+                                if (done) return;
+                                done = true;
+                                resolve({
+                                    status: 'fail',
+                                    detail: '动态注入被拒绝',
+                                    hint: '检查是否有 CSP 或策略限制；聊天与时间线将无法按需加载。'
+                                });
+                            };
+                            document.head.appendChild(script);
+                            setTimeout(function () {
+                                if (done) return;
+                                done = true;
+                                resolve({ status: 'warn', detail: '2 秒内未触发 load', hint: '按需加载可能很慢或被拦截。' });
+                            }, 2000);
+                        });
+                    }
+                },
+                {
+                    name: 'content-visibility（列表离屏渲染）',
+                    run: function () {
+                        var ok = !!(window.CSS && CSS.supports && CSS.supports('content-visibility', 'auto'));
+                        return ok
+                            ? { status: 'pass', detail: '支持（长列表离屏不参与布局）' }
+                            : { status: 'warn', detail: '不支持', hint: '1000 条待办时滚动会更吃力，属性能降级，不影响功能。' };
+                    }
+                },
+                {
+                    name: '存储配额（navigator.storage.estimate）',
+                    run: function () {
+                        if (!(navigator.storage && typeof navigator.storage.estimate === 'function')) {
+                            return { status: 'warn', detail: '无法估算', hint: '按保守值假设：localStorage 约 5MB。' };
+                        }
+                        return navigator.storage.estimate().then(function (est) {
+                            var quota = est && est.quota ? est.quota : 0;
+                            var usage = est && est.usage ? est.usage : 0;
+                            var mb = function (n) { return (n / 1024 / 1024).toFixed(1) + ' MB'; };
+                            var enough = quota >= 50 * 1024 * 1024;
+                            return {
+                                status: enough ? 'pass' : 'warn',
+                                detail: '配额 ' + mb(quota) + '，已用 ' + mb(usage),
+                                hint: enough ? '' : '配额偏小：聊天图片多时容易写满，建议导出备份并定期清理。'
+                            };
+                        }).catch(function () {
+                            return { status: 'warn', detail: '估算失败', hint: '按保守值假设：localStorage 约 5MB。' };
+                        });
                     }
                 }
             ]

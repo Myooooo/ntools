@@ -36,12 +36,15 @@
             if (typeof NC.ui.installGlobalErrorHandlers === 'function') NC.ui.installGlobalErrorHandlers();
         } catch (err) { /* 基础设施错误不阻断页面 */ }
 
+        syncVersionLabel();
         initTheme();
         initLlmAndSettings();
         initRail();
         bindNav();
         bindAppMenu();
         bindBanner();
+        bindDurabilityBar();
+        bindEmailFrame();
         bindTabsShortcut();
         bindGlobalEvents();
         applyUrlOverrides();
@@ -55,7 +58,35 @@
         initLeafModule('image', 'page-image', 'image-module-note');
 
         routeFromHash(true);
+        maybeAutoLite();
+        NC.ready = true;
         return true;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 弱机自动 Lite
+     * 首屏初始化超过 400ms 且用户从未手动选过 Lite → 自动开启（可在设置里关掉）。
+     * 只做一次：一旦写入偏好，后续就以用户/既有设置为准。
+     * ------------------------------------------------------------------ */
+    function maybeAutoLite() {
+        try {
+            if (!global.localStorage) return;
+            if (global.localStorage.getItem('nchat-lite-mode') !== null) return;
+            if (NC.theme.isLite()) return;
+            var elapsed = Date.now() - (NC.bootAt || Date.now());
+            if (elapsed < 400) return;
+            NC.theme.setLite(true);
+            NC.log('auto-lite: boot took ' + elapsed + 'ms');
+        } catch (err) { /* ignore */ }
+    }
+
+    /* 版本号单一来源：页面只写占位，实际值来自 NC.version，避免两处漂移 */
+    function syncVersionLabel() {
+        var el = document.getElementById('rail-version');
+        if (!el || !NC.version) return;
+        var short = String(NC.version).split('.').slice(0, 2).join('.');
+        el.textContent = 'v' + short;
+        el.title = '版本 ' + NC.version;
     }
 
     /* ------------------------------------------------------------------ *
@@ -83,10 +114,21 @@
      * ------------------------------------------------------------------ */
     var RAIL_KEY = 'ntools.rail-collapsed';
 
+    var COMPACT_QUERY = '(max-width: 1100px)';
+
     function initRail() {
         var app = document.getElementById('tools-app');
         var btn = document.getElementById('rail-toggle-btn');
         if (!app || !btn) return;
+
+        /* manual：用户显式选择（持久化）；compact：窗口窄，强制图标态（不持久化）。
+         * 两者取或——1080p 左右分屏时不占掉 196px，回到宽屏又恢复用户的选择。 */
+        var manual = false;
+        var mq = global.matchMedia ? global.matchMedia(COMPACT_QUERY) : null;
+
+        function isCompact() {
+            return !!(mq && mq.matches);
+        }
 
         function apply(collapsed) {
             app.classList.toggle('is-rail-collapsed', !!collapsed);
@@ -95,14 +137,24 @@
             btn.title = collapsed ? '展开侧边栏' : '收起侧边栏';
         }
 
-        var saved = false;
-        try { saved = global.localStorage.getItem(RAIL_KEY) === '1'; } catch (err) { saved = false; }
-        apply(saved);
+        function applyEffective() {
+            apply(manual || isCompact());
+            app.classList.toggle('is-compact', isCompact());
+        }
+
+        try { manual = global.localStorage.getItem(RAIL_KEY) === '1'; } catch (err) { manual = false; }
+        applyEffective();
+
+        if (mq) {
+            var onChange = function () { applyEffective(); };
+            if (mq.addEventListener) mq.addEventListener('change', onChange);
+            else if (mq.addListener) mq.addListener(onChange);
+        }
 
         btn.addEventListener('click', function (event) {
-            var next = !app.classList.contains('is-rail-collapsed');
-            apply(next);
-            try { global.localStorage.setItem(RAIL_KEY, next ? '1' : '0'); } catch (err) { /* ignore */ }
+            manual = !manual;
+            applyEffective();
+            try { global.localStorage.setItem(RAIL_KEY, manual ? '1' : '0'); } catch (err) { /* ignore */ }
             /* 鼠标点击后释放焦点：否则收起态按钮会一直以“聚焦/悬浮”浮在 logo 上 */
             if (event && event.detail > 0) {
                 btn.blur();
@@ -244,22 +296,96 @@
         }
     }
 
+    /* 聊天栈（约 250KB）首屏不加载：只在第一次进 nChat 时按序注入。
+     * 弱机上这能省掉首屏 20% 的解析量。 */
+    var CHAT_SCRIPTS = [
+        'js/sse.js',
+        'js/api.js',
+        'js/chat-db.js',
+        'js/conversation-store.js',
+        'js/settings-store.js',
+        'js/message-view.js',
+        'js/composer.js',
+        'js/settings-view.js',
+        'js/chat-controller.js',
+        'js/chat-sessions.js',
+        'js/chat-embed.js'
+    ];
+    var chatBundlePromise = null;
+
+    function loadChatBundle() {
+        if (chatBundlePromise) return chatBundlePromise;
+        var util = NC.util;
+        if (!util || typeof util.loadScript !== 'function') {
+            return Promise.reject(new Error('loader unavailable'));
+        }
+        chatBundlePromise = CHAT_SCRIPTS.reduce(function (chain, src) {
+            return chain.then(function () { return util.loadScript(src); });
+        }, Promise.resolve());
+        return chatBundlePromise;
+    }
+
+    /* 供设置面板使用：导出/导入全量备份前，确保聊天栈已就绪 */
+    NC.loadChatBundle = loadChatBundle;
+
+    function setChatBoot(text) {
+        var page = document.getElementById('page-nchat');
+        if (!page) return;
+        var el = document.getElementById('chat-boot');
+        if (text == null) {
+            if (el) el.hidden = true;
+            return;
+        }
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'chat-boot';
+            el.className = 'chat-boot';
+            el.setAttribute('role', 'status');
+            page.appendChild(el);
+        }
+        el.textContent = text;
+        el.hidden = false;
+    }
+
     function initChat() {
         if (chatInited) return;
-        try {
-            if (NC.chatEmbed && typeof NC.chatEmbed.init === 'function') {
+        if (chatBundlePromise && !isChatReady()) return;   // 正在加载，避免重复进入
+
+        function isChatReady() {
+            return !!(NC.chatEmbed && typeof NC.chatEmbed.init === 'function');
+        }
+
+        function boot() {
+            try {
                 var ok = NC.chatEmbed.init();
                 if (ok !== false) {
                     chatInited = true;
                 } else {
                     showBanner('聊天模块尚未就绪，稍后重新切换到 nChat 标签重试。', { persistent: false });
                 }
+            } catch (err) {
+                showBanner('聊天初始化失败，其它工具仍可使用。', { persistent: true });
+            }
+        }
+
+        if (isChatReady()) {
+            setChatBoot(null);
+            boot();
+            return;
+        }
+        setChatBoot('正在加载聊天模块…');
+        loadChatBundle().then(function () {
+            setChatBoot(null);
+            if (isChatReady()) {
+                boot();
             } else {
                 showBanner('聊天模块未加载（js/chat-embed.js），其它工具仍可使用。', { persistent: true });
             }
-        } catch (err) {
-            showBanner('聊天初始化失败，其它工具仍可使用。', { persistent: true });
-        }
+        }).catch(function () {
+            chatBundlePromise = null;   // 允许下次切回 nChat 时重试
+            setChatBoot(null);
+            showBanner('聊天模块加载失败，其它工具仍可使用。可刷新页面重试。', { persistent: true });
+        });
     }
 
     /* ------------------------------------------------------------------ *
@@ -382,7 +508,7 @@
         });
         var note = document.createElement('p');
         note.className = 'about-panel__note';
-        note.textContent = '所有数据仅保存在本机浏览器，不会上传网络。建议定期在「待办 → 更多」中导出 JSON 备份。';
+        note.textContent = '除你主动发送给所选模型端点的内容（消息正文与附件）外，所有数据仅保存在本机浏览器。建议定期在「设置 → 数据」导出备份。';
         wrap.appendChild(note);
         ui.openModal({
             title: '关于 nTools',
@@ -439,6 +565,255 @@
         if (NC.tools.todo && NC.tools.todo.exportToFile) NC.tools.todo.exportToFile();
         else ui.toast('待办模块未就绪，暂时无法导出', { type: 'warn' });
     }
+
+    /* ------------------------------------------------------------------ *
+     * 邮件 iframe：握手 + 未加载引导 + 存储告警
+     * iframe 失败时不触发 error 事件（file:// 下尤其如此），所以用
+     * 页面主动 postMessage 握手 + 超时兜底来判断，而不是猜 contentDocument。
+     * ------------------------------------------------------------------ */
+    var emailFrameState = { ready: false, timer: null, loadedOnce: false };
+
+    function bindEmailFrame() {
+        var frame = document.getElementById('email-frame');
+        var missing = document.getElementById('email-missing');
+        if (!frame || !missing) return;
+        var EMAIL_SRC = 'js/mail/email-manager.html';
+
+        function showMissing(show) {
+            missing.hidden = !show;
+            frame.style.visibility = show ? 'hidden' : '';
+        }
+
+        function armTimeout() {
+            if (emailFrameState.timer) global.clearTimeout(emailFrameState.timer);
+            emailFrameState.timer = global.setTimeout(function () {
+                if (!emailFrameState.ready) showMissing(true);
+            }, 3500);
+        }
+
+        function reload() {
+            emailFrameState.ready = false;
+            showMissing(false);
+            frame.src = EMAIL_SRC + '?r=' + Date.now();
+            armTimeout();
+        }
+
+        /* 主题与 Lite 由主应用统一控制：邮件页不再自己选主题 */
+        function postTheme() {
+            try {
+                if (!frame.contentWindow) return;
+                frame.contentWindow.postMessage({
+                    type: 'ntools-theme',
+                    theme: NC.theme.isLight() ? 'light' : 'dark',
+                    lite: NC.theme.isLite()
+                }, '*');
+            } catch (err) { /* ignore */ }
+        }
+
+        frame.addEventListener('load', postTheme);
+        NC.events.on('theme:changed', postTheme);
+        NC.events.on('lite:changed', postTheme);
+
+        global.addEventListener('message', function (event) {
+            var data = event.data;
+            if (!data || typeof data !== 'object') return;
+            if (event.source !== frame.contentWindow) return;
+
+            if (data.type === 'ntools-email-theme-request') {
+                postTheme();
+                return;
+            }
+            if (data.type === 'ntools-email-ready') {
+                postTheme();
+                emailFrameState.ready = true;
+                if (emailFrameState.timer) global.clearTimeout(emailFrameState.timer);
+                showMissing(false);
+                if (data.storage === false) {
+                    showBanner('邮件管理无法访问本地存储：修改不会被保存。', { persistent: true });
+                }
+                return;
+            }
+            if (data.type === 'ntools-email-save' && data.ok === false) {
+                showBanner(
+                    data.quota
+                        ? '邮件数据保存失败：本地存储空间不足，请先在邮件页导出备份。'
+                        : '邮件数据保存失败，最后一次修改可能未落盘。',
+                    { persistent: true }
+                );
+            }
+        });
+
+        var retry = document.getElementById('email-retry-btn');
+        if (retry) retry.addEventListener('click', reload);
+        var dismiss = document.getElementById('email-dismiss-btn');
+        if (dismiss) dismiss.addEventListener('click', function () { showMissing(false); });
+
+        NC.events.on('email:imported', reload);
+        armTimeout();
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 数据韧性条：保存失败 / 只读镜像 / 加载闸门
+     * 与顶栏 banner 不同，这里不自动消失——它描述的是一个持续存在的状态。
+     * ------------------------------------------------------------------ */
+    var durabilityView = {
+        bar: null,
+        text: null,
+        actions: null,
+        readonly: null,
+        save: null,
+        rendered: false
+    };
+
+    function bindDurabilityBar() {
+        durabilityView.bar = document.getElementById('durability-bar');
+        durabilityView.text = document.getElementById('durability-text');
+        durabilityView.actions = document.getElementById('durability-actions');
+        if (!durabilityView.bar || !durabilityView.text || !durabilityView.actions) return;
+
+        NC.events.on('todo:readonly', function (payload) {
+            durabilityView.readonly = payload && payload.reason ? payload : null;
+            renderDurability();
+        });
+        NC.events.on('todo:savestate', function (payload) {
+            durabilityView.save = payload || null;
+            renderDurability();
+        });
+        NC.events.on('storage:error', function () { renderDurability(); });
+        NC.events.on('quota:warning', function () { renderDurability(); });
+        NC.events.on('todo:limit', function (payload) {
+            ui.toast((payload && payload.message) || '已达数据上限', { type: 'warn', duration: 4200 });
+        });
+        NC.events.on('conversation:truncated-on-load', function (payload) {
+            var p = payload || {};
+            ui.toast(
+                '聊天记录超出上限（会话 ' + p.sessions + ' / 单会话消息上限 ' + p.maxMessages +
+                '），未截断的原始数据已存入快照，可在设置 → 数据 中恢复',
+                { type: 'warn', duration: 6000 }
+            );
+        });
+        NC.events.on('todo:trash-purged', function (payload) {
+            ui.toast((payload && payload.message) || '已清理回收站旧任务', { type: 'info', duration: 4200 });
+        });
+        renderDurability();
+    }
+
+    function durabilityButton(label, kind, onClick) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'nc-btn nc-btn--sm' + (kind === 'primary' ? ' nc-btn--primary' : ' nc-btn--ghost');
+        btn.textContent = label;
+        btn.addEventListener('click', onClick);
+        return btn;
+    }
+
+    function todoStore() {
+        return NC.store && NC.store.todo ? NC.store.todo : null;
+    }
+
+    function saveOriginalTodo() {
+        var store = todoStore();
+        var raw = store && store.originalRaw ? store.originalRaw() : null;
+        if (!raw) {
+            ui.toast('没有可导出的原始数据', { type: 'warn' });
+            return;
+        }
+        util.downloadBlob(
+            'ntools-todo-original-' + new Date().toISOString().slice(0, 10) + '.json',
+            raw,
+            'application/json'
+        );
+        ui.toast('已导出加载时的原始数据', { type: 'success' });
+    }
+
+    function renderDurability() {
+        var view = durabilityView;
+        if (!view.bar) return;
+        var store = todoStore();
+        var save = view.save || (store && store.saveState ? store.saveState() : null);
+        var ro = view.readonly;
+
+        view.actions.textContent = '';
+        view.bar.classList.remove('is-warning');
+
+        if (ro && ro.reason) {
+            var message = ro.message || '待办数据已进入只读模式';
+            view.bar.classList.toggle('is-warning', ro.reason === 'other-window');
+            view.text.textContent = message;
+
+            if (ro.reason === 'other-window') {
+                view.actions.appendChild(durabilityButton('接管编辑', 'primary', function () {
+                    if (store && store.takeover && store.takeover()) {
+                        ui.toast('已接管编辑', { type: 'success' });
+                    } else {
+                        ui.toast('接管失败：另一个窗口仍在编辑', { type: 'warn' });
+                    }
+                }));
+            } else if (ro.reason === 'load-trimmed' || ro.reason === 'future-version') {
+                view.actions.appendChild(durabilityButton('另存原始数据', 'ghost', saveOriginalTodo));
+                if (ro.reason === 'load-trimmed') {
+                    view.actions.appendChild(durabilityButton('接受修剪', 'primary', function () {
+                        confirmTrim(store);
+                    }));
+                }
+            } else if (ro.reason === 'external-conflict') {
+                view.actions.appendChild(durabilityButton('另存本地修改', 'ghost', exportTodoBackup));
+                view.actions.appendChild(durabilityButton('以对方为准', 'primary', function () {
+                    if (store && store.init) {
+                        store.init();
+                        ui.toast('已重新加载存储中的数据', { type: 'success' });
+                    }
+                }));
+            } else if (ro.reason === 'save-failed') {
+                view.actions.appendChild(durabilityButton('导出备份', 'primary', exportTodoBackup));
+            }
+            showDurability(true);
+            return;
+        }
+
+        if (save && (save.saveError || save.retrying || (save.ok === false))) {
+            view.bar.classList.add('is-warning');
+            var retry = save.retrying && save.retryDelay ? '（' + Math.round(save.retryDelay / 1000) + ' 秒后重试）' : '';
+            view.text.textContent = '待办数据保存失败' + retry + '：修改暂存在内存中，请尽快导出备份。';
+            view.actions.appendChild(durabilityButton('导出备份', 'primary', exportTodoBackup));
+            view.actions.appendChild(durabilityButton('立即重试', 'ghost', function () {
+                if (store && store.saveNow) {
+                    var ok = store.saveNow();
+                    ui.toast(ok ? '已保存' : '仍然失败，请导出备份', { type: ok ? 'success' : 'error' });
+                }
+            }));
+            showDurability(true);
+            return;
+        }
+
+        showDurability(false);
+    }
+
+    function confirmTrim(store) {
+        ui.confirm(
+            '加载时有部分数据因超出上限或缺少标题被丢弃。接受后将以修剪后的数据覆盖存储，原始数据可从「另存原始数据」恢复。建议先导出一份。',
+            { title: '接受修剪并继续编辑', confirmText: '接受修剪', danger: true }
+        ).then(function (ok) {
+            if (!ok) return;
+            var done = store && store.acceptTrimmed ? store.acceptTrimmed() : false;
+            ui.toast(done ? '已接受修剪并保存' : '保存失败，请导出备份', { type: done ? 'success' : 'error' });
+        });
+    }
+
+    function showDurability(visible) {
+        var bar = durabilityView.bar;
+        if (!bar) return;
+        if (!visible) {
+            if (!bar.hidden) {
+                bar.hidden = true;
+                document.documentElement.removeAttribute('data-durability');
+            }
+            return;
+        }
+        if (bar.hidden) bar.hidden = false;
+        document.documentElement.setAttribute('data-durability', 'on');
+    }
+
 
     function showBanner(message, options) {
         var opts = options || {};

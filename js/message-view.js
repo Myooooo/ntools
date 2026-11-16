@@ -28,6 +28,8 @@
     var emptyEl = null;
     var emptyText = '';
     var autoFollow = true;
+    var endSentinel = null;
+    var followObserver = null;
     var lightboxEl = null;
     var lightboxImg = null;
     var lightboxPrevFocus = null;
@@ -65,22 +67,29 @@
         } catch (err) {
             html = util.escapeHtml(source);
         }
+        var clean = sanitizeHtml(html);
+        /* 净化后为空且原文非空：说明整段被裁掉了，退回转义文本而不是空白 */
+        return clean || util.escapeHtml(source);
+    }
+
+    /** 净化一段 HTML（与 renderMarkdown 同一口径） */
+    function sanitizeHtml(html) {
         try {
             if (global.DOMPurify && typeof global.DOMPurify.sanitize === 'function') {
-                html = global.DOMPurify.sanitize(html, {
+                return global.DOMPurify.sanitize(html, {
+                    USE_PROFILES: { html: true },
                     ADD_ATTR: ['target', 'rel'],
                     FORBID_TAGS: ['style', 'form', 'iframe', 'object', 'embed', 'video', 'audio', 'input', 'button', 'select', 'textarea'],
                     FORBID_ATTR: ['style']
                 });
             }
-        } catch (err) {
-            html = util.escapeHtml(source);
-        }
+        } catch (err) { /* 落到原文转义 */ }
         return html;
     }
 
-    function renderMarkdownInto(el, text) {
-        el.innerHTML = renderMarkdown(text);
+    /** 单块装饰：外链、图片降级、表格包裹、代码/公式增强。作用于某一个容器。 */
+    function decorate(el) {
+        if (!el) return;
         var links = el.querySelectorAll('a[href]');
         Array.prototype.forEach.call(links, function (link) {
             link.setAttribute('target', '_blank');
@@ -116,6 +125,95 @@
         if (NC.mdEnhance && typeof NC.mdEnhance.enhance === 'function') {
             NC.mdEnhance.enhance(el);
         }
+    }
+
+    function renderMarkdownInto(el, text) {
+        el.__mdStream = null;
+        el.innerHTML = renderMarkdown(text);
+        decorate(el);
+    }
+
+    /**
+     * 流式增量渲染。
+     *
+     * 用 marked.lexer 把当前全文切成块，已结束的块只渲染一次，只有"最后一块"
+     * 每次重渲——否则每 60ms 一次全量 parse+DOMPurify+innerHTML 会让流式成本
+     * 随文本长度二次增长（弱机上表现为"越写越卡"）。
+     *
+     * 结构：[已完成节点…] [尾块节点…] <!--marker-->
+     * 尾块每次 flush 先删除再重建；marker 始终留在末尾。
+     */
+    function renderMarkdownStreaming(el, text) {
+        var source = typeof text === 'string' ? text : '';
+        var marked = global.marked;
+        if (!marked || typeof marked.lexer !== 'function' || typeof marked.parser !== 'function' || !source) {
+            renderMarkdownInto(el, source);
+            return;
+        }
+        var state = el.__mdStream;
+        if (state && state.text === source) return;
+
+        var tokens;
+        try {
+            tokens = marked.lexer(source);
+        } catch (err) {
+            renderMarkdownInto(el, source);
+            return;
+        }
+        if (!Array.isArray(tokens)) {
+            renderMarkdownInto(el, source);
+            return;
+        }
+        var finalCount = Math.max(0, tokens.length - 1);
+
+        /* token 数量回退（解析器合并）或首次渲染：重建骨架 */
+        if (!state || state.finalCount > finalCount) {
+            el.textContent = '';
+            state = {
+                marker: document.createComment('md-tail'),
+                done: 0,
+                finalCount: 0,
+                text: ''
+            };
+            el.appendChild(state.marker);
+            el.__mdStream = state;
+        }
+
+        /* 清空尾块 */
+        while (state.marker.nextSibling) {
+            state.marker.parentNode.removeChild(state.marker.nextSibling);
+        }
+
+        function buildBlock(token) {
+            var html;
+            try {
+                html = sanitizeHtml(marked.parser([token]));
+            } catch (err) {
+                return null;
+            }
+            if (!html) return null;
+            var box = document.createElement('div');
+            box.innerHTML = html;
+            decorate(box);
+            var frag = document.createDocumentFragment();
+            while (box.firstChild) frag.appendChild(box.firstChild);
+            return frag.childNodes.length ? frag : null;
+        }
+
+        /* 新完成的块只渲染一次 */
+        for (var i = state.done; i < finalCount; i += 1) {
+            var chunk = buildBlock(tokens[i]);
+            if (chunk) el.insertBefore(chunk, state.marker);
+        }
+        state.done = finalCount;
+
+        /* 尾块每次重建：结构是 [已完成…][marker][尾块…]，
+         * 尾块必须落在 marker 之后，下一次才能用 marker.nextSibling 整段清掉。 */
+        var tail = tokens.length ? buildBlock(tokens[tokens.length - 1]) : null;
+        if (tail) el.appendChild(tail);
+
+        state.finalCount = finalCount;
+        state.text = source;
     }
 
     /* ------------------------------------------------------------------ *
@@ -407,8 +505,10 @@
 
     function renderAssistantContent(el, message) {
         if (typeof message.content === 'string' && message.content) {
-            renderMarkdownInto(el, message.content);
+            if (message.streaming === true) renderMarkdownStreaming(el, message.content);
+            else renderMarkdownInto(el, message.content);
         } else {
+            el.__mdStream = null;
             el.textContent = '';
         }
     }
@@ -444,7 +544,8 @@
         if (role === 'assistant' && message.reasoning) {
             var details = ensureReasoning(article);
             var body = details.querySelector('.chat-reasoning__body');
-            renderMarkdownInto(body, message.reasoning);
+            if (message.reasoningStreaming === true) renderMarkdownStreaming(body, message.reasoning);
+            else renderMarkdownInto(body, message.reasoning);
             var summary = details.querySelector('.chat-reasoning__summary');
             summary.textContent = reasoningLabel(message);
             details.open = false;
@@ -467,8 +568,51 @@
         return container.scrollHeight - container.scrollTop - container.clientHeight <= 80;
     }
 
+    function setFollow(next) {
+        next = !!next;
+        if (next === autoFollow) return;
+        autoFollow = next;
+        notifyFollow();
+    }
+
+    function setupFollowWatcher() {
+        if (!container) return;
+        // 底部哨兵 + IntersectionObserver：不读 scrollHeight/scrollTop（避免流式期间
+        // 每帧强制布局），80px rootMargin 与原来的“距底 80px 算跟随”一致。
+        if (followObserver) {
+            followObserver.disconnect();
+            followObserver = null;
+        }
+        if (endSentinel && endSentinel.parentNode) {
+            endSentinel.parentNode.removeChild(endSentinel);
+        }
+        endSentinel = null;
+
+        if (typeof global.IntersectionObserver !== 'function') {
+            // 老内核降级：用原滚动阈值（passive，仍有节流）
+            container.addEventListener('scroll', util.throttle(updateFollow, 90), { passive: true });
+            return;
+        }
+
+        endSentinel = util.e('div', { class: 'chat-end-sentinel', 'aria-hidden': 'true' });
+        container.appendChild(endSentinel);
+
+        followObserver = new global.IntersectionObserver(function (entries) {
+            var entry = entries && entries[0];
+            if (!entry || entry.target !== endSentinel) return;
+            // 面板隐藏（切到其他 tab）时高度为 0，不据此改写跟随状态
+            if (!container.clientHeight) return;
+            setFollow(entry.isIntersecting);
+        }, {
+            root: container,
+            rootMargin: '0px 0px 80px 0px',
+            threshold: 0
+        });
+        followObserver.observe(endSentinel);
+    }
+
     function notifyFollow() {
-        if (typeof options.onFollowChange === 'function') options.onFollowChange(nearBottom());
+        if (typeof options.onFollowChange === 'function') options.onFollowChange(autoFollow);
     }
 
     function updateFollow() {
@@ -742,7 +886,8 @@
         if (message.reasoning) {
             var details = ensureReasoning(article);
             var body = details.querySelector('.chat-reasoning__body');
-            renderMarkdownInto(body, message.reasoning);
+            if (message.reasoningStreaming === true) renderMarkdownStreaming(body, message.reasoning);
+            else renderMarkdownInto(body, message.reasoning);
             var summary = details.querySelector('.chat-reasoning__summary');
             if (message.reasoningStreaming) {
                 summary.textContent = '思考中…';
@@ -885,6 +1030,11 @@
 
     function setStreaming(on) {
         streaming = !!on;
+        /* 流式期间 DOM 每 60ms 重写一次，暂时关掉 select 增强观察器 */
+        if (NC.ui && typeof NC.ui.pauseSelectObserver === 'function') {
+            if (streaming) NC.ui.pauseSelectObserver();
+            else NC.ui.resumeSelectObserver();
+        }
         if (!container) return;
         container.classList.toggle('is-streaming', streaming);
         container.setAttribute('aria-busy', streaming ? 'true' : 'false');
@@ -907,8 +1057,7 @@
         container.textContent = '';
         listEl = util.e('div', { class: 'chat-list' });
         container.appendChild(listEl);
-
-        container.addEventListener('scroll', util.throttle(updateFollow, 90));
+        setupFollowWatcher();
 
         util.delegate(container, 'click', '.chat-msg__action', function (event, button) {
             var article = button.closest('.chat-msg');
@@ -975,6 +1124,8 @@
         clearErrors: clearErrors,
         scrollToBottom: scrollToBottom,
         renderMarkdown: renderMarkdown,
+        renderInto: renderMarkdownInto,
+        renderStreaming: renderMarkdownStreaming,
         openLightbox: openLightbox,
         closeLightbox: closeLightbox,
         getCopyText: getCopyText

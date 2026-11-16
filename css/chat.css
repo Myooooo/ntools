@@ -56,6 +56,14 @@
     margin: 0 auto;
 }
 
+/* 跟随判定哨兵：底部 1px 标记，IntersectionObserver 以 80px rootMargin 观察 */
+.chat-end-sentinel {
+    flex: 0 0 auto;
+    width: 100%;
+    height: 1px;
+    pointer-events: none;
+}
+
 /* --------------------------------------------------------------------------
  * 1. 工具栏：小面积玻璃 + 发丝线；端点/状态/操作用对齐建立层级
  * -------------------------------------------------------------------------- */
@@ -157,7 +165,7 @@ html[data-theme="light"] #chat-profile-select {
     overflow: hidden;
     color: var(--nc-text-3);
     font-size: var(--nc-fs-2xs);
-    letter-spacing: 0.01em;
+    letter-spacing: var(--nc-track-meta);
     white-space: nowrap;
 }
 
@@ -222,16 +230,18 @@ html[data-theme="light"] #chat-profile-select {
     transform: scale(0.97) translateY(-2px);
     opacity: 0;
     visibility: hidden;
+    /* 关闭 120ms，打开 140ms（.is-open 覆盖时长） */
     transition:
-        opacity var(--nc-dur-fast) var(--nc-ease-out),
-        transform var(--nc-dur-fast) var(--nc-ease-out),
-        visibility var(--nc-dur-fast) var(--nc-ease-out);
+        opacity var(--nc-dur-press) var(--nc-ease-out),
+        transform var(--nc-dur-press) var(--nc-ease-out),
+        visibility var(--nc-dur-press) var(--nc-ease-out);
 }
 
 .chat-menu.is-open {
     transform: none;
     opacity: 1;
     visibility: visible;
+    transition-duration: var(--nc-dur-fast);
 }
 
 .chat-menu__item {
@@ -348,6 +358,11 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
     line-height: var(--nc-lh-normal);
     overflow-wrap: anywhere;
     word-break: break-word;
+}
+
+/* 助手正文是主要阅读面：比 UI 行高略松，长回答不挤成一团 */
+.chat-msg--assistant .chat-msg__content {
+    line-height: var(--nc-lh-reading);
 }
 
 .chat-msg--user .chat-msg__content {
@@ -716,7 +731,7 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
     margin: 0.85em 0;
     padding: 11px 13px;
     overflow-x: auto;
-    border: 1px solid var(--nc-border);
+    border: 1px solid var(--nc-code-border, var(--nc-border));
     border-radius: var(--nc-radius-md);
     background: var(--nc-code-bg);
 }
@@ -872,7 +887,7 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
     margin: 0;
     font-size: var(--nc-fs-lg);
     font-weight: 600;
-    letter-spacing: -0.012em;
+    letter-spacing: var(--nc-track-title);
     color: var(--nc-text);
 }
 
@@ -1410,9 +1425,17 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
 /* --------------------------------------------------------------------------
  * 14. 响应式：工具栏紧凑、记录列收窄、输入 dock 安全区
  * -------------------------------------------------------------------------- */
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
+    /* 窄桌面：主机名先让位；完整模型 + 主机保留在 .chat-profile-meta 的提示里 */
+    .chat-meta__host {
+        display: none;
+    }
+}
+
+@media (max-width: 1100px) {
+    /* 再窄一档：模型元信息整列让位，端点名保持完整可读 */
     .chat-profile-meta {
-        gap: var(--nc-space-2);
+        display: none;
     }
 }
 
@@ -1849,7 +1872,7 @@ html[data-lite="true"] .chat-reasoning__summary::before {
     font-family: var(--nc-font-mono);
     font-size: var(--nc-fs-2xs);
     font-variant-numeric: tabular-nums;
-    letter-spacing: 0.01em;
+    letter-spacing: var(--nc-track-meta);
 }
 
 .chat-meta__host {
@@ -2244,8 +2267,10 @@ html[data-lite="true"] #chat-profile-select + .nc-select__trigger {
     opacity: 1;
 }
 
-.chat-code__copy:hover {
-    color: var(--nc-text);
+@media (hover: hover) and (pointer: fine) {
+    .chat-code__copy:hover {
+        color: var(--nc-text);
+    }
 }
 
 @media (hover: none) {
@@ -2273,4 +2298,28 @@ html[data-lite="true"] #chat-profile-select + .nc-select__trigger {
 
 .chat-msg--user .chat-msg__action:disabled {
     color: rgba(255, 255, 255, 0.35);
+}
+
+/* ==========================================================================
+ * 聊天模块按需加载：首屏不注入约 250KB 的聊天栈，加载期间给一层轻提示
+ * ========================================================================== */
+.tools-page[data-page="nchat"] {
+    position: relative;
+}
+
+.chat-boot {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--nc-bg);
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-sm);
+    letter-spacing: var(--nc-track-ui);
+}
+
+.chat-boot[hidden] {
+    display: none;
 }

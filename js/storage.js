@@ -44,28 +44,54 @@
         events.emit('storage:error', { kind: kind, key: key, error: error, memoryMode: !available });
     }
 
+    /* 损坏备份最多保留 MAX_CORRUPT 份：备份是为了救命，不是为了吃满配额 */
+    var MAX_CORRUPT = 3;
+
+    function pruneCorrupted(key) {
+        try {
+            var prefix = key + '.corrupt.';
+            var list = keys(prefix);
+            if (list.length < MAX_CORRUPT) return;
+            list.sort();
+            var drop = list.slice(0, list.length - (MAX_CORRUPT - 1));
+            drop.forEach(function (name) {
+                try {
+                    if (available) global.localStorage.removeItem(name);
+                    delete memory[name];
+                } catch (err) { /* ignore */ }
+            });
+        } catch (err) { /* ignore */ }
+    }
+
     function backupCorrupted(key, raw) {
         try {
             if (raw == null) return;
-            if (available) {
-                var backupKey = key + '.corrupt.' + Date.now();
-                global.localStorage.setItem(backupKey, raw);
-            } else {
-                memory[key + '.corrupt.' + Date.now()] = raw;
-            }
+            pruneCorrupted(key);
+            var backupKey = key + '.corrupt.' + Date.now();
+            if (available) global.localStorage.setItem(backupKey, raw);
+            else memory[backupKey] = raw;
         } catch (err) {
             // 备份失败不阻断主流程
             console.warn('[NC] failed to backup corrupted storage:', key);
         }
     }
 
+    function hasPending(key) {
+        return Object.prototype.hasOwnProperty.call(memory, key);
+    }
+
+    /**
+     * 读取原始串。优先返回"待落盘的内存副本"（写失败但已在内存里生效的新值），
+     * 其次才是 localStorage。否则配额失败后读取会拿到旧值，造成内存与磁盘分叉。
+     */
     function getRaw(key) {
+        if (hasPending(key)) return memory[key];
         try {
             if (available) return global.localStorage.getItem(key);
-            return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : null;
+            return null;
         } catch (err) {
             emitStorageError('read', key, err);
-            return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : null;
+            return null;
         }
     }
 
@@ -75,11 +101,15 @@
             events.emit('quota:warning', { key: key, bytes: size, limit: MAX_BYTES, reason: 'budget' });
         }
         try {
-            if (available) global.localStorage.setItem(key, raw);
-            else memory[key] = raw;
+            if (available) {
+                global.localStorage.setItem(key, raw);
+                delete memory[key];        // 已落盘：清掉待写副本
+            } else {
+                memory[key] = raw;         // 内存模式：这就是唯一副本，不能删
+            }
             return { ok: true, bytes: size, memoryMode: !available };
         } catch (err) {
-            // 写入失败时仍保留内存副本，保证当前会话可用
+            // 写入失败时仍保留内存副本，保证当前会话可用（getRaw 会优先返回它）
             memory[key] = raw;
             var quota = !!(err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014));
             events.emit(quota ? 'quota:warning' : 'storage:error', {
@@ -87,6 +117,52 @@
             });
             return { ok: false, error: err, quota: quota, bytes: size, memoryMode: !available };
         }
+    }
+
+    /**
+     * 写入并读回校验：比对长度即可发现"写进去了但内容被截断/没写进去"的情况。
+     * 对 localStorage 来说这是廉价的自证，避免"以为存上了"。
+     */
+    function setVerified(key, value) {
+        var raw;
+        try {
+            raw = JSON.stringify(value);
+        } catch (err) {
+            emitStorageError('serialize', key, err);
+            return { ok: false, error: err };
+        }
+        var result = setRaw(key, raw);
+        if (!result || result.ok !== true) return result || { ok: false };
+        var back = null;
+        try {
+            back = available ? global.localStorage.getItem(key) : memory[key];
+        } catch (err) {
+            back = null;
+        }
+        if (back !== raw) {
+            var mismatch = new Error('read-back mismatch');
+            result.ok = false;
+            result.error = mismatch;
+            result.mismatch = true;
+            events.emit('storage:error', { key: key, kind: 'verify', error: mismatch, memoryMode: !available });
+        }
+        return result;
+    }
+
+    /** 配额余量估算（0 表示已满或不可估算） */
+    function remainingBytes() {
+        if (!available) return 0;
+        var used = 0;
+        try {
+            for (var i = 0; i < global.localStorage.length; i++) {
+                var name = global.localStorage.key(i);
+                var value = name ? global.localStorage.getItem(name) : null;
+                used += estimateBytes(value || '') + estimateBytes(name || '');
+            }
+        } catch (err) {
+            return 0;
+        }
+        return Math.max(0, MAX_BYTES - used);
     }
 
     function get(key, fallback) {
@@ -169,14 +245,18 @@
         available: available,
         memoryMode: memoryMode,
         maxBytes: MAX_BYTES,
+        maxCorrupt: MAX_CORRUPT,
         get: get,
         set: set,
         getRaw: getRaw,
         setRaw: setRaw,
+        setVerified: setVerified,
         remove: remove,
         has: has,
         keys: keys,
         estimateBytes: estimateBytes,
+        remainingBytes: remainingBytes,
+        hasPending: hasPending,
         onExternalChange: onExternalChange,
         backupCorrupted: backupCorrupted
     };

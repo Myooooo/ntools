@@ -14,7 +14,7 @@
         "Noto Sans Mono CJK SC", ui-monospace, monospace;
     --nc-font-num: var(--nc-font-sans);
 
-    --nc-fs-2xs: 10.5px;
+    --nc-fs-2xs: 11px;
     --nc-fs-xs: 11.5px;
     --nc-fs-sm: 12.5px;
     --nc-fs-md: 13.5px;
@@ -27,7 +27,14 @@
     --nc-lh-tight: 1.2;
     --nc-lh-snug: 1.35;
     --nc-lh-normal: 1.55;
+    --nc-lh-reading: 1.62;
     --nc-lh-relaxed: 1.72;
+
+    /* 字号相关的字距（大字号收紧、小字号放开；不写一个万能值） */
+    --nc-track-display: -0.022em;
+    --nc-track-title: -0.014em;
+    --nc-track-ui: 0.002em;
+    --nc-track-meta: 0.012em;
 
     /* ---------- 间距（4px 栅格） ---------- */
     --nc-space-1: 4px;
@@ -63,6 +70,10 @@
     --nc-dur-slow: 260ms;
     --nc-dur-page: 180ms;
     --nc-dur-panel: 220ms;
+    --nc-dur-tip: 125ms;
+
+    /* 按压反馈：只做 3% 缩放，按下即时、释放快速回弹 */
+    --nc-press-scale: 0.97;
 
     /* ---------- 层级 ---------- */
     --nc-z-sticky: 20;
@@ -136,10 +147,17 @@
 
     --nc-bg-page: var(--nc-ambient);
     --nc-code-bg: rgba(3, 5, 9, 0.5);
+    --nc-code-border: rgba(255, 255, 255, 0.09);
     --nc-scrollbar: rgba(255, 255, 255, 0.13);
     --nc-scrollbar-hover: rgba(255, 255, 255, 0.24);
     --nc-focus-ring: 0 0 0 3px var(--nc-accent-ring);
     --nc-mask-fade: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.5));
+
+    /* 工具提示：深色浮层在两种主题下都保持稳定对比（不跟随页面底色） */
+    --nc-tip-bg: #1f2734;
+    --nc-tip-fg: #eef3fa;
+    --nc-tip-border: rgba(255, 255, 255, 0.14);
+    --nc-tip-shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.72), 0 2px 6px -2px rgba(0, 0, 0, 0.42);
 
     /* 数字排版 */
     --nc-num-feat: "tnum" 1, "lnum" 1;
@@ -206,7 +224,8 @@ html[data-theme="light"] {
     --nc-shadow-accent: 0 6px 20px -8px rgba(47, 111, 219, 0.4);
 
     --nc-bg-page: var(--nc-ambient);
-    --nc-code-bg: rgba(20, 24, 32, 0.045);
+    --nc-code-bg: rgba(20, 24, 32, 0.065);
+    --nc-code-border: rgba(20, 24, 32, 0.14);
     --nc-scrollbar: rgba(20, 24, 32, 0.16);
     --nc-scrollbar-hover: rgba(20, 24, 32, 0.28);
     --nc-focus-ring: 0 0 0 3px var(--nc-accent-ring);
@@ -223,6 +242,7 @@ html[data-lite="true"] {
     --nc-dur-slow: 0ms;
     --nc-dur-page: 0ms;
     --nc-dur-panel: 0ms;
+    --nc-dur-tip: 0ms;
 
     --nc-glass: var(--nc-surface);
     --nc-glass-bg: var(--nc-surface);
@@ -241,10 +261,14 @@ html[data-lite="true"] {
     --nc-shadow-2: none;
     --nc-shadow-3: none;
     --nc-shadow-accent: none;
+    --nc-tip-shadow: none;
 
     --nc-bg-page: var(--nc-bg);
 }
 
+/* Lite：关闭高开销动效（位移/缩放/装饰性循环、骨架闪烁），
+ * 但保留“正在发生”的功能性指示（加载 spinner、流式光标、输入中三点）：
+ * 它们是 transform/opacity 合成动画，单价极低，缺失反而让状态不可读。 */
 html[data-lite="true"] *,
 html[data-lite="true"] *::before,
 html[data-lite="true"] *::after {
@@ -252,6 +276,34 @@ html[data-lite="true"] *::after {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+}
+
+html[data-lite="true"] .nc-spinner,
+html[data-lite="true"] .nc-btn.is-loading::after,
+html[data-lite="true"] .chat-loading__spinner {
+    animation-duration: 800ms !important;
+    animation-iteration-count: infinite !important;
+}
+
+html[data-lite="true"] .chat-typing span {
+    animation-duration: 1.2s !important;
+    animation-iteration-count: infinite !important;
+}
+
+html[data-lite="true"] .chat-msg.is-streaming .chat-caret {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+}
+
+html[data-lite="true"] .nc-skeleton {
+    animation: none !important;
+    background: var(--nc-surface-3);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    html[data-lite="true"] .nc-btn--primary:hover {
+        filter: none;
+    }
 }
 
 /* ---------- 系统级减少动效：保留可读的淡入，去掉位移 ---------- */

@@ -36,6 +36,7 @@
     var listeners = [];
     var lifecycleBound = false;
     var lastSig = '';
+    var savedSig = Object.create(null);
     var db = null;
     var ready = false;
     var useLocal = false;
@@ -319,6 +320,7 @@
             });
         }
         state = doc;
+        markAllSaved();
         if (source) bootError = null;
     }
 
@@ -349,6 +351,38 @@
         return finishBoot();
     }
 
+    /**
+     * 加载期截断保护：会话数/消息数超上限时，先把"未截断的原始数据"存进快照，
+     * 再让内存使用修剪后的版本。这样即使后续保存覆盖，原始数据仍可找回。
+     */
+    function guardTruncation(rawSessions) {
+        if (!Array.isArray(rawSessions)) return;
+        var overSessions = rawSessions.length > MAX_SESSIONS;
+        var overMessages = 0;
+        rawSessions.forEach(function (item) {
+            if (item && Array.isArray(item.messages) && item.messages.length > MAX_MESSAGES) {
+                overMessages += 1;
+            }
+        });
+        if (!overSessions && !overMessages) return;
+        var d = NC.durability;
+        if (d && d.snapshot) {
+            d.snapshot.configure({ prefix: 'chat-raw', slots: 2, namespace: 'chat' });
+            d.snapshot.push('chat-raw', rawSessions, {
+                sessions: rawSessions.length,
+                overMessages: overMessages,
+                maxSessions: MAX_SESSIONS,
+                maxMessages: MAX_MESSAGES
+            });
+        }
+        events.emit('conversation:truncated-on-load', {
+            sessions: rawSessions.length,
+            overMessages: overMessages,
+            maxSessions: MAX_SESSIONS,
+            maxMessages: MAX_MESSAGES
+        });
+    }
+
     function boot(configId) {
         currentConfigId = configId || currentConfigId || 'default';
         if (!NC.chatDb || typeof NC.chatDb.open !== 'function') {
@@ -356,8 +390,17 @@
         }
         return NC.chatDb.open().then(function () {
             db = NC.chatDb;
+            if (typeof db.setDegradedHandler === 'function') {
+                db.setDegradedHandler(function (reason) {
+                    events.emit('conversation:storage-fallback', { reason: 'degraded:' + reason });
+                    useLocal = true;
+                    db = null;
+                    persistLocal();
+                });
+            }
             return db.getAllSessions();
         }).then(function (sessions) {
+            guardTruncation(sessions);
             return db.getMeta('activeByEndpoint').then(function (activeMap) {
                 // 没有任何 IDB 会话时，从旧 localStorage 迁移一次。
                 if (!sessions || !sessions.length) {
@@ -416,15 +459,53 @@
 
     function scheduleSave() { debouncedSave(); }
 
+    /**
+     * 会话签名：任一会话的消息数/更新时间/选中根变化即视为脏会话。
+     * 只写脏会话，而不是每次 clear + 全量重写整个库（写放大 + 双窗口互相覆盖）。
+     */
+    function sessionSig(session) {
+        return (session.updatedAt || 0) + '|' +
+            (session.messages ? session.messages.length : 0) + '|' +
+            (session.selectedRootId || '') + '|' +
+            (session.title || '');
+    }
+
+    function markAllSaved() {
+        savedSig = Object.create(null);
+        state.sessions.forEach(function (session) {
+            savedSig[session.id] = sessionSig(session);
+        });
+    }
+
     function flush() {
         if (useLocal) {
             persistLocal();
             return Promise.resolve(true);
         }
         if (!ready || !db) return Promise.resolve(false);
-        var sessions = state.sessions;
+
+        var toPut = [];
+        var seen = Object.create(null);
+        state.sessions.forEach(function (session) {
+            seen[session.id] = true;
+            if (savedSig[session.id] !== sessionSig(session)) toPut.push(session);
+        });
+        var toDelete = Object.keys(savedSig).filter(function (id) { return !seen[id]; });
         var active = clone(state.activeByEndpoint);
-        return db.replaceAllSessions(sessions).then(function () {
+
+        return Promise.resolve(true).then(function () {
+            if (!toPut.length && !toDelete.length) return true;
+            var put = toPut.length && typeof db.putSessions === 'function'
+                ? db.putSessions(toPut)
+                : Promise.resolve(true);
+            return put.then(function () {
+                if (!toDelete.length) return true;
+                if (typeof db.deleteSessions === 'function') return db.deleteSessions(toDelete);
+                return Promise.all(toDelete.map(function (id) { return db.deleteSession(id); }));
+            });
+        }).then(function () {
+            toPut.forEach(function (session) { savedSig[session.id] = sessionSig(session); });
+            toDelete.forEach(function (id) { delete savedSig[id]; });
             return db.setMeta('activeByEndpoint', active);
         }).then(function () {
             lastSig = '';
@@ -579,6 +660,10 @@
             lifecycleBound = true;
             if (global.addEventListener) {
                 global.addEventListener('pagehide', function () { saveNow(); });
+                /* 切走/最小化时就落盘：pagehide 时发起异步 IndexedDB 事务可能来不及提交 */
+                document.addEventListener('visibilitychange', function () {
+                    if (document.hidden) saveNow();
+                });
                 global.addEventListener('storage', function (event) {
                     if (event && (event.key === KEY || event.key === 'nchat-db-namespace.v1')) reload();
                 });
@@ -826,6 +911,72 @@
         }).catch(function () { return messages(); });
     }
 
+    /** 整库导出（含每个会话的完整消息），用于全量备份 */
+    function exportAllSessions() {
+        return {
+            version: VERSION,
+            app: 'nTools',
+            exportedAt: new Date().toISOString(),
+            activeByEndpoint: clone(state.activeByEndpoint),
+            sessions: state.sessions.map(function (session) {
+                return {
+                    id: session.id,
+                    title: session.title,
+                    endpointId: session.endpointId,
+                    createdAt: session.createdAt,
+                    updatedAt: session.updatedAt,
+                    selectedRootId: session.selectedRootId,
+                    messages: clone(session.messages)
+                };
+            })
+        };
+    }
+
+    /**
+     * 整库导入（替换）。先备份当前状态到 localStorage 回退键，再写入。
+     * @returns {Promise<{ok:boolean, sessions?:number, reason?:string}>}
+     */
+    function importAllSessions(raw) {
+        var data = raw;
+        if (typeof raw === 'string') data = util.parseJSON(raw, null);
+        if (!util.isPlainObject(data) || !Array.isArray(data.sessions)) {
+            return Promise.resolve({ ok: false, reason: 'format' });
+        }
+        var incoming = [];
+        data.sessions.forEach(function (item) {
+            var session = normalizeSession(item);
+            if (session) incoming.push(session);
+        });
+        if (!incoming.length) return Promise.resolve({ ok: false, reason: 'empty' });
+        var previous = { version: VERSION, activeByEndpoint: clone(state.activeByEndpoint), sessions: clone(state.sessions) };
+        try { storage.set(KEY + '.preimport', previous); } catch (err) { /* 尽力而为 */ }
+
+        state.sessions = incoming;
+        if (util.isPlainObject(data.activeByEndpoint)) {
+            state.activeByEndpoint = Object.create(null);
+            Object.keys(data.activeByEndpoint).forEach(function (key) {
+                if (typeof data.activeByEndpoint[key] === 'string') {
+                    state.activeByEndpoint[key] = data.activeByEndpoint[key];
+                }
+            });
+        }
+        ensureActiveMap();
+        currentSessionId = state.activeByEndpoint[currentConfigId] || (incoming[0] ? incoming[0].id : null);
+        if (currentSessionId) currentConfigId = (currentSession() || {}).endpointId || currentConfigId;
+        var job = useLocal || !db
+            ? Promise.resolve(true)
+            : db.replaceAllSessions(state.sessions).then(function () {
+                return db.setMeta('activeByEndpoint', clone(state.activeByEndpoint));
+            });
+        return job.then(function () {
+            markAllSaved();
+            notify('import-all', { sessions: incoming.length });
+            return { ok: true, sessions: incoming.length };
+        }).catch(function (err) {
+            return { ok: false, reason: err && err.message ? err.message : 'write-failed' };
+        });
+    }
+
     function exportBackup() {
         var session = currentSession();
         return {
@@ -926,6 +1077,8 @@
         saveNow: saveNow,
         switchConfig: switchConfig,
         exportBackup: exportBackup,
+        exportAllSessions: exportAllSessions,
+        importAllSessions: importAllSessions,
         importBackup: importBackup,
         exportMarkdown: exportMarkdown,
         reload: reload,

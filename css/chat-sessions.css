@@ -212,13 +212,14 @@
     color: var(--nc-text-2);
     font-size: var(--nc-fs-sm);
     font-weight: 500;
-    letter-spacing: 0.002em;
+    letter-spacing: var(--nc-track-ui);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-/* 桌面收起后会话头也保持窄；移动端由抽屉覆盖 */
-@media (max-width: 900px) {
+/* 窄桌面（≤1100，含 1080p 左右分屏）会话栏改浮层抽屉：
+ * 960px 时 196(rail) + 260(sessions) 会把正文压到 504px，抽屉是唯一可读方案。 */
+@media (max-width: 1100px) {
     .chat-sessions {
         position: absolute;
         z-index: calc(var(--nc-z-modal) - 10);
@@ -310,9 +311,7 @@ html[data-lite="true"] .chat-sessions-scrim {
     to { transform: rotate(360deg); }
 }
 
-html[data-lite="true"] .chat-loading__spinner {
-    animation: none;
-}
+/* Lite：加载 spinner 是功能性指示，保留低速旋转（tokens.css 统一恢复） */
 
 @media (prefers-reduced-motion: reduce) {
     .chat-loading__spinner { animation: none; }

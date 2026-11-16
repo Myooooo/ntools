@@ -18,7 +18,12 @@
     var util = NC.util;
 
     var DEFAULTS = {
-        idleTimeout: 45000,
+        connectTimeout: 15000,      // 建立连接（拿到响应头）
+        firstEventTimeout: 30000,   // 拿到响应头到首个 SSE 事件
+        idleTimeout: 45000,         // 事件之间的最大静默
+        maxDuration: 180000,        // 单次请求总时长上限（心跳不能无限续命）
+        maxRetries: 2,              // 仅对"尚未产出任何内容"的 429/5xx/网络抖动作退避重试
+        retryBaseDelay: 500,
         maxBodyPreview: 2000
     };
 
@@ -121,12 +126,29 @@
      * 也兼容用户直接粘贴完整 /chat/completions（不会重复追加）。
      */
     function buildUrl(base) {
+        var schemaChat = NC.schema && NC.schema.chat;
+        if (schemaChat && typeof schemaChat.resolveChatEndpoint === 'function') {
+            return schemaChat.resolveChatEndpoint(base);
+        }
+        /* 兜底（schema 未加载时）：至少不要把 query 拼进 pathname */
         if (typeof base !== 'string') return '';
         var value = base.trim();
         if (!value || /[\s\u0000-\u001f]/.test(value)) return '';
-        value = value.replace(/\/+$/, '');
-        if (!/\/chat\/completions$/i.test(value)) value += '/chat/completions';
-        return value;
+        var cut = value.indexOf('?');
+        var path = cut === -1 ? value : value.slice(0, cut);
+        var query = cut === -1 ? '' : value.slice(cut);
+        path = path.replace(/\/+$/, '');
+        if (!/\/chat\/completions$/i.test(path)) path += '/chat/completions';
+        return path + query;
+    }
+
+    /* 推理类模型不接受 temperature/top_p（传了会 400），按 modelId 前缀/后缀跳过 */
+    var NO_SAMPLING_RE = /^(o1|o3|o4|gpt-5)([-.]|$)|reasoner$/i;
+
+    function supportsSampling(modelId) {
+        var model = typeof modelId === 'string' ? modelId.trim() : '';
+        if (!model) return false;
+        return !NO_SAMPLING_RE.test(model);
     }
 
     function readSessionId(config) {
@@ -152,7 +174,7 @@
             messages: messages,
             stream: opts.stream !== false
         };
-        if (config.enableAdvanced) {
+        if (config.enableAdvanced && supportsSampling(config.modelId)) {
             var temperature = Number(config.temperature);
             var topP = Number(config.top_p);
             if (isFinite(temperature) && temperature >= 0 && temperature <= 2) payload.temperature = temperature;
@@ -198,6 +220,39 @@
         return total;
     }
 
+    /**
+     * 上下文预算裁剪：从最老的整轮开始丢，保证列表仍以 user 开头。
+     * 不改变最后一条（就是本次要发的内容）。
+     * @returns {{messages:Array, trimmed:number, tokens:number, budget:number, over:boolean}}
+     */
+    function trimMessagesForBudget(messages, options) {
+        var opts = options || {};
+        var budget = util.isFiniteNum(opts.budget) && opts.budget > 0 ? opts.budget : 32000;
+        var list = Array.isArray(messages) ? messages.slice() : [];
+        var tokens = estimateMessagesTokens(list);
+        var trimmed = 0;
+        if (tokens <= budget) {
+            return { messages: list, trimmed: 0, tokens: tokens, budget: budget, over: false };
+        }
+        while (list.length > 1 && tokens > budget) {
+            list.shift();
+            trimmed += 1;
+            tokens = estimateMessagesTokens(list);
+        }
+        while (list.length > 1 && list[0].role !== 'user') {
+            list.shift();
+            trimmed += 1;
+            tokens = estimateMessagesTokens(list);
+        }
+        return {
+            messages: list,
+            trimmed: trimmed,
+            tokens: estimateMessagesTokens(list),
+            budget: budget,
+            over: tokens > budget
+        };
+    }
+
     function computeStats(options) {
         var opts = options || {};
         var usage = opts.usage || {};
@@ -235,8 +290,58 @@
         }
     }
 
+    function readRetryAfter(response) {
+        try {
+            if (!response || !response.headers || typeof response.headers.get !== 'function') return 0;
+            var raw = response.headers.get('retry-after');
+            if (!raw) return 0;
+            var secs = parseInt(raw, 10);
+            if (isFinite(secs) && secs >= 0) return Math.min(secs * 1000, 30000);
+            var when = Date.parse(raw);
+            if (isFinite(when)) return Math.min(Math.max(0, when - Date.now()), 30000);
+        } catch (err) { /* ignore */ }
+        return 0;
+    }
+
+    /**
+     * 只对"尚未产出任何内容"的瞬时错误重试：
+     * 429 / 5xx / 408 / 网络抖动。已开始输出的错误重试会造成重复消息。
+     */
+    function isRetryableError(result) {
+        if (!result || result.ok) return false;
+        var error = result.error || {};
+        if (error.partial) return false;
+        if (error.type === 'network') return true;
+        if (error.type === 'http') {
+            return error.status === 429 || error.status === 408 || error.status >= 500;
+        }
+        return false;
+    }
+
+    function sleepWithAbort(ms, signal) {
+        return new Promise(function (resolve) {
+            var done = false;
+            function finish() {
+                if (done) return;
+                done = true;
+                resolve();
+            }
+            var timer = setTimeout(finish, ms);
+            if (signal) {
+                if (signal.aborted) { clearTimeout(timer); finish(); return; }
+                signal.addEventListener('abort', function () { clearTimeout(timer); finish(); }, { once: true });
+            }
+        });
+    }
+
+    var CONTEXT_HINT_RE = /context|maximum length|too long|token limit|reduce the length/i;
+
     function extractErrorMessage(body, statusText) {
         if (!body) return statusText || '请求失败';
+        if (CONTEXT_HINT_RE.test(body)) {
+            return '上下文长度超出服务端上限：请新建会话，或在设置中调低上下文预算后重试（原文：' +
+                String(body).replace(/\s+/g, ' ').slice(0, 160) + '）';
+        }
         try {
             var data = JSON.parse(body);
             if (data && data.error) {
@@ -483,7 +588,9 @@
         var externalOff = null;
         var aborted = false;
         var timedOut = false;
-        var idleTimer = null;
+        var timeoutPhase = '';
+        var phaseTimer = null;
+        var maxTimer = null;
         var sawAnyData = false;
         var gotOutput = false;
         var usage = null;
@@ -500,21 +607,51 @@
         }
 
         function cleanup() {
-            if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+            if (phaseTimer) { clearTimeout(phaseTimer); phaseTimer = null; }
+            if (maxTimer) { clearTimeout(maxTimer); maxTimer = null; }
             if (opts.signal && externalOff) externalOff();
         }
 
-        function resetIdle() {
-            if (idleTimer) clearTimeout(idleTimer);
-            idleTimer = setTimeout(function () {
+        function clearPhase() {
+            if (phaseTimer) { clearTimeout(phaseTimer); phaseTimer = null; }
+        }
+
+        function armTimer(phase, ms) {
+            clearPhase();
+            timeoutPhase = phase;
+            phaseTimer = setTimeout(function () {
                 timedOut = true;
                 if (controller) controller.abort();
-            }, DEFAULTS.idleTimeout);
+            }, ms);
+        }
+
+        function armIdle() {
+            armTimer('idle', DEFAULTS.idleTimeout);
+        }
+
+        function timeoutMessage() {
+            var secs = function (ms) { return Math.round(ms / 1000) + ' 秒'; };
+            if (timeoutPhase === 'connect') {
+                return '连接超时：' + secs(DEFAULTS.connectTimeout) + '内未建立连接，请检查网关地址与网络';
+            }
+            if (timeoutPhase === 'first-event') {
+                return '首包超时：' + secs(DEFAULTS.firstEventTimeout) + '内未收到任何数据';
+            }
+            if (timeoutPhase === 'max') {
+                return '总时长超时：超过' + secs(DEFAULTS.maxDuration) + '仍未结束，已中止';
+            }
+            return '数据流中断：' + secs(DEFAULTS.idleTimeout) + '未收到新数据';
         }
 
         function markOutput() {
             if (!firstTokenAt) firstTokenAt = Date.now();
             gotOutput = true;
+        }
+
+        /* 标记"已经吐过内容"：这类错误绝不能重试，否则会产生重复消息 */
+        function errorResult(error) {
+            if (answerText || reasoningText) error.partial = true;
+            return { ok: false, error: error };
         }
 
         var thinkFilter = createThinkFilter({
@@ -606,7 +743,12 @@
                 externalOff = function () { opts.signal.removeEventListener('abort', onExternalAbort); };
             }
 
-            resetIdle();
+            armTimer('connect', DEFAULTS.connectTimeout);
+            maxTimer = setTimeout(function () {
+                timedOut = true;
+                timeoutPhase = 'max';
+                if (controller) controller.abort();
+            }, DEFAULTS.maxDuration);
             var response;
             try {
                 response = await global.fetch(url, {
@@ -622,8 +764,8 @@
                 });
             } catch (error) {
                 if (aborted) return { ok: true, aborted: true, usage: null, content: '', reasoning: '' };
-                if (timedOut) return { ok: false, error: { type: 'timeout', message: '请求超时：连接或首包超时' } };
-                return { ok: false, error: { type: 'network', message: mapNetworkError(error), error: error } };
+                if (timedOut) return errorResult({ type: 'timeout', message: timeoutMessage(), phase: timeoutPhase });
+                return errorResult({ type: 'network', message: mapNetworkError(error), error: error });
             }
 
             if (!response.ok) {
@@ -631,16 +773,14 @@
                 if (includeUsage && !gotOutput && (response.status === 400 || response.status === 422)) {
                     return { ok: false, retryable: true };
                 }
-                return {
-                    ok: false,
-                    error: {
-                        type: 'http',
-                        status: response.status,
-                        statusText: response.statusText,
-                        body: body,
-                        message: extractErrorMessage(body, response.statusText)
-                    }
-                };
+                return errorResult({
+                    type: 'http',
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: body,
+                    retryAfter: readRetryAfter(response),
+                    message: extractErrorMessage(body, response.statusText)
+                });
             }
 
             // 部分兼容网关忽略 stream:true，直接返回 application/json；
@@ -661,10 +801,12 @@
                 if (jsonBody) {
                     handleJson(jsonBody);
                     jsonMode = true;
+                    clearPhase();
                 }
             }
 
             if (!jsonMode && response.body && typeof response.body.getReader === 'function' && typeof global.TextDecoder === 'function') {
+                armTimer('first-event', DEFAULTS.firstEventTimeout);
                 var reader = response.body.getReader();
                 var decoder = new global.TextDecoder('utf-8');
                 // 兜底：即使 fetch 实现未把 signal 传播到 body 流，也主动取消读取
@@ -677,7 +819,7 @@
                     while (true) {
                         var chunk = await reader.read();
                         if (chunk.done) break;
-                        resetIdle();
+                        armIdle();
                         parser.feed(decoder.decode(chunk.value, { stream: true }));
                         if (parser.isDone() || apiErrorMessage) {
                             try { reader.cancel(); } catch (err) { /* ignore */ }
@@ -686,9 +828,9 @@
                     }
                     if (!parser.isDone()) parser.end();
                 } catch (error) {
-                    if (timedOut) return { ok: false, error: { type: 'timeout', message: '请求超时：数据流中断' } };
+                    if (timedOut) return errorResult({ type: 'timeout', message: timeoutMessage(), phase: timeoutPhase });
                     if (aborted) return { ok: true, aborted: true, usage: usage, content: answerText, reasoning: reasoningText };
-                    return { ok: false, error: { type: 'network', message: mapNetworkError(error), error: error } };
+                    return errorResult({ type: 'network', message: mapNetworkError(error), error: error });
                 } finally {
                     if (controller) controller.signal.removeEventListener('abort', abortHook);
                 }
@@ -712,12 +854,12 @@
 
             thinkFilter.end();
 
-            if (timedOut) return { ok: false, error: { type: 'timeout', message: '请求超时：长时间未收到数据' } };
+            if (timedOut) return { ok: false, error: { type: 'timeout', message: timeoutMessage(), phase: timeoutPhase } };
             if (aborted) {
                 return { ok: true, aborted: true, usage: usage, content: answerText, reasoning: reasoningText };
             }
-            if (apiErrorMessage) return { ok: false, error: { type: 'api', message: apiErrorMessage } };
-            if (!sawAnyData) return { ok: false, error: { type: 'empty', message: '服务端未返回有效的流式数据（可能是非 SSE 响应）' } };
+            if (apiErrorMessage) return errorResult({ type: 'api', message: apiErrorMessage });
+            if (!sawAnyData) return errorResult({ type: 'empty', message: '服务端未返回有效的流式数据（可能是非 SSE 响应）' });
 
             var endedAt = Date.now();
             var stats = computeStats({
@@ -787,9 +929,24 @@
                 onReasoning: function (text) { call(opts.onReasoning, text); },
                 onUsage: function (usage) { call(opts.onUsage, usage); }
             };
-            var result = await streamOnce(runOpts, true);
+            var includeUsage = true;
+            var result = await streamOnce(runOpts, includeUsage);
+            /* 兼容：网关不认 stream_options 时去掉 include_usage 重来一次 */
             if (result && result.retryable) {
-                result = await streamOnce(runOpts, false);
+                includeUsage = false;
+                result = await streamOnce(runOpts, includeUsage);
+            }
+            /* 瞬时错误退避重试：只在"一个字都没吐出来"时进行 */
+            var attempt = 0;
+            while (!abortedByCaller && !settled && isRetryableError(result) && attempt < DEFAULTS.maxRetries) {
+                attempt += 1;
+                var hinted = result && result.error && util.isFiniteNum(result.error.retryAfter)
+                    ? result.error.retryAfter
+                    : 0;
+                var delay = hinted || Math.min(DEFAULTS.retryBaseDelay * Math.pow(2, attempt - 1), 8000);
+                await sleepWithAbort(delay, signal);
+                if (abortedByCaller || settled) break;
+                result = await streamOnce(runOpts, includeUsage);
             }
             if (settled) return;
             if (!result) {
@@ -826,12 +983,18 @@
         chat: chat,
         buildUrl: buildUrl,
         buildPayload: buildPayload,
+        supportsSampling: supportsSampling,
+        isRetryableError: isRetryableError,
+        readRetryAfter: readRetryAfter,
+        extractErrorMessage: extractErrorMessage,
         normalizeApiFormat: normalizeApiFormat,
         hasImageContent: hasImageContent,
+        isAllowedImageUrl: allowedImage,
         contentParts: contentParts,
         readChoiceFragments: readChoiceFragments,
         estimateTokens: estimateTokens,
         estimateMessagesTokens: estimateMessagesTokens,
+        trimMessagesForBudget: trimMessagesForBudget,
         computeStats: computeStats,
         normalizeMessageForApi: normalizeMessageForApi,
         normalizeUserContent: normalizeUserContent,

@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+    <!-- 内容安全策略：默认只允许同源（file:// 下显式放行 file:）。
+         端点由用户配置，connect-src 必须放开；其余一律收紧。 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob: https: http:; font-src 'self' file: data:; connect-src *; media-src 'self' file: blob:; frame-src 'self' file:; object-src 'none'; base-uri 'none'">
     <meta name="color-scheme" content="dark light">
     <meta name="theme-color" id="nc-theme-color" content="#0b0e13">
     <title>nTools · 工具箱</title>
@@ -17,7 +20,6 @@
     <link rel="stylesheet" href="css/chat-sessions.css">
     <link rel="stylesheet" href="css/settings.css">
     <link rel="stylesheet" href="css/rail.css">
-    <link rel="stylesheet" href="css/timeline.css">
     <link rel="stylesheet" href="css/interaction.css">
     <link rel="stylesheet" href="css/email-tab.css">
 
@@ -28,37 +30,27 @@
     <script defer src="js/polyfills.js"></script>
     <script defer src="js/marked.min.js"></script>
     <script defer src="js/purify.min.js"></script>
-    <script defer src="js/qrcode.min.js"></script>
     <script defer src="js/core.js"></script>
     <script defer src="js/compat.js"></script>
     <script defer src="js/icons.js"></script>
     <script defer src="js/storage.js"></script>
+    <script defer src="js/durability.js"></script>
     <script defer src="js/ui.js"></script>
+    <script defer src="js/tooltip.js"></script>
     <script defer src="js/theme.js"></script>
     <!-- 全局模型端点 / AI / 设置 -->
     <script defer src="js/schema-chat.js"></script>
     <script defer src="js/llm-store.js"></script>
     <script defer src="js/ai.js"></script>
     <script defer src="js/settings-panel.js"></script>
-    <!-- 页面模块：原生聊天（去掉 iframe） -->
-    <script defer src="js/sse.js"></script>
-    <script defer src="js/api.js"></script>
-    <script defer src="js/chat-db.js"></script>
-    <script defer src="js/conversation-store.js"></script>
-    <script defer src="js/settings-store.js"></script>
+    <!-- 页面模块：原生聊天 → 首屏不加载，首次进入 nChat 时动态注入（约 250KB） -->
     <script defer src="js/markdown-enhance.js"></script>
-    <script defer src="js/message-view.js"></script>
-    <script defer src="js/composer.js"></script>
-    <script defer src="js/settings-view.js"></script>
-    <script defer src="js/chat-controller.js"></script>
-    <script defer src="js/chat-sessions.js"></script>
-    <script defer src="js/chat-embed.js"></script>
     <!-- 页面模块：Todo 专项 -->
     <script defer src="js/schema-todo.js"></script>
     <script defer src="js/todo-store.js"></script>
+    <script defer src="js/todo-row.js"></script>
     <script defer src="js/todo-view.js"></script>
     <script defer src="js/todo-time.js"></script>
-    <script defer src="js/todo-timeline.js"></script>
     <script defer src="js/todo-ai.js"></script>
     <script defer src="js/todo.js"></script>
     <!-- 页面模块：工具叶子（由 platform-compat 提供，未就位时 ntools-app.js 做降级） -->
@@ -120,7 +112,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" title="版本">v5.1</span>
+            <span class="tools-rail__version" id="rail-version" title="版本">v5.3</span>
         </div>
     </aside>
 
@@ -130,9 +122,16 @@
             <span class="tools-banner__icon" data-icon="alert" data-icon-size="16"></span>
             <span class="tools-banner__text" id="app-banner-text"></span>
             <button type="button" class="nc-btn nc-btn--sm nc-btn--ghost" id="app-banner-action" hidden></button>
-            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm" id="app-banner-close" aria-label="关闭提示">
+            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm" id="app-banner-close" title="关闭提示" aria-label="关闭提示">
                 <span data-icon="x" data-icon-size="15"></span>
             </button>
+        </div>
+
+        <!-- 数据韧性条：保存失败 / 只读镜像 / 加载闸门常驻提示（不自动消失） -->
+        <div class="tools-banner tools-banner--durability" id="durability-bar" role="status" aria-live="polite" hidden>
+            <span class="tools-banner__icon" data-icon="shield" data-icon-size="16"></span>
+            <span class="tools-banner__text" id="durability-text"></span>
+            <span class="tools-banner__actions" id="durability-actions"></span>
         </div>
 
         <main class="tools-pages" id="tools-pages">
@@ -286,7 +285,20 @@
 
             <!-- ---------------- Tab：邮件管理（本地嵌入，不显示本页标题栏） ---------------- -->
             <section class="tools-page tools-page--email" id="page-email" data-panel="email" data-page="email" aria-label="邮件管理" hidden>
-                <iframe class="email-frame" id="email-frame" title="邮件管理" src="email/email-manager.html"></iframe>
+                <iframe class="email-frame" id="email-frame" title="邮件管理"
+                        src="js/mail/email-manager.html"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"></iframe>
+                <div class="email-missing" id="email-missing" hidden>
+                    <div class="email-missing__title">邮件管理页未加载</div>
+                    <p class="email-missing__text">
+                        未找到或无法加载 <code>js/mail/email-manager.html</code>。
+                        请确认该文件与主程序一起部署（目录结构保持一致），然后点击重试。
+                    </p>
+                    <div class="email-missing__actions">
+                        <button type="button" class="nc-btn nc-btn--primary nc-btn--sm" id="email-retry-btn">重试加载</button>
+                        <button type="button" class="nc-btn nc-btn--sm nc-btn--ghost" id="email-dismiss-btn">仍然留在此页</button>
+                    </div>
+                </div>
             </section>
 
             <!-- ---------------- Tab 2：二维码 ---------------- -->
@@ -461,7 +473,7 @@
                                 <span data-icon="edit" data-icon-size="15"></span>
                                 <span>系统提示词</span>
                             </button>
-                            <button id="chat-menu-btn" class="nc-btn nc-btn--icon nc-btn--sm" type="button" aria-label="聊天菜单" aria-haspopup="menu" aria-expanded="false">
+                            <button id="chat-menu-btn" class="nc-btn nc-btn--icon nc-btn--sm" type="button" title="聊天菜单" aria-label="聊天菜单" aria-haspopup="menu" aria-expanded="false">
                                 <span data-icon="more" data-icon-size="16"></span>
                             </button>
                         </div>
@@ -531,7 +543,7 @@
                                 <h2 class="chat-prompt-sheet__title" id="chat-prompt-title">聊天系统提示词</h2>
                                 <p class="chat-prompt-sheet__sub">当前端点：<span id="chat-system-prompt-profile">—</span>。保存后对后续消息生效。</p>
                             </div>
-                            <button id="chat-system-prompt-cancel" class="nc-btn nc-btn--icon nc-btn--sm" type="button" aria-label="关闭">
+                            <button id="chat-system-prompt-cancel" class="nc-btn nc-btn--icon nc-btn--sm" type="button" title="关闭" aria-label="关闭">
                                 <span data-icon="x" data-icon-size="16"></span>
                             </button>
                         </header>

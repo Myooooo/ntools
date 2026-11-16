@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>邮箱维护工具</title>
+<link rel="stylesheet" href="../../css/mail.css">
+</head>
+<body>
+  <div class="app-shell" id="app-shell">
+    <header class="app-bar">
+      <div class="bar-inner">
+        <span class="bar-title"><i data-icon="mail" data-w="20" data-h="20"></i> 邮箱维护工具</span>
+
+        <div class="bar-actions">
+          <button class="btn btn-primary" onclick="openAddEditModal()"><i data-icon="plus-circle" data-w="14" data-h="14"></i>添加邮箱</button>
+          <button class="btn btn-ghost" onclick="openBackupTab('json')"><i data-icon="database" data-w="14" data-h="14"></i>备份恢复</button>
+          <button class="btn btn-ghost" onclick="openGroupsModal()"><i data-icon="folder-cog" data-w="14" data-h="14"></i>分组管理</button>
+          <button class="btn btn-ghost" id="theme-toggle-btn" onclick="toggleTheme()" title="切换深色 / 浅色模式">
+            <i data-icon="moon" data-w="14" data-h="14"></i><span id="theme-toggle-label">深色</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <!-- 左侧导航 -->
+      <aside class="sidebar-stack">
+        <div class="panel side-pad">
+          <div class="side-title">
+            <span>分组目录</span>
+            <span class="nav-count" id="stat-total-count">0 条</span>
+          </div>
+          <div class="nav-list" id="group-nav-list"></div>
+          <div class="side-divider"></div>
+          <button class="btn-dashed" onclick="openGroupsModal()"><i data-icon="folder-plus" data-w="13" data-h="13"></i>创建新分组</button>
+        </div>
+
+        <div class="panel quick-card side-pad">
+          <div class="quick-title"><i data-icon="send" data-w="14" data-h="14"></i>生成收件人</div>
+          <p class="quick-desc">勾选所需邮箱后，一键生成邮件客户端可识别的收件人列表文本。</p>
+          <button class="btn btn-primary btn-block" onclick="openRecipientModal()">
+            <i data-icon="clipboard-copy" data-w="14" data-h="14"></i>
+            生成收件人列表（<span id="btn-selected-count">0</span>）
+          </button>
+        </div>
+      </aside>
+
+      <!-- 右侧主数据区 -->
+      <section class="content-column">
+        <!-- 搜索 + 批量操作 + 直接一级/二级/团队/部门下拉筛选 -->
+        <div class="panel toolbar">
+          <div class="toolbar-top">
+            <div class="search-wrap">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
+              <input type="text" id="search-input" class="control-input search-input" placeholder="搜索邮箱、描述、角色、团队或部门..."
+                oninput="handleSearch(this.value)">
+              <button class="search-clear hidden" id="search-clear-btn" onclick="clearSearch()"><i data-icon="x" data-w="13" data-h="13"></i></button>
+            </div>
+
+            <div class="toolstrip">
+              <button class="btn btn-ghost" onclick="toggleSelectAllFiltered()"><i data-icon="check-square" data-w="13" data-h="13"></i><span id="select-all-btn-text">全选当前</span></button>
+              <button class="btn btn-danger-ghost hidden" id="batch-del-btn" onclick="batchDeleteSelected()"><i data-icon="trash-2" data-w="13" data-h="13"></i>批量删除</button>
+
+              <div class="dropdown" id="batch-move-dropdown">
+                <button class="btn btn-ghost hidden" id="batch-move-btn" onclick="toggleBatchMoveDropdown(event)">
+                  <i data-icon="folder-cog" data-w="13" data-h="13"></i>移动至分组
+                </button>
+                <div class="dropdown-menu" id="batch-move-menu"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 分类独立筛选下拉 -->
+          <div class="filter-bar" id="filter-bar">
+            <span class="filter-lbl"><i data-icon="list-filter" data-w="13" data-h="13"></i>筛选</span>
+            <select id="filter-l1-select" class="control-select filter-sel" onchange="handleDirectFilterChange('l1', this.value)">
+              <option value="">类别（全部）</option>
+            </select>
+            <select id="filter-l2-select" class="control-select filter-sel" onchange="handleDirectFilterChange('l2', this.value)">
+              <option value="">部门/机构（全部）</option>
+            </select>
+            <select id="filter-l3-select" class="control-select filter-sel" onchange="handleDirectFilterChange('l3', this.value)">
+              <option value="">团队/部门（全部）</option>
+            </select>
+            <button class="filter-reset" id="filter-reset-btn" onclick="resetCategoryFilter()"><i data-icon="rotate-ccw" data-w="12" data-h="12"></i>重置</button>
+          </div>
+        </div>
+
+        <!-- 邮箱列表（仅此区域滚动） -->
+        <div class="panel panel-list list-scroll" id="list-scroll">
+          <div class="list-head">
+            <div>
+              <span class="list-title" id="current-group-title">全部邮箱</span>
+              <span class="list-meta" id="filtered-records-count">　共 0 条记录</span>
+            </div>
+            <span class="list-meta">已选：<strong id="header-selected-count">0</strong></span>
+          </div>
+
+          <div id="email-list-container"></div>
+
+          <div id="empty-state" class="empty hidden">
+            <div class="empty-icon"><i data-icon="inbox" data-w="24" data-h="24"></i></div>
+            <div class="empty-title">暂无邮箱数据</div>
+            <p class="empty-desc">当前筛选条件下没有匹配的邮箱记录，可尝试重置筛选或新增数据。</p>
+            <button class="btn btn-primary" onclick="openAddEditModal()"><i data-icon="plus" data-w="13" data-h="13"></i>添加邮箱</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 悬浮操作栏 -->
+    <div class="float-bar" id="floating-action-bar">
+      <span class="float-count"><span class="pulse"></span>已勾选 <strong id="float-selected-count">0</strong> 项</span>
+      <span class="float-divider"></span>
+      <button class="btn btn-primary" onclick="openRecipientModal()"><i data-icon="copy" data-w="13" data-h="13"></i>生成收件人列表</button>
+      <button class="btn btn-muted" onclick="clearAllSelection()">取消选择</button>
+    </div>
+  </div>
+
+  <!-- 启动加载层 -->
+  <div class="boot-mask" id="boot-mask">
+    <div class="boot-logo"><i data-icon="mail" data-w="28" data-h="28"></i></div>
+    <div class="boot-ring"></div>
+    <div class="boot-text">正在加载数据，请稍候…</div>
+  </div>
+
+  <!-- ==================== 模态框 ==================== -->
+
+  <!-- 添加邮箱（批量文本导入 + 单条添加） -->
+  <div id="modal-add-edit" class="modal-mask closed">
+    <div class="modal wide-lg">
+      <div class="modal-head">
+        <div class="tabs" style="background:var(--surface-subtle);padding:3px;border-radius:var(--radius-md);border:1px solid var(--border-color)">
+          <button class="tab" id="tab-import-btn" onclick="switchAddEditTab('import')">批量文本导入</button>
+          <button class="tab" id="tab-single-btn" onclick="switchAddEditTab('single')">单条添加</button>
+        </div>
+        <button class="modal-x" onclick="closeModal('modal-add-edit')"><i data-icon="x" data-w="16" data-h="16"></i></button>
+      </div>
+
+      <!-- 批量文本导入面板（默认） -->
+      <div id="add-import-panel" class="modal-body">
+        <div class="flex-spread mb-1">
+          <label class="label">粘贴原始邮箱文本 <span class="req">*</span></label>
+          <button class="hint-brand" type="button" style="border:0;background:transparent;cursor:pointer" onclick="fillSampleText()">填入示例数据</button>
+        </div>
+        <textarea id="batch-import-textarea" class="control-textarea" rows="8"
+          placeholder="使用分号或逗号隔开"></textarea>
+
+        <div class="mt-3" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label class="label">导入至分组 <span class="req">*</span></label>
+            <div class="multiselect" id="import-ms" data-name="importMs" onclick="toggleMultiselect(this, event)">
+              <div class="multiselect-trigger">
+                <span class="ms-selection ms-selection-import">
+                  <span class="ms-placeholder" id="import-ms-placeholder">请选择目标分组</span>
+                </span>
+                <span class="ms-caret"><i data-icon="chevron-down" data-w="14" data-h="14"></i></span>
+              </div>
+              <div class="ms-menu" id="import-ms-menu"></div>
+            </div>
+          </div>
+          <div>
+            <label class="label">重复邮箱处理策略 <span class="req">*</span></label>
+            <select id="import-conflict-policy" class="control-select">
+              <option value="skip">跳过已存在的邮箱</option>
+              <option value="update">合并更新已有信息</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:12px">
+          <label class="label">批量导入备注</label>
+          <input type="text" id="import-notes-input" class="control-input" placeholder="请填写备注">
+        </div>
+
+        <div class="modal-foot">
+          <button type="button" class="btn btn-muted" onclick="closeModal('modal-add-edit')">取消</button>
+          <button type="button" class="btn btn-primary" onclick="handleExecuteImport()">解析并导入</button>
+        </div>
+      </div>
+
+      <!-- 单条添加面板 -->
+      <div id="add-single-panel" class="modal-body hidden">
+        <form id="form-add-edit" onsubmit="handleSaveEmail(event)">
+          <div class="field">
+            <label class="label">邮箱地址 <span class="req">*</span></label>
+            <input type="email" id="input-email" class="control-input" required placeholder="请填写邮箱地址">
+          </div>
+          <div class="field">
+            <div class="flex-spread">
+              <label class="label">描述 / 显示名称 <span class="req">*</span></label>
+              <span class="hint-brand">支持结构解析</span>
+            </div>
+            <input type="text" id="input-desc" class="control-input" required oninput="handleDescInputChange(this.value)"
+              placeholder="请填写描述信息">
+            <p class="hint">标准格式：角色（“团队/部门”/“部门/机构”/“类别”），层级间以 / 分隔</p>
+          </div>
+
+          <div id="desc-parse-preview" class="parse-box">
+            <div class="parse-label"><i data-icon="folder-cog" data-w="13" data-h="13"></i>结构解析结果</div>
+            <div class="parse-tags" id="desc-parse-tags"></div>
+          </div>
+
+          <div class="field">
+            <label class="label">所属分组<span class="req">*</span></label>
+            <div class="multiselect" id="edit-ms" data-name="editMs" onclick="toggleMultiselect(this, event)">
+              <div class="multiselect-trigger">
+                <span class="ms-selection ms-selection-edit">
+                  <span class="ms-placeholder" id="edit-ms-placeholder">请选择所属分组</span>
+                </span>
+                <span class="ms-caret"><i data-icon="chevron-down" data-w="14" data-h="14"></i></span>
+              </div>
+              <div class="ms-menu" id="edit-ms-menu"></div>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label">备注信息</label>
+            <input type="text" id="input-notes" class="control-input" placeholder="请填写补充信息">
+          </div>
+
+          <div class="modal-foot">
+            <button type="button" class="btn btn-muted" onclick="closeModal('modal-add-edit')">取消</button>
+            <button type="submit" class="btn btn-primary">保存记录</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑邮箱（独立弹窗，以 id 为主键） -->
+  <div id="modal-edit" class="modal-mask closed">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 class="modal-title">编辑邮箱记录</h3>
+        <button class="modal-x" onclick="closeModal('modal-edit')"><i data-icon="x" data-w="16" data-h="16"></i></button>
+      </div>
+      <form class="modal-body" id="form-edit-email" onsubmit="handleEditEmail(event)">
+        <input type="hidden" id="edit-email-id">
+        <div class="field">
+          <label class="label">邮箱地址 <span class="req">*</span></label>
+          <input type="email" id="edit-input-email" class="control-input" required placeholder="请填写邮箱地址">
+        </div>
+        <div class="field">
+          <div class="flex-spread">
+            <label class="label">描述 / 显示名称 <span class="req">*</span></label>
+            <span class="hint-brand">支持结构解析</span>
+          </div>
+          <input type="text" id="edit-input-desc" class="control-input" required oninput="handleEditDescInputChange(this.value)"
+            placeholder="请填写描述信息">
+          <p class="hint">标准格式：角色（“团队/部门”/“部门/机构”/“类别”），层级间以 / 分隔</p>
+        </div>
+
+        <div id="desc-parse-preview-2" class="parse-box">
+          <div class="parse-label"><i data-icon="folder-cog" data-w="13" data-h="13"></i>结构解析结果</div>
+          <div class="parse-tags" id="desc-parse-tags-2"></div>
+        </div>
+
+        <div class="field">
+          <label class="label">所属分组<span class="req">*</span></label>
+          <div class="multiselect" id="edit-ms-2" data-name="editMs2" onclick="toggleMultiselect(this, event)">
+            <div class="multiselect-trigger">
+              <span class="ms-selection ms-selection-edit">
+                <span class="ms-placeholder" id="edit-ms-placeholder-2">请选择所属分组</span>
+              </span>
+              <span class="ms-caret"><i data-icon="chevron-down" data-w="14" data-h="14"></i></span>
+            </div>
+            <div class="ms-menu" id="edit-ms-menu-2"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label">备注信息</label>
+          <input type="text" id="edit-input-notes" class="control-input" placeholder="请填写补充信息">
+        </div>
+
+        <div class="modal-foot">
+          <button type="button" class="btn btn-muted" onclick="closeModal('modal-edit')">取消</button>
+          <button type="submit" class="btn btn-primary">保存修改</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 生成收件人 -->
+  <div id="modal-recipient" class="modal-mask closed">
+    <div class="modal wide-lg">
+      <div class="modal-head">
+        <div>
+          <h3 class="modal-title">已生成收件人列表</h3>
+          <p class="modal-sub">已整合所选 <strong id="recip-count-badge" style="color:var(--brand)">0</strong> 位收件人</p>
+        </div>
+        <button class="modal-x" onclick="closeModal('modal-recipient')"><i data-icon="x" data-w="16" data-h="16"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="flex-spread mb-1">
+          <div class="tabs" style="background:var(--surface-subtle);border-radius:var(--radius-md);padding:3px;border:1px solid var(--border-color)">
+            <button class="tab active" id="rf-standard" onclick="changeRecipientFormat('standard')">标准完整格式</button>
+            <button class="tab" id="rf-simple" onclick="changeRecipientFormat('simple')">纯邮箱分号</button>
+            <button class="tab" id="rf-comma" onclick="changeRecipientFormat('comma')">逗号隔开</button>
+          </div>
+          <span class="hint">可直接粘贴至 Outlook / Foxmail / 网页邮箱</span>
+        </div>
+
+        <textarea id="recipient-result-text" class="control-textarea readonly" readonly rows="7" style="user-select:all"></textarea>
+
+        <div class="mt-3" style="max-height:120px;overflow-y:auto;padding:10px;background:var(--surface-subtle);border:1px solid var(--border-color);border-radius:var(--radius-md)">
+          <div class="hint-brand mb-1">收件人列表</div>
+          <div style="display:flex;flex-direction:column;gap:4px" id="recipient-chips-list"></div>
+        </div>
+
+        <div class="modal-foot flex-spread">
+          <button type="button" class="btn btn-ghost" onclick="downloadRecipientText()"><i data-icon="download" data-w="13" data-h="13"></i>另存为 .txt 文件</button>
+          <button type="button" class="btn btn-primary" onclick="copyGeneratedRecipients()"><i data-icon="clipboard-check" data-w="13" data-h="13"></i><span id="copy-recip-btn-text">一键复制收件人列表</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分组管理 -->
+  <div id="modal-groups" class="modal-mask closed">
+    <div class="modal wide-md">
+      <div class="modal-head">
+        <div style="display:flex;align-items:center;gap:8px">
+          <i data-icon="folder-cog" data-w="16" data-h="16"></i>
+          <h3 class="modal-title">组织分组维护</h3>
+        </div>
+        <button class="modal-x" onclick="closeModal('modal-groups')"><i data-icon="x" data-w="16" data-h="16"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <div style="display:flex;gap:8px">
+          <input type="text" id="new-group-name-input" class="control-input grow" placeholder="输入新分组名称...">
+          <button class="btn btn-primary" onclick="handleAddNewGroup()">添加分组</button>
+        </div>
+        <div class="mt-3 manage-list" id="group-manage-list"></div>
+        <div class="modal-foot">
+          <button class="btn btn-muted" onclick="closeModal('modal-groups')">完成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 备份恢复（JSON 备份与还原 / 格式文本导出） -->
+  <div id="modal-backup" class="modal-mask closed">
+    <div class="modal wide-lg">
+      <div class="modal-head">
+        <div class="tabs" style="background:var(--surface-subtle);padding:3px;border-radius:var(--radius-md);border:1px solid var(--border-color)">
+          <button class="tab active" id="tab-backup-json-btn" onclick="switchBackupTab('json')">JSON 备份与还原</button>
+          <button class="tab" id="tab-backup-export-btn" onclick="switchBackupTab('export')">格式文本导出</button>
+        </div>
+        <button class="modal-x" onclick="closeModal('modal-backup')"><i data-icon="x" data-w="16" data-h="16"></i></button>
+      </div>
+
+      <div class="modal-body" id="backup-modal-body">
+        <div id="backup-json-panel">
+          <div class="backup-card">
+            <div class="backup-title" style="color:var(--brand)">导出数据备份（JSON）</div>
+            <p class="backup-desc">将当前全部组织分组设置与邮箱记录导出为标准 .json 备份文件。</p>
+            <button class="btn btn-primary btn-block" onclick="exportJSONBackup()"><i data-icon="download" data-w="14" data-h="14"></i>下载完整备份</button>
+          </div>
+
+          <div class="backup-card">
+            <div class="backup-title">从备份文件还原</div>
+            <p class="backup-desc">选取先前导出的 JSON 备份文件，覆盖并恢复工具数据。</p>
+            <input type="file" id="json-file-input" accept=".json" class="hidden" onchange="handleJSONFileImport(event)">
+            <button class="btn btn-ghost btn-block" onclick="document.getElementById('json-file-input').click()"><i data-icon="upload" data-w="14" data-h="14"></i>选择本地 JSON 文件还原</button>
+          </div>
+
+          <div class="backup-card" style="margin-bottom:0">
+            <div class="backup-title">重置工具初始数据</div>
+            <p class="backup-desc">清除本地所有数据并恢复为工具初始预设四大分组与示例邮箱。</p>
+            <button class="btn btn-ghost btn-block" onclick="requestResetData()"><i data-icon="rotate-ccw" data-w="14" data-h="14"></i>恢复初始默认数据</button>
+          </div>
+        </div>
+
+        <!-- 格式文本导出面板 -->
+        <div id="backup-export-panel" class="hidden">
+          <div class="flex-spread mb-1">
+            <label class="label">导出范围与格式</label>
+            <span class="hint-brand" id="export-count-hint">当前输出 0 条</span>
+          </div>
+          <div class="fmt-group">
+            <button class="fmt-btn active" onclick="setExportFormat('full', this)">标准格式（&quot;名称&quot; &lt;邮箱&gt;;）</button>
+            <button class="fmt-btn" onclick="setExportFormat('email-only', this)">仅邮箱（分号分隔）</button>
+            <button class="fmt-btn" onclick="setExportFormat('comma', this)">逗号分隔格式</button>
+          </div>
+          <textarea id="batch-export-textarea" class="control-textarea readonly" readonly rows="8"></textarea>
+
+          <div class="modal-foot flex-spread">
+            <button type="button" class="btn btn-ghost" onclick="downloadTextFile()"><i data-icon="download" data-w="13" data-h="13"></i>另存为 .txt 文件</button>
+            <button type="button" class="btn btn-primary" onclick="copyExportContent()"><i data-icon="copy" data-w="13" data-h="13"></i>复制导出内容</button>
+          </div>
+        </div>
+
+        <div class="backup-foot" id="backup-modal-foot">
+          <button class="btn btn-muted" onclick="closeModal('modal-backup')">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 自定义确认弹窗 -->
+  <div id="modal-confirm" class="modal-mask closed">
+    <div class="modal confirm">
+      <div class="confirm-head">
+        <span class="confirm-icon" id="confirm-icon"><i data-icon="alert-triangle" data-w="20" data-h="20"></i></span>
+        <div style="flex:1;min-width:0">
+          <div class="confirm-title" id="confirm-title">确认操作</div>
+          <div class="confirm-msg" id="confirm-msg"></div>
+        </div>
+      </div>
+      <div class="confirm-foot">
+        <button class="btn btn-muted" id="confirm-cancel-btn" onclick="confirmCancel()">取消</button>
+        <button class="btn btn-primary" id="confirm-ok-btn" onclick="confirmOk()">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast-wrap" id="toast-container"></div>
+
+  <!-- 内联图标库（Lucide, ISC License） -->
+  <script defer src="mail-icons.js"></script>
+
+  <!-- ==================== 核心业务逻辑 ==================== -->
+  <script defer src="mail-app.js"></script>
+</body>
+</html>

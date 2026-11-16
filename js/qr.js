@@ -119,6 +119,24 @@
         callback(dataUrl);
     }
 
+    /* 二维码库按需加载：只在第一次真正生成时才去读 js/qrcode.min.js，
+     * 首屏少解析 20KB。失败时给出可读提示而不是白屏。 */
+    var qrLibPromise = null;
+
+    function ensureQrLib() {
+        if (typeof global.QRCode !== 'undefined') return Promise.resolve(true);
+        if (qrLibPromise) return qrLibPromise;
+        qrLibPromise = new Promise(function (resolve) {
+            var script = document.createElement('script');
+            script.src = 'js/qrcode.min.js';
+            script.async = true;
+            script.onload = function () { resolve(typeof global.QRCode !== 'undefined'); };
+            script.onerror = function () { qrLibPromise = null; resolve(false); };
+            document.head.appendChild(script);
+        });
+        return qrLibPromise;
+    }
+
     function generate() {
         if (!state.initialized) init();
         if (!els.output) return false;
@@ -130,7 +148,10 @@
             return false;
         }
         if (typeof global.QRCode === 'undefined') {
-            toast('二维码组件未加载（js/qrcode.min.js）', 'error');
+            ensureQrLib().then(function (ok) {
+                if (ok) generate();
+                else toast('二维码组件加载失败（缺少 js/qrcode.min.js）', 'error');
+            });
             return false;
         }
 

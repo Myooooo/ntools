@@ -42,11 +42,13 @@
     border-left: 1px solid var(--nc-border-strong);
     box-shadow: -24px 0 80px -32px rgba(0, 0, 0, 0.5);
     transform: translateX(24px);
-    transition: transform var(--nc-dur-slow) var(--nc-ease-out);
+    /* 关闭更快（180ms）；打开时 260ms，进出不对称 */
+    transition: transform var(--nc-dur) var(--nc-ease-out);
 }
 
 .settings-sheet.is-open .settings-sheet__panel {
     transform: translateX(0);
+    transition-duration: var(--nc-dur-slow);
 }
 
 /* ---------- 头部 ---------- */
@@ -486,6 +488,39 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 12px;
+}
+
+/* 快照列表：每行 = 时间 + 任务数 + 恢复按钮 */
+.sp-snap-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.sp-snap-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    border-top: 1px solid var(--nc-border-faint);
+    font-size: var(--nc-fs-sm);
+}
+
+.sp-snap-row:first-child {
+    border-top: 0;
+}
+
+.sp-snap-row__time {
+    flex: 1;
+    min-width: 0;
+    color: var(--nc-text-2);
+    font-variant-numeric: tabular-nums;
+}
+
+.sp-snap-row__meta {
+    flex: 0 0 auto;
+    color: var(--nc-text-3);
 }
 
 .sp-data-row {
@@ -1342,8 +1377,10 @@
     transition: transform var(--nc-dur-fast) var(--nc-ease), box-shadow var(--nc-dur-fast) var(--nc-ease);
 }
 
-.sp-range__input:hover::-webkit-slider-thumb {
-    transform: scale(1.08);
+@media (hover: hover) and (pointer: fine) {
+    .sp-range__input:hover::-webkit-slider-thumb {
+        transform: scale(1.08);
+    }
 }
 
 .sp-range__input:focus-visible::-webkit-slider-thumb {

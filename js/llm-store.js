@@ -36,8 +36,8 @@
             version: VERSION,
             profiles: [newProfile({
                 name: '默认端点',
-                baseUrl: 'https://api.openai.com/v1',
-                modelId: 'gpt-4o'
+                baseUrl: '',
+                modelId: ''
             })],
             currentProfileId: null,
             todoAi: {
@@ -58,9 +58,9 @@
         var profile = {
             id: util.uid('p'),
             name: '新端点',
-            baseUrl: 'https://api.openai.com/v1',
+            baseUrl: '',
             apiKey: '',
-            modelId: 'gpt-4o',
+            modelId: '',
             apiFormat: 'openai',
             capabilities: normalizeCapabilities(),
             chatSystemPrompt: '',
@@ -135,6 +135,9 @@
         if ('apiFormat' in src) profile.apiFormat = normalizeApiFormat(src.apiFormat);
         if ('capabilities' in src) profile.capabilities = normalizeCapabilities(src.capabilities);
         if ('chatSystemPrompt' in src) profile.chatSystemPrompt = trimStr(src.chatSystemPrompt, '', 20000);
+        if ('enableAdvanced' in src) {
+            profile.enableAdvanced = !(src.enableAdvanced === false || src.enableAdvanced === 'false');
+        }
         if ('temperature' in src) profile.temperature = clampNum(src.temperature, profile.temperature, 0, 2);
         if ('topP' in src) profile.topP = clampNum(src.topP, profile.topP, 0, 2);
         if (creating && !('name' in src)) profile.name = '新端点';
@@ -148,18 +151,19 @@
         var profile = {
             id: typeof src.id === 'string' && /^[A-Za-z0-9_-]{4,64}$/.test(src.id) ? src.id : util.uid('p'),
             name: trimStr(src.name, '端点 ' + ((index || 0) + 1), 60),
-            baseUrl: sanitizeUrl(src.baseUrl || src.apiUrl || 'https://api.openai.com/v1'),
+            baseUrl: sanitizeUrl(src.baseUrl || src.apiUrl || ''),
             apiKey: trimStr(src.apiKey, '', 2048),
-            modelId: trimStr(src.modelId, 'gpt-4o', 120),
+            modelId: trimStr(src.modelId, '', 120),
             apiFormat: normalizeApiFormat(src.apiFormat || src.api_format || 'openai'),
             capabilities: normalizeCapabilities(src.capabilities),
             chatSystemPrompt: trimStr(src.chatSystemPrompt || src.systemPrompt || '', '', 20000),
+            enableAdvanced: !(src.enableAdvanced === false || src.enableAdvanced === 'false'),
             temperature: clampNum(src.temperature, 1, 0, 2),
             topP: clampNum(src.topP != null ? src.topP : src.top_p, 0.95, 0, 2),
             createdAt: util.isFiniteNum(src.createdAt) ? src.createdAt : now,
             updatedAt: util.isFiniteNum(src.updatedAt) ? src.updatedAt : now
         };
-        if (!profile.baseUrl) profile.baseUrl = 'https://api.openai.com/v1';
+
         return profile;
     }
 
@@ -188,7 +192,7 @@
             });
         }
         if (!doc.profiles.length) {
-            doc.profiles = [newProfile({ name: '默认端点', baseUrl: 'https://api.openai.com/v1', modelId: 'gpt-4o' })];
+            doc.profiles = [newProfile({ name: '默认端点' })];
         }
         var current = src.currentProfileId || src.currentId || '';
         doc.currentProfileId = doc.profiles.some(function (p) { return p.id === current; })
@@ -241,8 +245,8 @@
             profile.name === '默认端点' &&
             !profile.apiKey &&
             !profile.chatSystemPrompt &&
-            profile.baseUrl === 'https://api.openai.com/v1' &&
-            profile.modelId === 'gpt-4o';
+            (profile.baseUrl === '' || profile.baseUrl === 'https://api.openai.com/v1') &&
+            (profile.modelId === '' || profile.modelId === 'gpt-4o');
     }
 
     /** 只补空字段，不覆盖用户现有配置；force=true 用于“默认占位采纳旧配置”。 */
@@ -533,7 +537,7 @@
             capabilities: normalizeCapabilities(profile.capabilities),
             sessionId: profile.id,
             systemPrompt: profile.chatSystemPrompt || '',
-            enableAdvanced: true,
+            enableAdvanced: profile.enableAdvanced !== false,
             temperature: profile.temperature,
             top_p: profile.topP
         };

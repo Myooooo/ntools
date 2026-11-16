@@ -29,11 +29,11 @@
 
     var DEFAULTS = {
         name: '默认配置',
-        apiUrl: 'https://api.openai.com/v1',
+        apiUrl: '',
         apiKey: '',
-        modelId: 'gpt-4o',
+        modelId: '',
         systemPrompt: '',
-        enableAdvanced: false,
+        enableAdvanced: true,
         temperature: 1.0,
         top_p: 0.95
     };
@@ -84,6 +84,36 @@
         var m = /^(https?):\/\/([^\s/:?#]+)(:[0-9]+)?([^\s?#]*)(\?[^\s#]*)?(#[^\s]*)?$/i.exec(candidate);
         if (!m) return null;
         return (m[1] + '://' + m[2] + (m[3] || '') + (m[4] || '') + (m[5] || '')).replace(/\/+$/, '');
+    }
+
+    /**
+     * 把用户填的 Base URL 解析成真正的请求地址。
+     * 关键点：query 必须原样保留在路径之后，不能被拼到 pathname 里面。
+     *   https://h/v1?api-version=2024-01 → https://h/v1/chat/completions?api-version=2024-01
+     *   https://h/v1/chat/completions?x=1 → 原样返回（不重复追加）
+     * 非法（非 http/https、含空白/控制字符）返回 ''。
+     */
+    function resolveChatEndpoint(base) {
+        if (typeof base !== 'string') return '';
+        var raw = base.trim();
+        if (!raw) return '';
+        if (/[\s\u0000-\u001f\u007f]/.test(raw)) return '';
+        var candidate = raw;
+        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(candidate)) candidate = 'https://' + candidate;
+        var parsed;
+        if (typeof global.URL === 'function') {
+            try { parsed = new global.URL(candidate); } catch (err) { return ''; }
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+            var pathname = parsed.pathname.replace(/\/+$/, '');
+            if (!/\/chat\/completions$/i.test(pathname)) pathname += '/chat/completions';
+            return parsed.origin + pathname + (parsed.search || '');
+        }
+        // 极老内核兜底：手拆 query/hash
+        var m = /^(https?):\/\/([^\s\/:?#]+)(:[0-9]+)?([^\s?#]*)(\?[^\s#]*)?/i.exec(candidate);
+        if (!m) return '';
+        var path = (m[4] || '').replace(/\/+$/, '');
+        if (!/\/chat\/completions$/i.test(path)) path += '/chat/completions';
+        return m[1] + '://' + m[2] + (m[3] || '') + path + (m[5] || '');
     }
 
     function text(value, limit) {
@@ -138,7 +168,7 @@
             apiKey: text(src.apiKey, LIMITS.key).trim(),
             modelId: text(src.modelId, LIMITS.model).trim(),
             systemPrompt: text(src.systemPrompt, LIMITS.system),
-            enableAdvanced: bool(src.enableAdvanced, false),
+            enableAdvanced: bool(src.enableAdvanced, true),
             temperature: num(src.temperature, DEFAULTS.temperature, 0, 2),
             top_p: num(src.top_p, DEFAULTS.top_p, 0, 2)
         };
@@ -354,6 +384,7 @@
         text: text,
         isAllowedImageUrl: isAllowedImageUrl,
         sanitizeApiUrl: sanitizeApiUrl,
+        resolveChatEndpoint: resolveChatEndpoint,
         createDefaultConfig: createDefaultConfig,
         normalizeConfig: normalizeConfig,
         normalizeConfigs: normalizeConfigs,

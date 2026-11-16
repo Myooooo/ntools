@@ -56,14 +56,42 @@
             };
             request.onsuccess = function () {
                 var db = request.result;
-                db.onversionchange = function () { try { db.close(); } catch (err) { /* ignore */ } };
+                /* 另一个标签页要求升级/删除：关闭并让上层降级，而不是留着失效连接 */
+                db.onversionchange = function () {
+                    try { db.close(); } catch (err) { /* ignore */ }
+                    opened = false;
+                    dbPromise = null;
+                    if (typeof onDegraded === 'function') onDegraded('versionchange');
+                };
                 opened = true;
                 resolve(db);
             };
-            request.onerror = function () { reject(request.error || new Error('IndexedDB open failed')); };
-            request.onblocked = function () { reject(new Error('IndexedDB blocked')); };
+            request.onerror = function () {
+                dbPromise = null;   // 允许下次重试，不要把失败永久缓存
+                reject(request.error || new Error('IndexedDB open failed'));
+            };
+            request.onblocked = function () {
+                dbPromise = null;
+                reject(new Error('IndexedDB blocked'));
+            };
         });
         return dbPromise;
+    }
+
+    var onDegraded = null;
+
+    /** 注册降级回调（IndexedDB 不可用 / 版本变更时触发） */
+    function setDegradedHandler(fn) {
+        onDegraded = typeof fn === 'function' ? fn : null;
+    }
+
+    /** 主动丢弃缓存的连接，下次 open() 会重新打开 */
+    function reset() {
+        if (dbPromise) {
+            dbPromise.then(function (db) { try { db.close(); } catch (err) { /* ignore */ } }, function () {});
+        }
+        dbPromise = null;
+        opened = false;
     }
 
     function getAllSessions() {
@@ -122,6 +150,20 @@
             return new Promise(function (resolve, reject) {
                 var tx = db.transaction('sessions', 'readwrite');
                 tx.objectStore('sessions').delete(id);
+                tx.oncomplete = function () { resolve(true); };
+                tx.onerror = function () { reject(tx.error || new Error('IndexedDB delete failed')); };
+                tx.onabort = function () { reject(tx.error || new Error('IndexedDB delete aborted')); };
+            });
+        });
+    }
+
+    function deleteSessions(ids) {
+        if (!Array.isArray(ids) || !ids.length) return Promise.resolve(true);
+        return open().then(function (db) {
+            return new Promise(function (resolve, reject) {
+                var tx = db.transaction('sessions', 'readwrite');
+                var store = tx.objectStore('sessions');
+                ids.forEach(function (id) { store.delete(id); });
                 tx.oncomplete = function () { resolve(true); };
                 tx.onerror = function () { reject(tx.error || new Error('IndexedDB delete failed')); };
                 tx.onabort = function () { reject(tx.error || new Error('IndexedDB delete aborted')); };
@@ -204,6 +246,9 @@
         putSessions: putSessions,
         replaceAllSessions: replaceAllSessions,
         deleteSession: deleteSession,
+        deleteSessions: deleteSessions,
+        reset: reset,
+        setDegradedHandler: setDegradedHandler,
         getMeta: getMeta,
         setMeta: setMeta,
         putFile: putFile,

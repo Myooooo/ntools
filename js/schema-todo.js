@@ -51,6 +51,29 @@
 
     var PRIORITY_WEIGHT = { urgent: 4, high: 3, normal: 2, low: 1 };
 
+    /* 当前写盘版本。normalizeDoc 只产出这一版；读到更高版本必须只读，不能覆盖。 */
+    var DOC_VERSION = 2;
+
+    /* 会导致"数据条数变少"的问题：这类问题出现时必须先征得用户同意才允许写盘，
+     * 否则一次加载 + 一次自动保存就会把超出部分永久销毁。
+     * 身份重写类（task-id-fixed / list-id-fixed）只是改动 id，不算 destructive。 */
+    var DESTRUCTIVE_ISSUES = {
+        'tasks-truncated': 1,
+        'task-rejected': 1,
+        'quarantine-overflow': 1
+    };
+
+    function isDestructiveCode(code) {
+        return !!(code && DESTRUCTIVE_ISSUES[code]);
+    }
+
+    function destructiveIssues(issues) {
+        if (!Array.isArray(issues)) return [];
+        return issues.filter(function (issue) {
+            return issue && isDestructiveCode(issue.code);
+        });
+    }
+
     /* ------------------------------------------------------------------ *
      * 小工具
      * ------------------------------------------------------------------ */
@@ -110,8 +133,7 @@
 
     function pushIssue(issues, code, message, extra) {
         if (!issues) return;
-        var entry = { code: code, message: message };
-        if (extra) {
+        var entry = { code: code, message: message };        if (extra) {
             if (extra.index != null) entry.index = extra.index;
             if (extra.field) entry.field = extra.field;
             if (extra.path) entry.path = extra.path;
@@ -474,7 +496,13 @@
         var settings = normalizeSettings(src.settings, ctx);
         var meta = normalizeMeta(src.meta, ts, issues);
         if (ctx.quarantine.length) {
-            meta.quarantine = meta.quarantine.concat(ctx.quarantine).slice(0, LIMITS.quarantine);
+            var quarantineAll = meta.quarantine.concat(ctx.quarantine);
+            if (quarantineAll.length > LIMITS.quarantine) {
+                pushIssue(issues, 'quarantine-overflow', '隔离区超过 ' + LIMITS.quarantine + ' 条，超出部分已丢弃', {
+                    index: LIMITS.quarantine
+                });
+            }
+            meta.quarantine = quarantineAll.slice(0, LIMITS.quarantine);
         }
         var revision = isNum(src.revision) && src.revision >= 0 ? Math.round(src.revision) : 0;
 
@@ -975,6 +1003,10 @@
     NC.schema.todo = {
         KEYS: KEYS,
         LIMITS: LIMITS,
+        DOC_VERSION: DOC_VERSION,
+        DESTRUCTIVE_ISSUES: DESTRUCTIVE_ISSUES,
+        isDestructiveCode: isDestructiveCode,
+        destructiveIssues: destructiveIssues,
         VIEWS: VIEWS,
         SORTS: SORTS,
         STATUSES: STATUSES,

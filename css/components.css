@@ -918,7 +918,7 @@ html[data-theme="light"] .nc-select {
     color: var(--nc-text);
     font-size: var(--nc-fs-md);
     font-weight: 500;
-    letter-spacing: 0.002em;
+    letter-spacing: var(--nc-track-ui);
     box-shadow: none;
     transition:
         background-color var(--nc-dur-fast) var(--nc-ease),
@@ -1122,7 +1122,7 @@ html[data-theme="light"] .nc-select {
     font-size: var(--nc-fs-sm);
     font-weight: 500;
     color: var(--nc-text-2);
-    letter-spacing: 0.002em;
+    letter-spacing: var(--nc-track-ui);
 }
 
 /* ---------- 面板/卡片：结构靠发丝线，不靠卡片阴影 ---------- */
@@ -1142,7 +1142,7 @@ html[data-theme="light"] .nc-select {
 
 .nc-panel__title {
     font-size: var(--nc-fs-md);
-    letter-spacing: 0.002em;
+    letter-spacing: var(--nc-track-ui);
 }
 
 .nc-panel__body {
@@ -1157,7 +1157,7 @@ html[data-theme="light"] .nc-select {
     background: var(--nc-surface-2);
     color: var(--nc-text-2);
     font-size: var(--nc-fs-2xs);
-    letter-spacing: 0.01em;
+    letter-spacing: var(--nc-track-meta);
     border: 1px solid var(--nc-border-faint);
 }
 
@@ -1242,7 +1242,7 @@ html[data-theme="light"] .nc-select {
     font-size: var(--nc-fs-base);
     font-weight: 600;
     color: var(--nc-text-2);
-    letter-spacing: 0.002em;
+    letter-spacing: var(--nc-track-ui);
 }
 
 .nc-empty__desc {
@@ -1270,13 +1270,15 @@ html[data-theme="light"] .nc-select {
     background: var(--nc-elevated);
     box-shadow: var(--nc-shadow-3);
     transform: translateY(var(--nc-enter-y)) scale(var(--nc-enter-scale));
+    /* 关闭更快（180ms）；打开时由 .show 提到 220ms，进出不对称 */
     transition:
-        opacity var(--nc-dur-panel) var(--nc-ease-out),
-        transform var(--nc-dur-panel) var(--nc-ease-out);
+        opacity var(--nc-dur) var(--nc-ease-out),
+        transform var(--nc-dur) var(--nc-ease-out);
 }
 
 .nc-modal-overlay.show .nc-modal {
     transform: translateY(0) scale(1);
+    transition-duration: var(--nc-dur-panel);
 }
 
 .nc-modal__head { padding: 20px 22px 6px; }
@@ -1345,43 +1347,9 @@ html[data-theme="light"] .nc-select {
     font-size: var(--nc-fs-2xs);
 }
 
-@media (hover: none) {
-@media (hover: hover) and (pointer: fine) {
-
-    .nc-btn:hover {
-        background: var(--nc-surface-2);
-        border-color: var(--nc-border);
-        filter: none;
-    }
-}
-
-@media (hover: hover) and (pointer: fine) {
-
-
-    .nc-btn--primary:hover {
-        background: var(--nc-brand-bg);
-        filter: none;
-    }
-}
-
-@media (hover: hover) and (pointer: fine) {
-
-
-    .nc-chip:hover {
-        background: transparent;
-        color: var(--nc-text-2);
-    }
-}
-
-@media (hover: hover) and (pointer: fine) {
-
-
-    .nc-menu__item:hover {
-        background: transparent;
-    }
-}
-
-}
+/* 触屏（hover:none）不应出现粘滞 hover：桌面 hover 规则已全部包在
+ * @media (hover:hover) and (pointer:fine) 中；这里只保留触摸后的即时态，
+ * 不再用嵌套媒体查询（原写法 hover:none 内再要求 hover:hover，永远不会命中）。 */
 
 /* 减少动效：保留淡入，去掉位移/缩放 */
 @media (prefers-reduced-motion: reduce) {

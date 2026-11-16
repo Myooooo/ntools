@@ -1,5 +1,6 @@
 /* email-tab.css — 邮件管理本地嵌入：仅保留 nTools 左侧菜单，内容区全屏 */
 .tools-page--email {
+    position: relative;     /* 供"未加载"引导层绝对定位 */
     padding: 0 !important;
     display: flex;
     min-height: 0;
@@ -14,4 +15,50 @@
     min-height: 0;
     border: 0;
     background: #ffffff;
+}
+
+/* 邮件页未加载时的部署引导（替代一整片空白 iframe） */
+.email-missing {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 32px;
+    text-align: center;
+    background: var(--nc-bg);
+    color: var(--nc-text-2);
+}
+
+.email-missing[hidden] {
+    display: none;
+}
+
+.email-missing__title {
+    font-size: var(--nc-fs-lg);
+    font-weight: 650;
+    color: var(--nc-text);
+}
+
+.email-missing__text {
+    max-width: 46ch;
+    margin: 0;
+    font-size: var(--nc-fs-sm);
+    line-height: 1.6;
+}
+
+.email-missing__text code {
+    padding: 1px 5px;
+    border-radius: var(--nc-radius-xs);
+    background: var(--nc-surface-2);
+    font-family: var(--nc-font-mono);
+    font-size: var(--nc-fs-xs);
+}
+
+.email-missing__actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
 }

@@ -789,7 +789,7 @@
             },
             {
                 id: 'demo-3', listId: 'list_work', title: '与兼容组对齐 Chromium 102 基线',
-                notes: '确认 :has()、structuredClone、randomUUID 的可用性，补齐兼容性文档。',
+                notes: '确认选择器与克隆相关新特性的可用性，补齐兼容性文档。',
                 status: 'open', priority: 'normal', due: today + day + 10 * hour, tags: ['兼容'],
                 createdAt: now - day, updatedAt: now - 3 * hour
             },

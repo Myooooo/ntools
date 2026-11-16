@@ -98,6 +98,232 @@
     }
 }
 
+/* ==========================================================================
+ * v5.2 交互收口（Chromium 102 / 信创 ARM）
+ * 原则：按下即时反馈；提示与浮层来源明确；只动 transform / opacity /
+ *       background-color；标准模式完整动效，Lite 与 reduced-motion 即时。
+ * ========================================================================== */
+
+/* --------------------------------------------------------------------------
+ * 1. 按压反馈：紧凑控件按下缩 3%，释放立即回弹（不等待过渡）
+ * -------------------------------------------------------------------------- */
+.nc-chip,
+.nc-seg__btn,
+.nc-menu__item,
+.nc-select-pop__option,
+.chat-msg__action,
+.chat-icon-btn,
+.chat-lightbox__close,
+.chat-jump,
+.nc-toast__close,
+.nc-toast__action,
+.nc-linkbtn,
+.todo-quick-chip,
+.todo-views__add,
+.todo-list-row__more,
+.todo-search__clear,
+.todo-composer__more,
+.todo-ai-btn,
+.chat-session-more {
+    -webkit-tap-highlight-color: transparent;
+}
+
+.nc-chip:active,
+.nc-seg__btn:active,
+.nc-menu__item:active,
+.nc-select-pop__option:active,
+.chat-msg__action:active,
+.chat-icon-btn:active,
+.chat-lightbox__close:active,
+.chat-jump:active,
+.nc-toast__close:active,
+.nc-toast__action:active,
+.nc-linkbtn:active,
+.todo-quick-chip:active,
+.todo-views__add:active,
+.todo-list-row__more:active,
+.todo-search__clear:active,
+.todo-composer__more:active,
+.todo-ai-btn:active,
+.chat-session-more:active {
+    transform: scale(var(--nc-press-scale));
+}
+
+/* 禁用项按下无反馈，避免“能按动”的错觉 */
+.nc-menu__item:disabled:active,
+.nc-select-pop__option.is-disabled:active,
+.chat-msg__action:disabled:active {
+    transform: none;
+}
+
+/* 行级导航用底色确认按下；大面积缩放会晃 */
+.tools-nav__item:active,
+.todo-view-item:active,
+.chat-new-session:active,
+.sp-nav:active,
+.chat-session-item:active,
+.chat-suggest__item:active {
+    background: var(--nc-surface-3);
+}
+
+/* 自定义下拉的触发层：按下时给底色，明确“已按住” */
+.nc-select-wrap:active > .nc-select__trigger.nc-select {
+    background-color: var(--nc-surface-2);
+}
+
+/* 已有 120ms 过渡的按钮：按下不等待，释放才用过渡 */
+.nc-btn:active,
+.chat-send:active,
+.detail-close:active {
+    transition-duration: 0ms;
+}
+
+/* 浅色用户气泡是 accent 实色：焦点环改成反色，否则蓝环落在蓝底上 */
+html[data-theme="light"] .chat-msg--user .chat-msg__action:focus-visible {
+    outline-color: var(--nc-text-invert);
+}
+
+/* --------------------------------------------------------------------------
+ * 2. 工具提示：延迟出现、后续即时、来源明确（左侧导航向右展开）
+ * -------------------------------------------------------------------------- */
+.nc-tip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: var(--nc-z-toast);
+    max-width: min(320px, calc(100vw - 24px));
+    padding: 6px 9px;
+    border: 1px solid var(--nc-tip-border);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-tip-bg);
+    color: var(--nc-tip-fg);
+    box-shadow: var(--nc-tip-shadow);
+    font-size: var(--nc-fs-xs);
+    line-height: 1.4;
+    letter-spacing: var(--nc-track-meta);
+    text-align: left;
+    overflow-wrap: anywhere;
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(2px) scale(0.98);
+    transform-origin: var(--nc-tip-origin, 50% 100%);
+    transition:
+        opacity var(--nc-dur-tip) var(--nc-ease-out),
+        transform var(--nc-dur-tip) var(--nc-ease-out),
+        visibility 0s linear var(--nc-dur-tip);
+}
+
+.nc-tip.is-open {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+    transition:
+        opacity var(--nc-dur-tip) var(--nc-ease-out),
+        transform var(--nc-dur-tip) var(--nc-ease-out),
+        visibility 0s;
+}
+
+.nc-tip[data-placement="right"]:not(.is-open) {
+    transform: translateX(-2px) scale(0.98);
+}
+
+.nc-tip[data-placement="bottom"]:not(.is-open) {
+    transform: translateY(-2px) scale(0.98);
+}
+
+html[data-lite="true"] .nc-tip,
+html[data-lite="true"] .nc-tip.is-open {
+    transform: none;
+    transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nc-tip,
+    .nc-tip.is-open {
+        transform: none;
+        transition: none;
+    }
+}
+
+/* --------------------------------------------------------------------------
+ * 3. 端点切换：工具栏底部一次扫描线，确认“已切到新端点”
+ * -------------------------------------------------------------------------- */
+.chat-toolbar--embed::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--nc-accent) 18%, var(--nc-accent) 82%, transparent);
+    opacity: 0;
+    transform: scaleX(0);
+    transform-origin: left center;
+    pointer-events: none;
+}
+
+.chat-toolbar--embed.is-switching::after {
+    animation: nc-toolbar-scan var(--nc-dur-panel) var(--nc-ease-out) both;
+}
+
+@keyframes nc-toolbar-scan {
+    0% {
+        opacity: 0.9;
+        transform: scaleX(0);
+    }
+    70% {
+        opacity: 0.55;
+        transform: scaleX(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scaleX(1);
+    }
+}
+
+html[data-lite="true"] .chat-toolbar--embed.is-switching::after {
+    animation: none;
+    opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .chat-toolbar--embed.is-switching::after {
+        animation: none;
+        opacity: 0;
+    }
+}
+
+/* --------------------------------------------------------------------------
+ * 4. 材质高光：浮层顶部一条亮边，表达“这是一层材料”而不是一块纯色
+ * -------------------------------------------------------------------------- */
+html:not([data-lite="true"]) .nc-menu,
+html:not([data-lite="true"]) .nc-modal,
+html:not([data-lite="true"]) .chat-menu,
+html:not([data-lite="true"]) .nc-select-pop {
+    box-shadow:
+        inset 0 1px 0 var(--nc-glass-highlight),
+        var(--nc-shadow-3);
+}
+
+html:not([data-lite="true"]) .nc-toast,
+html:not([data-lite="true"]) .chat-stats__panel {
+    box-shadow:
+        inset 0 1px 0 var(--nc-glass-highlight),
+        var(--nc-shadow-2);
+}
+
+html:not([data-lite="true"]) .settings-sheet__panel {
+    box-shadow:
+        inset 0 1px 0 var(--nc-glass-highlight),
+        -24px 0 80px -32px rgba(0, 0, 0, 0.5);
+}
+
+/* Lite：设置 Sheet 的 80px 投影是整页最贵的一层，直接去掉 */
+html[data-lite="true"] .settings-sheet__panel {
+    box-shadow: none;
+}
+
 /* v4.5 设计 QA：QR 工作台收拢，避免 1440 下两列间距过大与下方空置 */
 @media (min-width: 901px) {
     .tool-layout--qr {

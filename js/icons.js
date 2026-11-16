@@ -72,11 +72,23 @@
             'aria-hidden="true" focusable="false">' + path + '</svg>';
     }
 
+    /* 模板池：同一 (name,size) 只解析一次 SVG 字符串，之后 cloneNode 复用。
+     * 列表每行 6~7 个图标，1000 行时能省掉数千次 HTML 解析。 */
+    var TEMPLATE_CACHE = Object.create(null);
+
     function el(name, size) {
-        var wrapper = document.createElement('span');
-        wrapper.className = 'nc-icon-wrap';
-        wrapper.innerHTML = svg(name, size);
-        return wrapper.firstChild;
+        var dim = size || 18;
+        var key = name + '@' + dim;
+        var tpl = TEMPLATE_CACHE[key];
+        if (!tpl) {
+            var wrapper = document.createElement('span');
+            wrapper.className = 'nc-icon-wrap';
+            wrapper.innerHTML = svg(name, dim);
+            tpl = wrapper.firstChild;
+            if (!tpl) return null;
+            TEMPLATE_CACHE[key] = tpl;
+        }
+        return tpl.cloneNode(true);
     }
 
     NC.icons = {

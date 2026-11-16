@@ -21,8 +21,14 @@
     var BACKUP_KEY = schema.KEYS.backup;
     var V1_KEY = schema.KEYS.v1;
     var V1_BACKUP_KEY = schema.KEYS.v1Backup;
+    var LEASE_KEY = 'ntools.todo.lease';
     var SAVE_DELAY = 250;
     var MAX_HISTORY = 20;
+    var RETRY_MIN = 800;
+    var RETRY_MAX = 15000;
+    var SNAPSHOT_INTERVAL = 10 * 60 * 1000;
+    var SNAPSHOT_EVERY_N_WRITES = 20;
+    var TRASH_TTL = 30 * 24 * 60 * 60 * 1000;
     var LIST_COLORS = ['#5b8cff', '#9a7bff', '#3ddc97', '#f5c451', '#ff6b6b', '#5aa9e6', '#f5a04d', '#8b9bb4'];
 
     var state = {
@@ -39,15 +45,31 @@
         loaded: false,
         loadInfo: null,
         dirty: false,
-        saveError: false
+        saveError: false,
+        /* 只读：加载闸门（截断/未来版本）或另有窗口持有写权 */
+        readOnly: false,
+        readOnlyReason: null,
+        readOnlyDetail: null,
+        readOnlyRaw: null,
+        lastSavedAt: 0,
+        saveCount: 0,
+        lastSnapshotAt: 0,
+        snapshotAtSave: 0,
+        snapshotInfo: null,
+        retryDelay: 0
     };
 
     var listeners = [];
     var history = [];
     var redoStack = [];
     var saveTimer = null;
+    var saveRetryTimer = null;
+    var leaseProbeTimer = null;
     var warnedSave = false;
+    var durabilityBound = false;
+    var lifecycleBound = false;
     var externalUnsub = null;
+    var leaseUnsub = null;
     var countsCache = { revision: -1, updatedAt: -1, value: null };
 
     /* ------------------------------------------------------------------ *
@@ -68,6 +90,7 @@
     function scheduleSave() {
         state.dirty = true;
         if (state.demo) return;
+        if (state.readOnly) return;          // 只读时只积累 dirty，不写盘
         if (saveTimer) global.clearTimeout(saveTimer);
         saveTimer = global.setTimeout(function () {
             saveTimer = null;
@@ -75,19 +98,184 @@
         }, SAVE_DELAY);
     }
 
+    function clearRetry() {
+        if (!saveRetryTimer) return;
+        global.clearTimeout(saveRetryTimer);
+        saveRetryTimer = null;
+    }
+
+    function scheduleRetry() {
+        if (saveRetryTimer) return;
+        if (state.demo || state.readOnly) return;
+        state.retryDelay = state.retryDelay
+            ? Math.min(Math.round(state.retryDelay * 2), RETRY_MAX)
+            : RETRY_MIN;
+        saveRetryTimer = global.setTimeout(function () {
+            saveRetryTimer = null;
+            if (state.readOnly || state.demo || !state.dirty) return;
+            saveNow();
+        }, state.retryDelay);
+    }
+
+    function emitSaveState() {
+        var payload = saveState();
+        events.emit('todo:savestate', payload);
+        return payload;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 单写者：同一时刻只允许一个窗口写这份数据
+     * ------------------------------------------------------------------ */
+    function durability() {
+        return NC.durability || null;
+    }
+
+    function claimWrite() {
+        var d = durability();
+        if (!d || !d.lease) return true;
+        if (d.lease.claim(LEASE_KEY)) return true;
+        enterReadOnly('other-window', null);
+        return false;
+    }
+
+    /** 初始化阶段使用：只取写权，不改只读状态（此时文档还没加载，横幅文案会不准） */
+    function claimWriteQuiet() {
+        var d = durability();
+        if (!d || !d.lease) return true;
+        return d.lease.claim(LEASE_KEY);
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 只读闸门
+     * ------------------------------------------------------------------ */
+    /* 只读镜像的复检：持有写权的窗口若被强杀（没机会发 pagehide），
+     * 本窗口只靠 storage 事件是等不到通知的，会永久只读。每 3 秒复核一次租约。 */
+    function stopLeaseProbe() {
+        if (!leaseProbeTimer) return;
+        global.clearInterval(leaseProbeTimer);
+        leaseProbeTimer = null;
+    }
+
+    function startLeaseProbe() {
+        stopLeaseProbe();
+        if (state.demo || !global.setInterval) return;
+        leaseProbeTimer = global.setInterval(function () {
+            if (!state.readOnly || state.readOnlyReason !== 'other-window') {
+                stopLeaseProbe();
+                return;
+            }
+            var d = durability();
+            if (!d || !d.lease) return;
+            if (!d.lease.isOwner(LEASE_KEY)) return;
+            exitReadOnly();
+            if (state.dirty) saveNow();
+        }, 3000);
+    }
+
+    function enterReadOnly(reason, detail) {
+        var was = state.readOnly;
+        state.readOnly = true;
+        state.readOnlyReason = reason;
+        state.readOnlyDetail = detail || null;
+        clearRetry();
+        if (!was) {
+            notify('read-only', { reason: reason, detail: state.readOnlyDetail });
+        }
+        events.emit('todo:readonly', {
+            reason: reason,
+            detail: state.readOnlyDetail,
+            message: readOnlyMessage(reason, detail)
+        });
+        if (reason === 'other-window') startLeaseProbe();
+        else stopLeaseProbe();
+        emitSaveState();
+    }
+
+    function readOnlyMessage(reason, detail) {
+        if (reason === 'other-window') return '另一个窗口正在编辑待办，本窗口为只读镜像';
+        if (reason === 'future-version') return '数据来自更新版本的 nTools，已进入只读模式以避免覆盖';
+        if (reason === 'load-trimmed') {
+            var n = detail && detail.issues ? detail.issues.length : 0;
+            return '加载时检测到 ' + n + ' 处会导致数据减少的问题，已进入只读模式';
+        }
+        return '待办数据已进入只读模式';
+    }
+
+    function exitReadOnly() {
+        stopLeaseProbe();
+        if (!state.readOnly) return true;
+        state.readOnly = false;
+        state.readOnlyReason = null;
+        state.readOnlyDetail = null;
+        state.readOnlyRaw = null;
+        notify('read-write', {});
+        events.emit('todo:readonly', { reason: null, message: null });
+        emitSaveState();
+        return true;
+    }
+
+    /** 另一个窗口释放了写权 / 用户点击「接管编辑」 */
+    function takeover() {
+        stopLeaseProbe();
+        var d = durability();
+        if (d && d.lease && !d.lease.steal(LEASE_KEY)) return false;
+        state.readOnly = false;
+        state.readOnlyReason = null;
+        state.readOnlyDetail = null;
+        state.readOnlyRaw = null;
+        events.emit('todo:readonly', { reason: null, message: null });
+        emitSaveState();
+        if (state.dirty) saveNow();
+        return true;
+    }
+
+    /** 用户确认接受加载时的修剪：先落一份快照，再放开写入 */
+    function acceptTrimmed() {
+        if (!state.readOnly || state.readOnlyReason !== 'load-trimmed') return false;
+        maybeSnapshot(true);
+        var payload = state.readOnlyDetail && state.readOnlyDetail.issues;
+        state.readOnly = false;
+        state.readOnlyReason = null;
+        state.readOnlyDetail = null;
+        events.emit('todo:readonly', { reason: null, message: null });
+        var ok = saveNow();
+        if (!ok) enterReadOnly('save-failed', { issues: payload });
+        return ok;
+    }
+
+    /** 原始（未修剪）数据的下载文本，用于"另存原始数据" */
+    function originalRaw() {
+        return state.readOnlyRaw || null;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 写入
+     * ------------------------------------------------------------------ */
     function saveNow() {
         if (state.demo) return false;
+        if (state.readOnly) return false;
         if (saveTimer) {
             global.clearTimeout(saveTimer);
             saveTimer = null;
         }
-        state.dirty = false;
+        if (!claimWrite()) return false;
+
+        var prevRev = util.isFiniteNum(state.doc.revision) ? state.doc.revision : 0;
+        var prevUpdatedAt = state.doc.updatedAt;
+        var nextRev = prevRev + 1;
+
         try {
-            state.doc.revision = (util.isFiniteNum(state.doc.revision) ? state.doc.revision : 0) + 1;
+            state.doc.revision = nextRev;
             state.doc.updatedAt = Date.now();
-            var result = storage.set(KEY, state.doc);
-            if (!result || result.ok === false) {
+            // setVerified：写完读回比对，避免"以为存上了"
+            var result = storage.setVerified(KEY, state.doc);
+            if (!result || result.ok !== true) {
+                state.doc.revision = prevRev;
+                state.doc.updatedAt = prevUpdatedAt;
                 state.saveError = true;
+                state.dirty = true;
+                clearRetry();
+                scheduleRetry();
                 if (!warnedSave) {
                     warnedSave = true;
                     events.emit('todo:error', {
@@ -97,14 +285,124 @@
                             : '本地存储写入失败，修改暂存在内存中'
                     });
                 }
-            } else {
-                state.saveError = false;
+                emitSaveState();
+                return false;
             }
+            state.saveError = false;
+            state.dirty = false;
+            state.retryDelay = 0;
+            warnedSave = false;
+            state.saveCount += 1;
+            state.lastSavedAt = Date.now();
+            clearRetry();
+            maybeSnapshot();
+            emitSaveState();
             return true;
         } catch (err) {
+            state.doc.revision = prevRev;
+            state.doc.updatedAt = prevUpdatedAt;
             state.saveError = true;
+            state.dirty = true;
+            scheduleRetry();
+            emitSaveState();
             return false;
         }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 环形快照
+     * ------------------------------------------------------------------ */
+    function maybeSnapshot(force) {
+        var d = durability();
+        if (!d || !d.snapshot) return;
+        var now = Date.now();
+        var due = !!force ||
+            (now - state.lastSnapshotAt > SNAPSHOT_INTERVAL) ||
+            (state.saveCount - state.snapshotAtSave >= SNAPSHOT_EVERY_N_WRITES);
+        if (!due) return;
+        state.lastSnapshotAt = now;
+        state.snapshotAtSave = state.saveCount;
+        d.snapshot.push('todo', state.doc, {
+            tasks: state.doc.tasks.length,
+            lists: state.doc.lists.length,
+            revision: state.doc.revision
+        }).then(function (res) {
+            if (res && res.ok) {
+                state.snapshotInfo = { at: now, slot: res.slot, backend: res.backend };
+                events.emit('todo:snapshot', state.snapshotInfo);
+            }
+        }).catch(function () { /* 快照失败不阻断主流程 */ });
+    }
+
+    function listSnapshots() {
+        var d = durability();
+        if (!d || !d.snapshot) return Promise.resolve([]);
+        return d.snapshot.list('todo');
+    }
+
+    function readSnapshot(slot) {
+        var d = durability();
+        if (!d || !d.snapshot) return Promise.resolve(null);
+        return d.snapshot.read('todo', slot);
+    }
+
+    /**
+     * 从快照恢复。恢复前先把"当前状态"也存一份，避免恢复错了无法回头。
+     */
+    function restoreSnapshot(slot) {
+        return readSnapshot(slot).then(function (doc) {
+            if (!doc) return { ok: false, reason: 'empty' };
+            var normalized = schema.normalizeDoc(doc).doc;
+            if (!normalized || !normalized.tasks) return { ok: false, reason: 'format' };
+            maybeSnapshot(true);
+            var before = schema.clone(state.doc);
+            state.doc = normalized;
+            var entry = {
+                label: '从快照恢复',
+                undo: function () { if (before) replaceDoc(schema.clone(before)); }
+            };
+            pushEntry(entry);
+            ensureUi();
+            notify('restore-snapshot', { tasks: normalized.tasks.length, slot: slot });
+            saveNow();
+            return { ok: true, tasks: normalized.tasks.length };
+        }).catch(function () {
+            return { ok: false, reason: 'exception' };
+        });
+    }
+
+    function saveState() {
+        return {
+            ok: !state.saveError,
+            dirty: state.dirty,
+            readOnly: state.readOnly,
+            reason: state.readOnlyReason,
+            message: state.readOnly ? readOnlyMessage(state.readOnlyReason, state.readOnlyDetail) : '',
+            retrying: !!saveRetryTimer,
+            retryDelay: state.retryDelay,
+            lastSavedAt: state.lastSavedAt,
+            saveCount: state.saveCount,
+            revision: state.doc ? state.doc.revision : 0,
+            pending: typeof storage.hasPending === 'function' ? storage.hasPending(KEY) : false,
+            memoryMode: typeof storage.memoryMode === 'function' ? storage.memoryMode() : !storage.available
+        };
+    }
+
+    function bindDurability() {
+        if (durabilityBound) return;
+        durabilityBound = true;
+        var d = durability();
+        if (!d) return;
+        d.snapshot.configure({ prefix: 'todo', slots: 3, namespace: 'todo' });
+        if (leaseUnsub) leaseUnsub();
+        leaseUnsub = d.lease.watch(LEASE_KEY, function (owner) {
+            if (!owner && !state.readOnly) {
+                enterReadOnly('other-window', null);
+            } else if (owner && state.readOnly && state.readOnlyReason === 'other-window') {
+                exitReadOnly();
+                if (state.dirty) saveNow();
+            }
+        });
     }
 
     function flush() {
@@ -164,7 +462,26 @@
                     info.from = parsed.schemaVersion === 2 ? 'v2' : 'v2-fallback';
                     info.migrated = norm.doc.tasks.length;
                     info.quarantined = norm.doc.meta.quarantine.length;
+                    info.issues = norm.issues || [];
                     adoptDoc(norm.doc, 'init', { loadInfo: info });
+                    /* 加载闸门：任何"会让数据变少"或"来自更高版本"的情况，先只读，
+                     * 由用户决定「另存原始数据」还是「接受修剪」。绝不再自动写盘覆盖。 */
+                    var future = util.isFiniteNum(parsed.schemaVersion) && parsed.schemaVersion > schema.DOC_VERSION;
+                    var destructive = schema.destructiveIssues ? schema.destructiveIssues(norm.issues) : [];
+                    if (future) {
+                        state.readOnlyRaw = raw;
+                        enterReadOnly('future-version', {
+                            schemaVersion: parsed.schemaVersion,
+                            readVersion: schema.DOC_VERSION,
+                            issues: norm.issues || []
+                        });
+                    } else if (destructive.length) {
+                        state.readOnlyRaw = raw;
+                        enterReadOnly('load-trimmed', {
+                            issues: destructive,
+                            allIssues: norm.issues || []
+                        });
+                    }
                     return info;
                 }
             }
@@ -218,10 +535,39 @@
         return info;
     }
 
+    /**
+     * 回收站保留 30 天。超期任务在下一次启动时清理，并显式告知用户
+     * （不静默删除，也不让它无限占用 3.5MB 预算）。
+     */
+    function purgeStaleTrash() {
+        var cutoff = Date.now() - TRASH_TTL;
+        var before = state.doc.tasks.length;
+        state.doc.tasks = state.doc.tasks.filter(function (task) {
+            return !(task && task.deletedAt && task.deletedAt < cutoff);
+        });
+        var removed = before - state.doc.tasks.length;
+        if (removed > 0) {
+            events.emit('todo:trash-purged', {
+                removed: removed,
+                days: Math.round(TRASH_TTL / 86400000),
+                message: '已自动清理回收站中 ' + removed + ' 条超过 30 天的任务'
+            });
+        }
+        return removed;
+    }
+
     function init(options) {
         var opts = options || {};
         state.loaded = false;
         state.demo = !!opts.demo;
+        state.readOnly = false;
+        state.readOnlyReason = null;
+        state.readOnlyDetail = null;
+        state.readOnlyRaw = null;
+        state.saveError = false;
+        state.dirty = false;
+        state.retryDelay = 0;
+        clearRetry();
         history = [];
         redoStack = [];
         warnedSave = false;
@@ -234,6 +580,10 @@
             notify('init', { loadInfo: { from: 'demo', migrated: state.doc.tasks.length } });
             return;
         }
+
+        /* 先取写权再加载：迁移/自动保存都属于"写"，不应在无写权时发生 */
+        bindDurability();
+        var owned = claimWriteQuiet();
 
         try {
             state.loadInfo = loadFromRaw();
@@ -250,10 +600,13 @@
         if (externalUnsub) externalUnsub();
         externalUnsub = storage.onExternalChange(KEY, onExternalChange);
 
-        global.addEventListener('pagehide', flush);
-        document.addEventListener('visibilitychange', function () {
-            if (document.hidden) flush();
-        });
+        if (!lifecycleBound) {
+            lifecycleBound = true;
+            global.addEventListener('pagehide', flush);
+            document.addEventListener('visibilitychange', function () {
+                if (document.hidden) flush();
+            });
+        }
 
         if (state.ui.view === 'trash') state.ui.view = 'all';
         if (state.ui.listId != null) state.ui.listId = null;
@@ -261,12 +614,25 @@
         var persistedView = state.doc.settings && schema.VIEWS.indexOf(state.doc.settings.view) > -1
             ? state.doc.settings.view : 'all';
         state.ui.view = persistedView;
+
+        /* 写权在别的窗口：加载完成后进入只读镜像（此时文档已就绪，横幅文案才准） */
+        if (!owned && !state.readOnly) enterReadOnly('other-window', null);
+
+        if (!state.readOnly && purgeStaleTrash() > 0) {
+            ensureUi();
+            scheduleSave();
+        }
+
         notify('init', { loadInfo: state.loadInfo });
+        emitSaveState();
         return state.loadInfo;
     }
 
     function onExternalChange(newValue) {
-        if (newValue == null) return;
+        if (newValue == null) {
+            // 主键被清空（另一个窗口 reset）：不跟随，避免把自己也清掉
+            return;
+        }
         var parsed = util.parseJSON(newValue, undefined);
         if (parsed === undefined || !util.isPlainObject(parsed) || !Array.isArray(parsed.tasks)) return;
         var incoming = schema.normalizeDoc(parsed).doc;
@@ -274,13 +640,18 @@
         var localRev = util.isFiniteNum(state.doc.revision) ? state.doc.revision : 0;
         if (incomingRev <= localRev) return;
 
+        /* 本地有未保存修改且外部版本更新：进入只读，禁止下一次写覆盖对方。
+         * （有租约时通常走不到这里；这是租约失效/被强删时的兜底。） */
         if (state.dirty) {
+            enterReadOnly('external-conflict', { remoteRevision: incomingRev });
             notify('external-conflict', { remoteRevision: incomingRev });
             return;
         }
+        if (state.readOnly && state.readOnlyReason === 'load-trimmed') return;
         state.doc = incoming;
         ensureUi();
         notify('external', { remoteRevision: incomingRev });
+        emitSaveState();
     }
 
     /* ------------------------------------------------------------------ *
@@ -629,6 +1000,15 @@
         var data = input || {};
         var title = typeof data.title === 'string' ? data.title.trim() : '';
         if (!title) return null;
+        /* 上限护栏：宁可拒绝新增，也不要造出一个"下次加载会被截断"的文档 */
+        if (state.doc.tasks.length >= schema.LIMITS.tasks) {
+            events.emit('todo:limit', {
+                code: 'tasks',
+                limit: schema.LIMITS.tasks,
+                message: '任务已达 ' + schema.LIMITS.tasks + ' 条上限，请先清理已完成或回收站任务'
+            });
+            return null;
+        }
         var ctx = makeCtx();
         var now = Date.now();
         var task = schema.normalizeTask({
@@ -1017,6 +1397,8 @@
      * 导入 / 导出 / 备份
      * ------------------------------------------------------------------ */
     function writeBackup() {
+        // 破坏性操作前除了写 localStorage 备份，再打一份环形快照（IDB 优先）
+        maybeSnapshot(true);
         try {
             var result = storage.setRaw(BACKUP_KEY, JSON.stringify(state.doc));
             return !!(result && result.ok);
@@ -1079,8 +1461,7 @@
         var raw = storage.getRaw(BACKUP_KEY);
         if (raw == null) return { ok: false, reason: 'none' };
         var parsed = util.parseJSON(raw, undefined);
-        if (parsed === undefined) return { ok: false, reason: 'corrupt' };
-        var doc;
+        if (parsed === undefined) return { ok: false, reason: 'corrupt' };        var doc;
         if (Array.isArray(parsed) || (util.isPlainObject(parsed) && Array.isArray(parsed.data) && !Array.isArray(parsed.tasks))) {
             doc = schema.migrateV1(parsed).doc;
         } else if (util.isPlainObject(parsed) && (Array.isArray(parsed.tasks) || parsed.schemaVersion === 2)) {
@@ -1089,6 +1470,7 @@
             return { ok: false, reason: 'format' };
         }
         var before = schema.clone(state.doc);
+        maybeSnapshot(true);          // 覆盖前先留一份当前状态
         state.doc = doc;
         var entry = {
             label: '恢复备份',
@@ -1155,6 +1537,7 @@
     NC.store.todo = {
         KEY: KEY,
         BACKUP_KEY: BACKUP_KEY,
+        LEASE_KEY: LEASE_KEY,
         V1_KEY: V1_KEY,
         init: init,
         subscribe: subscribe,
@@ -1201,7 +1584,17 @@
         undoLabel: undoLabel,
         redoLabel: redoLabel,
         flush: flush,
+        saveNow: saveNow,
         storageState: storageState,
+        /* 数据韧性 */
+        isReadOnly: function () { return !!state.readOnly; },
+        saveState: saveState,
+        takeover: takeover,
+        acceptTrimmed: acceptTrimmed,
+        originalRaw: originalRaw,
+        listSnapshots: listSnapshots,
+        readSnapshot: readSnapshot,
+        restoreSnapshot: restoreSnapshot,
         LIST_COLORS: LIST_COLORS
     };
 })(window);

@@ -33,7 +33,6 @@
     };
     var detailTimers = Object.create(null);
     var detailPending = Object.create(null);
-    var inlineEdit = null;
     var unsubscribe = null;
     var composerTags = [];
     var pendingPasteText = '';
@@ -42,6 +41,8 @@
     var composerRecurrence = null;
     var timelineMounted = false;
     var timelineTried = false;
+    var timelineAssetsRequested = false;
+    var timelineAssetsFailed = false;
     var modeEnterTimer = null;
     var detailClosing = false;
     var detailClosingId = null;
@@ -98,6 +99,7 @@
         actions = options || {};
         cacheElements();
         if (!els.list || !store) return false;
+        bindRowModule();
         ensureExtras();
         bindStaticEvents();
         unsubscribe = store.subscribe(render);
@@ -107,6 +109,33 @@
             if (window.innerWidth <= 768) render({ reason: 'resize' });
         }, 180));
         return true;
+    }
+
+    /**
+     * 把行渲染模块需要的共享引用注入进去（todo-row.js）。
+     * 只传对象引用与纯函数，不传可变标量，避免两处状态不同步。
+     */
+    function bindRowModule() {
+        var row = NC.view && NC.view.todoRow;
+        if (!row || typeof row.init !== 'function') {
+            throw new Error('todo-row.js 未加载');
+        }
+        row.init({
+            els: els,
+            nodeMap: nodeMap,
+            rendered: rendered,
+            store: store,
+            util: util,
+            node: node,
+            attr: attr,
+            icon: icon,
+            toggleClass: toggleClass,
+            findList: findList,
+            buildItems: buildItems,
+            renderEmpty: renderEmpty,
+            PRIORITY_LABELS: PRIORITY_LABELS,
+            RECURRENCE_LABELS: RECURRENCE_LABELS
+        });
     }
 
     function cacheElements() {
@@ -540,6 +569,10 @@
         els.timeline = container;
     }
 
+    function isTimelineMode(doc) {
+        return !!(doc && doc.settings && doc.settings.viewMode === 'timeline');
+    }
+
     function syncMode(doc, ui) {
         if (!els.mainpane) return;
         var mode = doc.settings.viewMode === 'timeline' ? 'timeline' : 'list';
@@ -571,21 +604,54 @@
                 timelineMounted = false;
                 renderTimelineFallback(true);
             }
+        } else if (!timelineAssetsFailed) {
+            ensureTimelineAssets();
         } else {
-            renderTimelineFallback(false);
+            renderTimelineFallback(true);
         }
     }
 
-    function renderTimelineFallback(failed) {
+    function renderTimelineNotice(text) {
         if (!els.timeline) return;
         var note = els.timeline.querySelector('.todo-timeline-note');
         if (!note) {
             note = node('div', 'todo-timeline-note');
             els.timeline.appendChild(note);
         }
-        note.textContent = failed
+        note.textContent = text;
+    }
+
+    function renderTimelineFallback(failed) {
+        renderTimelineNotice(failed
             ? '全景视图加载失败，可切回列表继续使用。'
-            : '全景视图组件尚未加载（js/timeline.js），可切回列表继续使用。';
+            : '全景视图组件尚未加载（js/todo-timeline.js），可切回列表继续使用。');
+    }
+
+    /**
+     * 全景视图的脚本与样式改为按需加载：首屏省掉 64KB JS + 24KB CSS。
+     * 首次切到全景模式时才注入，加载完自动重新同步一次模式。
+     */
+    function ensureTimelineAssets() {
+        if (timelineAssetsRequested) return;
+        timelineAssetsRequested = true;
+        var util = NC.util;
+        if (!util || typeof util.loadScript !== 'function') {
+            renderTimelineFallback(true);
+            return;
+        }
+        renderTimelineNotice('正在加载全景视图…');
+        var jobs = [util.loadScript('js/todo-timeline.js')];
+        if (typeof util.loadStyle === 'function') {
+            jobs.push(util.loadStyle('css/timeline.css').catch(function () { return null; }));
+        }
+        Promise.all(jobs).then(function () {
+            timelineAssetsFailed = false;
+            syncMode(store.getDoc(), store.getUi());
+        }).catch(function () {
+            timelineAssetsFailed = true;
+            timelineAssetsRequested = false;
+            renderTimelineFallback(true);
+        });
     }
 
     /* ---- 回收站页头「清空回收站」按钮（有任务时显示） ---- */
@@ -1002,7 +1068,9 @@
         syncTrashClearButton(ui, counts);
         renderLists(doc, ui, counts);
         renderComposer(doc, ui);
-        renderList(visible, ui, doc);
+        /* 全景模式下任务列表被 CSS 隐藏：跳过 diff，避免同一份数据渲染两遍。
+         * 切回列表时 render() 会照常走一次完整 diff，数据不会过期。 */
+        if (!isTimelineMode(doc)) renderList(visible, ui, doc);
         renderDetail(ui, doc, reason);
         syncDetailAnimation(ui);
         autoCloseMissingDetail(ui);
@@ -1192,469 +1260,27 @@
 
     function makeTaskItem(task) { return { type: 'task', key: 't:' + task.id, task: task }; }
 
+    /* 行渲染已拆到 todo-row.js：这里只做转发，调用点保持不变。 */
+    function rowApi() { return NC.view && NC.view.todoRow; }
+
     function renderList(visible, ui, doc) {
-        var items = buildItems(visible, ui, doc);
-        var list = els.list;
-
-        if (!items.length) {
-            while (list.firstChild) list.removeChild(list.firstChild);
-            clearNodeMap();
-            list.hidden = true;
-            els.empty.hidden = false;
-            renderEmpty(visible, ui, doc);
-            return;
-        }
-        list.hidden = false;
-        els.empty.hidden = true;
-
-        var seen = Object.create(null);
-        var cursor = list.firstChild;
-        items.forEach(function (item) {
-            var existing = nodeMap[item.key];
-            var el;
-            if (existing) {
-                el = existing;
-                if (item.type === 'task') updateTaskNode(el, item.task, ui, doc);
-                else updateGroupNode(el, item.group);
-            } else {
-                el = item.type === 'task' ? createTaskNode(item.task, ui, doc) : createGroupNode(item.group);
-                nodeMap[item.key] = el;
-                if (rendered.initialized) {
-                    el.classList.add('is-new');
-                    global.setTimeout(function () { el.classList.remove('is-new'); }, 320);
-                }
-            }
-            seen[item.key] = true;
-            if (el === cursor) {
-                cursor = cursor.nextSibling;
-            } else {
-                list.insertBefore(el, cursor);
-            }
-        });
-        while (cursor) {
-            var next = cursor.nextSibling;
-            list.removeChild(cursor);
-            cursor = next;
-        }
-        Object.keys(nodeMap).forEach(function (key) {
-            if (!seen[key]) delete nodeMap[key];
-        });
-        applyRovingTabindex(ui);
+        var row = rowApi();
+        if (!row || typeof row.renderList !== 'function') return false;
+        return row.renderList(visible, ui, doc);
     }
 
-    function clearNodeMap() {
-        Object.keys(nodeMap).forEach(function (key) { delete nodeMap[key]; });
-    }
-
-    function applyRovingTabindex(ui) {
-        var hasSelected = false;
-        Object.keys(nodeMap).forEach(function (key) {
-            var el = nodeMap[key];
-            if (!el || !el.classList || !el.classList.contains('todo-item')) return;
-            var body = el.querySelector('.todo-item__body');
-            if (!body) return;
-            var selected = !!ui.selectedId && el.getAttribute('data-id') === ui.selectedId;
-            if (selected) hasSelected = true;
-            body.tabIndex = selected ? 0 : -1;
-        });
-        if (!hasSelected) {
-            /* 没有任何选中项：第一行可聚焦 */
-            var list = els.list;
-            var firstBody = list ? list.querySelector('.todo-item__body') : null;
-            if (firstBody) firstBody.tabIndex = 0;
-        }
-    }
-
-    /* ---- 任务行 ---- */
-    function createTaskNode(task, ui, doc) {
-        var li = node('li', 'todo-item');
-        attr(li, 'data-id', task.id);
-        li.setAttribute('role', 'listitem');
-
-        var check = document.createElement('input');
-        check.type = 'checkbox';
-        check.className = 'nc-check todo-item__check';
-        attr(check, 'aria-label', '完成任务：' + task.title);
-
-        var body = node('button', 'todo-item__body');
-        attr(body, 'type', 'button');
-        attr(body, 'data-act', 'open');
-        attr(body, 'aria-label', '查看任务：' + task.title);
-
-        var titleline = node('span', 'todo-item__titleline');
-        var pinMark = node('span', 'todo-item__pin');
-        pinMark.appendChild(icon('flag', 12));
-        attr(pinMark, 'aria-hidden', 'true');
-        titleline.appendChild(pinMark);
-        /* 循环图标在标题左侧（置顶图标之后）；无循环时 hidden 不占位 */
-        var repeatMark = node('span', 'todo-item__repeat');
-        repeatMark.appendChild(icon('refresh', 12));
-        titleline.appendChild(repeatMark);
-        var title = node('span', 'todo-item__title');
-        titleline.appendChild(title);
-        /* 标签移到行级右侧栏（贴着操作按钮左侧，垂直居中），标题行只保留 pin→repeat→title */
-        var tags = node('span', 'todo-item__tags');
-
-        var meta = node('span', 'todo-item__meta');
-        var due = node('span', 'todo-item__due');
-        var flag = node('span', 'todo-item__flag');
-        var dot = node('span', 'todo-prio-dot');
-        var prioText = node('span', 'todo-item__prio-text');
-        flag.appendChild(dot);
-        flag.appendChild(prioText);
-        var listChip = node('span', 'todo-item__list');
-        meta.appendChild(due);
-        meta.appendChild(flag);
-        meta.appendChild(listChip);
-
-        body.appendChild(titleline);
-        body.appendChild(meta);
-
-        var acts = node('div', 'todo-item__actions');
-        var pinBtn = node('button', 'nc-btn nc-btn--icon nc-btn--sm');
-        attr(pinBtn, 'type', 'button');
-        attr(pinBtn, 'data-act', 'pin');
-        attr(pinBtn, 'aria-label', '置顶任务');
-        pinBtn.appendChild(icon('flag', 14));
-        acts.appendChild(pinBtn);
-        var editBtn = node('button', 'nc-btn nc-btn--icon nc-btn--sm');
-        attr(editBtn, 'type', 'button');
-        attr(editBtn, 'data-act', 'edit');
-        attr(editBtn, 'aria-label', '编辑标题');
-        editBtn.appendChild(icon('edit', 15));
-        var delBtn = node('button', 'nc-btn nc-btn--icon nc-btn--sm');
-        attr(delBtn, 'type', 'button');
-        attr(delBtn, 'data-act', 'delete');
-        attr(delBtn, 'aria-label', '删除任务');
-        delBtn.appendChild(icon('trash', 15));
-        /* 回收站专用操作 */
-        var restoreBtn = node('button', 'nc-btn nc-btn--icon nc-btn--sm');
-        attr(restoreBtn, 'type', 'button');
-        attr(restoreBtn, 'data-act', 'restore');
-        attr(restoreBtn, 'aria-label', '恢复任务');
-        attr(restoreBtn, 'title', '恢复任务');
-        restoreBtn.appendChild(icon('refresh', 15));
-        var purgeBtn = node('button', 'nc-btn nc-btn--icon nc-btn--sm');
-        attr(purgeBtn, 'type', 'button');
-        attr(purgeBtn, 'data-act', 'purge');
-        attr(purgeBtn, 'aria-label', '彻底删除');
-        attr(purgeBtn, 'title', '彻底删除（不可恢复）');
-        purgeBtn.appendChild(icon('trash', 15));
-        acts.appendChild(editBtn);
-        acts.appendChild(delBtn);
-        acts.appendChild(restoreBtn);
-        acts.appendChild(purgeBtn);
-
-        li.appendChild(check);
-        li.appendChild(body);
-        li.appendChild(tags);
-        li.appendChild(acts);
-        li.__task = task;
-        updateTaskNode(li, task, ui, doc);
-        return li;
-    }
-
-    function updateTaskNode(li, task, ui, doc) {
-        var now = Date.now();
-        var done = task.status === 'done';
-        var canceled = task.status === 'canceled';
-        var classes = 'todo-item';
-        if (done) classes += ' is-done';
-        if (canceled) classes += ' is-canceled';
-        if (task.pinned === true) classes += ' is-pinned';
-        if (ui.selectedId === task.id) classes += ' is-selected';
-        if (ui.editingId === task.id) classes += ' is-editing';
-        if (ui.view === 'trash') classes += ' is-trash';
-        if (!done && !canceled && task.due != null && task.due < now) classes += ' is-overdue';
-        var heat = heatClass(task, now);
-        if (heat) classes += ' ' + heat;
-        li.className = classes;
-        attr(li, 'data-heat', heat || '');
-        attr(li, 'data-pinned', task.pinned === true ? 'true' : 'false');
-        attr(li, 'data-id', task.id);
-        attr(li, 'data-status', task.status);
-        attr(li, 'data-priority', task.priority);
-        li.__task = task;
-
-        var trashView = ui.view === 'trash';
-        var check = li.querySelector('.todo-item__check');
-        if (check) {
-            check.checked = done;
-            check.hidden = trashView;
-            attr(check, 'aria-label', (done ? '取消完成：' : '完成任务：') + task.title);
-        }
-        /* 回收站只保留「恢复 / 彻底删除」，隐藏置顶/编辑/删除与完成 checkbox */
-        ['[data-act="pin"]', '[data-act="edit"]', '[data-act="delete"]'].forEach(function (selector) {
-            var btn = li.querySelector(selector);
-            if (btn) btn.hidden = trashView;
-        });
-        ['[data-act="restore"]', '[data-act="purge"]'].forEach(function (selector) {
-            var btn = li.querySelector(selector);
-            if (btn) btn.hidden = !trashView;
-        });
-        var body = li.querySelector('.todo-item__body');
-        if (body) attr(body, 'aria-label', '查看任务：' + task.title);
-        var title = li.querySelector('.todo-item__title');
-        if (title && title.textContent !== task.title) title.textContent = task.title;
-
-        /* 标签：行级右侧栏；无标签 hidden 不占位 */
-        var tagsWrap = li.querySelector('.todo-item__tags');
-        if (tagsWrap) tagsWrap.hidden = task.tags.length === 0;
-        var tagSig = task.tags.join('\u0001');
-        if (tagsWrap && li.__tagSig !== tagSig) {
-            li.__tagSig = tagSig;
-            while (tagsWrap.firstChild) tagsWrap.removeChild(tagsWrap.firstChild);
-            task.tags.slice(0, 3).forEach(function (tag) {
-                tagsWrap.appendChild(node('span', 'todo-item__tag', tag));
-            });
-            if (task.tags.length > 3) tagsWrap.appendChild(node('span', 'todo-item__tag', '+' + (task.tags.length - 3)));
-        }
-
-        /* 置顶 / 循环标识 */
-        var pinMark = li.querySelector('.todo-item__pin');
-        if (pinMark) pinMark.hidden = task.pinned !== true;
-        var repeatMark = li.querySelector('.todo-item__repeat');
-        if (repeatMark) {
-            repeatMark.hidden = !task.recurrence;
-            if (task.recurrence) {
-                var freqLabel = RECURRENCE_LABELS[task.recurrence.freq] || '循环';
-                attr(repeatMark, 'title', '循环：' + freqLabel);
-                attr(repeatMark, 'aria-label', '循环任务：' + freqLabel);
-            }
-        }
-        var pinBtn = li.querySelector('.todo-item__actions [data-act="pin"]');
-        if (pinBtn) {
-            toggleClass(pinBtn, 'is-active', task.pinned === true);
-            attr(pinBtn, 'aria-label', task.pinned ? '取消置顶' : '置顶任务');
-            attr(pinBtn, 'title', task.pinned ? '取消置顶（P）' : '置顶（P）');
-            attr(pinBtn, 'aria-pressed', task.pinned ? 'true' : 'false');
-        }
-
-        /* 截止时间 + 优先级 + 清单 */
-        var dueEl = li.querySelector('.todo-item__due');
-        updateDueLabel(dueEl, task, now);
-        var prioText = li.querySelector('.todo-item__prio-text');
-        if (prioText) {
-            prioText.textContent = PRIORITY_LABELS[task.priority] || '普通';
-            var prioDot = li.querySelector('.todo-prio-dot');
-            if (prioDot) attr(prioDot, 'data-priority', task.priority);
-        }
-        var listChip = li.querySelector('.todo-item__list');
-        if (listChip) {
-            var list = findList(doc, task.listId);
-            var showList = doc.lists.length > 1 && !ui.listId;
-            if (list && showList) {
-                listChip.hidden = false;
-                listChip.textContent = '';
-                var listDot = node('span', 'todo-prio-dot');
-                listDot.style.background = list.color || '#5b8cff';
-                listChip.appendChild(listDot);
-                listChip.appendChild(node('span', null, list.name));
-            } else {
-                listChip.hidden = true;
-            }
-        }
-        syncEditingState(li, task, ui);
-    }
-
-    /**
-     * 按「日历天」的到期热区：未完成且有 due。
-     * 逾期 → heat-overdue（深红）；今天（同日历日且未逾期）→ heat-3（红）；
-     * 明天 → heat-2（橙）；后天 → heat-1（黄）；>=3 个日历日外/完成/取消/无 due/回收站 → 不染色。
-     */
-    function heatClass(task, now) {
-        if (!task || task.deletedAt || task.status !== 'open' || !util.isFiniteNum(task.due)) return '';
-        var ts = util.isFiniteNum(now) ? now : Date.now();
-        if (task.due < ts) return 'heat-overdue';
-        var today = util.startOfDay(ts);
-        var dueDay = util.startOfDay(task.due);
-        var diff = Math.round((dueDay - today) / 86400000);
-        if (diff <= 0) return 'heat-3';
-        if (diff === 1) return 'heat-2';
-        if (diff === 2) return 'heat-1';
-        return '';
-    }
-
-    /** tick 时同步热区等级（跨 24/48/72h 边界时无需整树重建） */
     function syncHeatClass(li, task, now) {
-        if (!li || !li.classList) return;
-        var heat = heatClass(task, now);
-        if (li.getAttribute('data-heat') === (heat || '')) return;
-        li.classList.remove('heat-1', 'heat-2', 'heat-3', 'heat-overdue');
-        if (heat) li.classList.add(heat);
-        attr(li, 'data-heat', heat || '');
+        var row = rowApi();
+        if (!row || typeof row.syncHeatClass !== 'function') return false;
+        return row.syncHeatClass(li, task, now);
     }
 
-    var WEEK_SHORT = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-
-    /**
-     * 记录式 ledger 的左侧时间槽：bucket（今天/明天/周X/日期）+ clock（HH:mm）。
-     * 时间语义统一走铜色（.tone-* 控制），不再渲染秒级图标，保持列对齐。
-     */
-    function updateDueLabel(dueEl, task, now) {
-        if (!dueEl) return;
-        if (!util.isFiniteNum(task.due)) {
-            dueEl.hidden = true;
-            dueEl.textContent = '';
-            return;
-        }
-        dueEl.hidden = false;
-        var meta = util.dueMeta(task.due, now);
-        var tone = meta.tone === 'overdue' ? 'overdue' : meta.tone;
-        var bucket;
-        var clock = meta.timeLabel || '';
-        var titleLabel = meta.label;
-
-        if (task.status === 'done') {
-            /* 完成项：时间槽改为「完成 + 完成时刻」，不再显示逾期语义 */
-            tone = 'done';
-            bucket = '完成';
-            clock = util.isFiniteNum(task.completedAt) ? util.formatTime(task.completedAt) : (meta.timeLabel || '');
-            titleLabel = '完成于 ' + util.formatDateTime(task.completedAt || Date.now());
-        } else if (task.status === 'canceled') {
-            tone = 'none';
-            bucket = '取消';
-            clock = meta.timeLabel || '';
-            titleLabel = '已取消 · 原截止 ' + meta.label;
-        } else if (tone === 'overdue') bucket = '逾期';
-        else if (tone === 'today') bucket = '今天';
-        else if (tone === 'tomorrow') bucket = '明天';
-        else if (tone === 'soon') bucket = WEEK_SHORT[new Date(task.due).getDay()];
-        else bucket = meta.dateLabel;
-
-        if (!bucket || !clock) {
-            dueEl.hidden = true;
-            dueEl.textContent = '';
-            return;
-        }
-        dueEl.className = 'todo-item__due tone-' + tone;
-        var label = bucket + ' ' + clock;
-
-        if (dueEl.__label !== label) {
-            dueEl.__label = label;
-            while (dueEl.firstChild) dueEl.removeChild(dueEl.firstChild);
-            var bucketEl = document.createElement('span');
-            bucketEl.className = 'todo-item__due-bucket';
-            bucketEl.textContent = bucket;
-            var clockEl = document.createElement('span');
-            clockEl.className = 'todo-item__due-clock';
-            clockEl.textContent = clock;
-            dueEl.appendChild(bucketEl);
-            dueEl.appendChild(clockEl);
-        }
-        attr(dueEl, 'title', titleLabel);
-        attr(dueEl, 'aria-label', (task.status === 'done' ? '完成时间：' : '截止时间：') + label);
+    function updateDueLabel(el, task, now) {
+        var row = rowApi();
+        if (!row || typeof row.updateDueLabel !== 'function') return false;
+        return row.updateDueLabel(el, task, now);
     }
 
-    /* ---- 行内编辑 ---- */
-    function syncEditingState(li, task, ui) {
-        var editing = ui.editingId === task.id;
-        var existing = li.__editInput;
-        if (editing && !existing) {
-            var input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'nc-input todo-item__edit';
-            input.value = task.title;
-            attr(input, 'aria-label', '编辑任务标题');
-            input.maxLength = 500;
-            li.appendChild(input);
-            li.__editInput = input;
-            input.addEventListener('keydown', function (event) {
-                if (event.isComposing || event.keyCode === 229) return;
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    commitInlineEdit(task.id);
-                } else if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelInlineEdit(task.id);
-                }
-            });
-            input.addEventListener('blur', function () {
-                if (inlineEdit && inlineEdit.id === task.id) commitInlineEdit(task.id);
-            });
-            inlineEdit = { id: task.id, input: input };
-            global.setTimeout(function () {
-                input.focus();
-                input.select();
-            }, 0);
-        } else if (!editing && existing) {
-            clearInlineEdit(li);
-        }
-    }
-
-    function beginInlineEdit(id) {
-        if (!id) return;
-        store.startEdit(id);
-        var li = nodeMap['t:' + id];
-        if (li) {
-            var input = li.__editInput;
-            if (input) {
-                input.focus();
-                input.select();
-            }
-        }
-    }
-
-    function clearInlineEdit(li) {
-        if (!li) return;
-        if (li.__editInput) {
-            if (li.__editInput.parentNode) li.__editInput.parentNode.removeChild(li.__editInput);
-            li.__editInput = null;
-        }
-        if (inlineEdit && inlineEdit.id === li.getAttribute('data-id')) inlineEdit = null;
-    }
-
-    function commitInlineEdit(id) {
-        if (!inlineEdit || inlineEdit.id !== id) return;
-        var input = inlineEdit.input;
-        var value = input.value.trim();
-        var task = store.getTask(id);
-        clearInlineEdit(nodeMap['t:' + id]);
-        inlineEdit = null;
-        if (!task) return;
-        if (!value || value === task.title) {
-            store.stopEdit();
-            return;
-        }
-        store.updateTask(id, { title: value }, { label: '编辑标题' });
-        store.stopEdit();
-    }
-
-    function cancelInlineEdit(id) {
-        clearInlineEdit(nodeMap['t:' + id]);
-        inlineEdit = null;
-        store.stopEdit();
-    }
-
-    /* ---- 分组头 ---- */
-    function createGroupNode(group) {
-        var li = node('li', 'todo-group');
-        attr(li, 'role', 'presentation');
-        attr(li, 'data-group', group.key);
-        if (group.danger) li.classList.add('is-danger');
-        return updateGroupNode(li, group);
-    }
-
-    function updateGroupNode(li, group) {
-        while (li.firstChild) li.removeChild(li.firstChild);
-        attr(li, 'data-group', group.key);
-        toggleClass(li, 'is-danger', !!group.danger);
-        toggleClass(li, 'is-collapsed', group.collapsible && !group.expanded);
-        if (group.collapsible) {
-            var toggle = node('button', 'todo-group__toggle');
-            attr(toggle, 'type', 'button');
-            attr(toggle, 'data-act', 'toggle-completed');
-            attr(toggle, 'aria-expanded', group.expanded ? 'true' : 'false');
-            toggle.appendChild(icon('chevron-down', 13));
-            toggle.appendChild(node('span', null, group.label));
-            li.appendChild(toggle);
-        } else {
-            li.appendChild(node('span', 'todo-group__label', group.label));
-        }
-        li.appendChild(node('span', 'todo-group__count', String(group.count)));
-        li.appendChild(node('span', 'todo-group__line'));
-        return li;
-    }
 
     /* ---- 空状态 ---- */
     function renderEmpty(visible, ui, doc) {
@@ -1785,7 +1411,7 @@
             var li = nodeMap['t:' + task.id];
             if (!li) return;
             li.__task = task;
-            updateDueLabel(li.querySelector('.todo-item__due'), task, now);
+            updateDueLabel(li.__refs ? li.__refs.due : li.querySelector('.todo-item__due'), task, now);
             syncHeatClass(li, task, now);
         });
         /* 计数可能跨分钟变化 */

@@ -85,7 +85,7 @@
     color: var(--nc-text-2);
     font-size: var(--nc-fs-md);
     font-weight: 500;
-    letter-spacing: 0.002em;
+    letter-spacing: var(--nc-track-ui);
     transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
 }
 
@@ -256,6 +256,37 @@
     flex: 0 0 auto;
 }
 
+/* 数据韧性条：保存失败 / 只读镜像 / 加载闸门。默认危险色，warning 态降级为琥珀色。 */
+.tools-banner--durability {
+    border-color: var(--nc-danger-soft);
+    border-left-color: var(--nc-danger);
+}
+
+.tools-banner--durability .tools-banner__icon {
+    color: var(--nc-danger);
+}
+
+.tools-banner--durability.is-warning {
+    border-color: var(--nc-warning-soft);
+    border-left-color: var(--nc-warning);
+}
+
+.tools-banner--durability.is-warning .tools-banner__icon {
+    color: var(--nc-warning);
+}
+
+.tools-banner__actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.tools-banner__actions:empty {
+    display: none;
+}
+
 /* ==========================================================================
  * 2. 页头：大标题 + 关键数字
  * ========================================================================== */
@@ -283,7 +314,7 @@
     margin-top: 4px;
     color: var(--nc-text-3);
     font-size: var(--nc-fs-sm);
-    letter-spacing: 0.002em;
+    letter-spacing: var(--nc-track-ui);
     line-height: 1.5;
     font-variant-numeric: tabular-nums;
     overflow: hidden;
@@ -1375,6 +1406,9 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* ---- 8.5 记录行：左时间槽 + 发丝分隔 ---- */
 .todo-item {
+    /* 弱机优先：离屏行不参与布局与绘制（Chromium 85+）。实测前先用变量兜住。 */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 56px;
     position: relative;
     display: flex;
     align-items: center;
@@ -1477,7 +1511,7 @@ input[type="range"]::-webkit-slider-thumb {
     font-size: var(--nc-fs-md);
     font-weight: 500;
     line-height: var(--nc-lh-snug);
-    letter-spacing: 0.002em;
+    letter-spacing: var(--nc-track-ui);
     text-overflow: ellipsis;
     white-space: nowrap;
 }

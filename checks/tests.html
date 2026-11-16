@@ -38,14 +38,19 @@
 </style>
 <script src="../js/theme-boot.js"></script>
 <script defer src="../js/polyfills.js"></script>
+<script defer src="../js/marked.min.js"></script>
+<script defer src="../js/purify.min.js"></script>
 <script defer src="../js/core.js"></script>
 <script defer src="../js/compat.js"></script>
 <script defer src="../js/icons.js"></script>
 <script defer src="../js/storage.js"></script>
+<script defer src="../js/durability.js"></script>
 <script defer src="../js/ui.js"></script>
 <script defer src="../js/theme.js"></script>
 <script defer src="../js/schema-todo.js"></script>
 <script defer src="../js/schema-chat.js"></script>
+<script defer src="../js/markdown-enhance.js"></script>
+<script defer src="../js/message-view.js"></script>
 <script defer src="../js/sse.js"></script>
 <script defer src="../js/api.js"></script>
 <script defer src="../js/llm-store.js"></script>
@@ -334,6 +339,39 @@
             assert(p && typeof p.then === 'function', 'copyText 应返回 Promise');
         });
 
+        /* ---------------- message-view：流式增量渲染 ---------------- */
+        t('message-view', '流式增量渲染与全量渲染结果一致', function () {
+            var host = document.createElement('div');
+            document.body.appendChild(host);
+            var full = '第一段 a\n\n第二段 **粗体** b\n\n```js\nconst x = 1;\nconst y = 2;\n```\n\n- 列表一\n- 列表二\n\n最后一段 c';
+            for (var i = 1; i <= full.length; i += 1) {
+                NC.view.messages.renderStreaming(host, full.slice(0, i));
+            }
+            var inc = host.innerHTML.replace(/<!--[^>]*-->/g, '').replace(/\s+/g, ' ');
+            NC.view.messages.renderInto(host, full);
+            var whole = host.innerHTML.replace(/<!--[^>]*-->/g, '').replace(/\s+/g, ' ');
+            eq(inc, whole, '逐字符流式与一次性渲染应完全一致');
+            host.parentNode.removeChild(host);
+        });
+        t('message-view', '流式渲染不重复段落', function () {
+            var host = document.createElement('div');
+            document.body.appendChild(host);
+            var full = 'A\n\nB\n\nC';
+            for (var i = 1; i <= full.length; i += 1) NC.view.messages.renderStreaming(host, full.slice(0, i));
+            eq(host.querySelectorAll('p').length, 3, '应有 3 个段落，实际 ' + host.querySelectorAll('p').length);
+            eq(host.textContent.replace(/\s+/g, ''), 'ABC');
+            host.parentNode.removeChild(host);
+        });
+        t('message-view', '流式渲染对代码围栏闭合正确', function () {
+            var host = document.createElement('div');
+            document.body.appendChild(host);
+            var steps = ['```js\n', '```js\na', '```js\nabc\n', '```js\nabc\n```'];
+            steps.forEach(function (text) { NC.view.messages.renderStreaming(host, text); });
+            eq(host.querySelectorAll('pre').length, 1, '代码块应只有一个');
+            assert(host.textContent.indexOf('abc') > -1, '代码内容应保留');
+            host.parentNode.removeChild(host);
+        });
+
         /* ---------------- storage ---------------- */
         t('storage', 'available 与 memoryMode 一致', function () {
             eq(typeof NC.storage.available, 'boolean');
@@ -398,6 +436,101 @@
             NC.storage.remove(key);
             assert(res && typeof res.ok === 'boolean', 'setRaw 应返回结果');
             eq(fired, 1, '应触发一次 quota:warning');
+        });
+        t('storage', 'setVerified 写后读回校验', function () {
+            var key = STORAGE_PREFIX + 'verified';
+            var res = NC.storage.setVerified(key, { a: 1, b: 'x' });
+            assert(res && res.ok === true, '正常写入应校验通过');
+            eq(NC.storage.get(key, null).a, 1);
+            NC.storage.remove(key);
+            assert(!NC.storage.has(key), 'remove 后应为空');
+        });
+        t('storage', '写失败后 getRaw 返回内存副本（不丢新值）', function () {
+            var key = STORAGE_PREFIX + 'pending-write';
+            NC.storage.remove(key);
+            var real = Storage.prototype.setItem;
+            Storage.prototype.setItem = function (k, v) {
+                if (k === key) { var e = new Error('quota'); e.name = 'QuotaExceededError'; throw e; }
+                return real.call(this, k, v);
+            };
+            var res;
+            try { res = NC.storage.setRaw(key, 'new-value'); }
+            finally { Storage.prototype.setItem = real; }
+            assert(res && res.ok === false, '应返回失败');
+            eq(NC.storage.hasPending(key), true, '应保留待写副本');
+            eq(NC.storage.getRaw(key), 'new-value', '应读回内存副本而非旧值');
+            NC.storage.remove(key);
+            eq(NC.storage.hasPending(key), false, 'remove 后应清空待写副本');
+        });
+        t('storage', 'hasPending：失败写入可读回', function () {
+            eq(typeof NC.storage.hasPending, 'function');
+            var key = STORAGE_PREFIX + 'pending';
+            eq(NC.storage.hasPending(key), false);
+            NC.storage.remove(key);
+        });
+        t('storage', 'remainingBytes 在预算内', function () {
+            eq(typeof NC.storage.remainingBytes, 'function');
+            var left = NC.storage.remainingBytes();
+            assert(left >= 0, '剩余字节不应为负');
+            assert(left <= NC.storage.maxBytes, '剩余字节不应超过预算');
+        });
+        t('storage', '损坏备份最多保留 3 份', function () {
+            eq(NC.storage.maxCorrupt, 3);
+            var key = STORAGE_PREFIX + 'corrupt-cap';
+            for (var i = 0; i < 6; i += 1) {
+                NC.storage.backupCorrupted(key, 'raw-' + i);
+            }
+            var list = NC.storage.keys(key + '.corrupt');
+            assert(list.length <= 3, '应最多保留 3 份，实际 ' + list.length);
+            list.forEach(function (name) { NC.storage.remove(name); });
+        });
+        t('schema.todo', 'DOC_VERSION 与 destructive 判定', function () {
+            eq(NC.schema.todo.DOC_VERSION, 2);
+            assert(NC.schema.todo.isDestructiveCode('tasks-truncated'), '截断属于 destructive');
+            assert(NC.schema.todo.isDestructiveCode('quarantine-overflow'), '隔离区溢出属于 destructive');
+            eq(NC.schema.todo.isDestructiveCode('task-id-fixed'), false);
+            var issues = [{ code: 'tasks-truncated' }, { code: 'task-id-fixed' }];
+            eq(NC.schema.todo.destructiveIssues(issues).length, 1);
+            eq(NC.schema.todo.destructiveIssues(null).length, 0);
+        });
+        t('schema.todo', '超限文档归一化上报 tasks-truncated', function () {
+            var tasks = [];
+            for (var i = 0; i < 5001; i += 1) {
+                tasks.push({ id: 'k' + i, title: 'T' + i, listId: 'list_default', status: 'open' });
+            }
+            var res = NC.schema.todo.normalizeDoc({ schemaVersion: 2, tasks: tasks });
+            eq(res.doc.tasks.length, 5000);
+            var flagged = res.issues.filter(function (item) { return item.code === 'tasks-truncated'; });
+            assert(flagged.length === 1, '应上报一次 tasks-truncated');
+        });
+        t('durability', '租约：本窗口可写 / 他人持有则不可写 / 可强夺', function () {
+            assert(NC.durability && NC.durability.lease, 'NC.durability.lease 应存在');
+            var name = STORAGE_PREFIX + 'lease-test';
+            NC.storage.remove(name);
+            assert(NC.durability.lease.isOwner(name), '无租约时应视为可写');
+            assert(NC.durability.lease.claim(name), '应能取得租约');
+            eq(NC.durability.lease.isOwner(name), true);
+            NC.storage.set(name, { tabId: 'another-tab-1234', at: Date.now() });
+            eq(NC.durability.lease.isOwner(name), false);
+            eq(NC.durability.lease.claim(name), false, '他人在有效期内不应让出');
+            assert(NC.durability.lease.steal(name), '显式接管应成功');
+            eq(NC.durability.lease.isOwner(name), true);
+            NC.durability.lease.release(name);
+            eq(NC.storage.has(name), false, '释放后租约键应删除');
+        });
+        t('durability', '租约：过期可自动接管', function () {
+            var name = STORAGE_PREFIX + 'lease-expired';
+            NC.storage.set(name, { tabId: 'dead-tab-9999', at: Date.now() - 60000 });
+            eq(NC.durability.lease.isOwner(name), true);
+            NC.storage.remove(name);
+        });
+        t('durability', '快照：configure 与暴露面', function () {
+            assert(NC.durability.snapshot, 'snapshot 应存在');
+            eq(typeof NC.durability.snapshot.push, 'function');
+            eq(typeof NC.durability.snapshot.list, 'function');
+            eq(typeof NC.durability.snapshot.read, 'function');
+            var cfg = NC.durability.snapshot.configure({ slots: 3 });
+            eq(cfg.slots, 3);
         });
         t('storage', 'keys(prefix) / onExternalChange', function () {
             NC.storage.setRaw(STORAGE_PREFIX + 'k1', '1');
@@ -691,6 +824,68 @@
             eq(b(null), '');
             eq(b('https://x b/v1'), '');
         }, [API]);
+        t('api', 'buildUrl 保留 query（内网网关必需）', function () {
+            var b = NC.api.buildUrl;
+            eq(b('https://h/v1?api-version=2024-01'), 'https://h/v1/chat/completions?api-version=2024-01');
+            eq(b('https://h/v1/chat/completions?x=1'), 'https://h/v1/chat/completions?x=1');
+            eq(b('https://h?token=abc'), 'https://h/chat/completions?token=abc');
+            eq(b('http://10.0.0.8:8000/v1/?a=1'), 'http://10.0.0.8:8000/v1/chat/completions?a=1');
+            eq(b('ftp://h/v1'), '');
+        }, [API]);
+        t('api', 'resolveChatEndpoint 与 buildUrl 一致', function () {
+            eq(typeof NC.schema.chat.resolveChatEndpoint, 'function');
+            eq(NC.schema.chat.resolveChatEndpoint('h/v1'),
+                NC.api.buildUrl('h/v1'));
+        }, [API]);
+        t('api', 'supportsSampling 跳过推理模型', function () {
+            var f = NC.api.supportsSampling;
+            eq(f('gpt-4o'), true);
+            eq(f('qwen2.5-72b-instruct'), true);
+            eq(f('o1-preview'), false);
+            eq(f('o3-mini'), false);
+            eq(f('gpt-5'), false);
+            eq(f('gpt-5-mini'), false);
+            eq(f('deepseek-reasoner'), false);
+            eq(f(''), false);
+        }, [API]);
+        t('api', 'buildPayload 推理模型不发采样参数', function () {
+            var payload = NC.api.buildPayload({
+                config: { modelId: 'o3-mini', enableAdvanced: true, temperature: 1.2, top_p: 0.8 },
+                messages: [{ role: 'user', content: 'hi' }]
+            });
+            eq(payload.temperature, undefined);
+            eq(payload.top_p, undefined);
+        }, [API]);
+        t('api', 'trimMessagesForBudget 从最老整轮开始丢', function () {
+            var f = NC.api.trimMessagesForBudget;
+            var list = [];
+            for (var i = 0; i < 40; i += 1) {
+                list.push({ role: i % 2 === 0 ? 'user' : 'assistant', content: new Array(500).join('字') });
+            }
+            var keep = f(list, { budget: 12000 });
+            assert(keep.messages.length < list.length, '应发生裁剪');
+            assert(keep.trimmed > 0, 'trimmed 应 > 0');
+            eq(keep.messages[0].role, 'user', '裁剪后仍应以 user 开头');
+            assert(keep.tokens <= 12000, '裁剪后应在预算内，实际 ' + keep.tokens);
+            var small = f(list.slice(0, 4), { budget: 100000 });
+            eq(small.trimmed, 0, '预算充足时不裁剪');
+            eq(small.messages.length, 4);
+        }, [API]);
+        t('api', 'isRetryableError 只重试未产出的瞬时错误', function () {
+            var f = NC.api.isRetryableError;
+            eq(f({ ok: true }), false);
+            eq(f({ ok: false, error: { type: 'network' } }), true);
+            eq(f({ ok: false, error: { type: 'http', status: 429 } }), true);
+            eq(f({ ok: false, error: { type: 'http', status: 503 } }), true);
+            eq(f({ ok: false, error: { type: 'http', status: 400 } }), false);
+            eq(f({ ok: false, error: { type: 'http', status: 500, partial: true } }), false);
+            eq(f({ ok: false, error: { type: 'timeout' } }), false);
+            eq(f(null), false);
+        }, [API]);
+        t('api', 'extractErrorMessage 识别上下文超限', function () {
+            var msg = NC.api.extractErrorMessage('maximum context length is 8192 tokens', 'Bad Request');
+            assert(msg.indexOf('上下文长度超出') === 0 || msg.indexOf('上下文长度超出') > -1, msg);
+        }, [API]);
         t('api', 'buildPayload 白名单', function () {
             var payload = NC.api.buildPayload({
                 config: { modelId: 'm1', systemPrompt: 'sys', enableAdvanced: false, temperature: 9 },
@@ -894,6 +1089,16 @@
             eq(store.getCurrentProfile().id, base.id, '删除当前后自动选第一个');
             eq(store.removeProfile(base.id), false, '不允许删除最后一个端点');
         }, [LLM]);
+        t('llm-store', 'enableAdvanced 默认开启且可关闭', function () {
+            var store = NC.store.llm;
+            store.reset();
+            var p = store.getProfiles()[0];
+            eq(p.enableAdvanced !== false, true, '默认应为开启（保持既有行为）');
+            eq(store.getChatConfig(p.id).enableAdvanced, true);
+            var off = store.updateProfile(p.id, { enableAdvanced: false });
+            eq(off.enableAdvanced, false, 'UI 关闭后应持久化');
+            eq(store.getChatConfig(p.id).enableAdvanced, false, 'getChatConfig 应跟随端点设置');
+        });
         t('llm-store', 'Todo AI 偏好 / 下班时间 / 持久化', function () {
             var store = NC.store.llm;
             var profile = store.getCurrentProfile();

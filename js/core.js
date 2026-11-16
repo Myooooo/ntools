@@ -7,7 +7,7 @@
     'use strict';
 
     var NC = global.NC = global.NC || {};
-    NC.version = '5.1.0';
+    NC.version = '5.15.0';
     NC.env = {
         page: 'unknown',
         chrome: 0,
@@ -15,6 +15,9 @@
         protocol: (global.location && global.location.protocol) || ''
     };
     NC.debug = false;
+    NC.ready = false;
+    /* 启动计时基准：用于自动判断是否需要 Lite（弱机优先） */
+    NC.bootAt = Date.now();
 
     NC.log = function () {
         if (!NC.debug || !global.console) return;
@@ -255,6 +258,46 @@
     }
 
     /* ------------------------------------------------------------------ *
+     * 按需加载（弱机优先：首屏只解析真正要用的脚本/样式）
+     * ------------------------------------------------------------------ */
+    var scriptCache = Object.create(null);
+    var styleCache = Object.create(null);
+
+    /** 动态注入脚本，同一 src 只加载一次；失败后允许重试 */
+    function loadScript(src) {
+        if (scriptCache[src]) return scriptCache[src];
+        scriptCache[src] = new Promise(function (resolve, reject) {
+            var el = document.createElement('script');
+            el.src = src;
+            el.async = true;
+            el.onload = function () { resolve(src); };
+            el.onerror = function () {
+                delete scriptCache[src];
+                reject(new Error('script failed: ' + src));
+            };
+            document.head.appendChild(el);
+        });
+        return scriptCache[src];
+    }
+
+    /** 动态注入样式表，同一 href 只加载一次 */
+    function loadStyle(href) {
+        if (styleCache[href]) return styleCache[href];
+        styleCache[href] = new Promise(function (resolve, reject) {
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = href;
+            link.onload = function () { resolve(href); };
+            link.onerror = function () {
+                delete styleCache[href];
+                reject(new Error('style failed: ' + href));
+            };
+            document.head.appendChild(link);
+        });
+        return styleCache[href];
+    }
+
+    /* ------------------------------------------------------------------ *
      * 剪贴板 / 下载
      * ------------------------------------------------------------------ */
     function copyText(text) {
@@ -444,6 +487,8 @@
         throttle: throttle,
         rafThrottle: rafThrottle,
         onceEvent: onceEvent,
+        loadScript: loadScript,
+        loadStyle: loadStyle,
         copyText: copyText,
         downloadBlob: downloadBlob,
         formatBytes: formatBytes,

@@ -1137,8 +1137,9 @@
                     if (mutation.addedNodes && mutation.addedNodes.length) {
                         Array.prototype.forEach.call(mutation.addedNodes, function (node) {
                             if (!node || node.nodeType !== 1) return;
-                            if (node.tagName === 'SELECT') enhanceSelect(node);
-                            else if (node.querySelector && node.querySelector('select:not([data-nc-select-enhanced])')) {
+                            if (node.tagName === 'SELECT') { enhanceSelect(node); return; }
+                            /* 只有确实含未增强的 select 才扫描子树 */
+                            if (node.querySelector && node.querySelector('select:not([data-nc-select-enhanced])')) {
                                 enhanceSelects(node);
                             }
                         });
@@ -1159,6 +1160,31 @@
             attributes: true,
             attributeFilter: ['disabled', 'title', 'aria-label', 'aria-labelledby', 'multiple', 'size', 'data-placeholder']
         });
+    }
+
+    /**
+     * 暂停/恢复自动增强观察器。
+     * 流式输出期间 DOM 每 60ms 全量重写一次，观察器回调纯属浪费；
+     * 暂停期间新增的 select 会在恢复时统一扫描一次补齐。
+     */
+    var selectPaused = false;
+
+    function pauseSelectObserver() {
+        selectPaused = true;
+        if (selectObserver) selectObserver.disconnect();
+    }
+
+    function resumeSelectObserver() {
+        if (!selectPaused) return;
+        selectPaused = false;
+        if (!selectObserver) return;
+        selectObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['disabled', 'title', 'aria-label', 'aria-labelledby', 'multiple', 'size', 'data-placeholder']
+        });
+        enhanceSelects(document);
     }
 
     function initSelectEnhancer() {
@@ -1217,6 +1243,8 @@
         trapFocus: trapFocus,
         getFocusable: getFocusable,
         installGlobalErrorHandlers: installGlobalErrorHandlers,
-        setBusy: setBusy
+        setBusy: setBusy,
+        pauseSelectObserver: pauseSelectObserver,
+        resumeSelectObserver: resumeSelectObserver
     };
 })(window);

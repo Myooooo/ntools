@@ -336,10 +336,10 @@
         var wrap = util.e('div', { class: 'sp-profile-editor' });
         var form = util.e('div', { class: 'sp-form-grid' });
 
-        var name = input({ value: profile.name, maxlength: '60', placeholder: '例如：内网 GPT-4o' });
-        var baseUrl = input({ value: profile.baseUrl, placeholder: 'https://api.openai.com/v1', spellcheck: 'false' });
-        var modelId = input({ value: profile.modelId, placeholder: 'gpt-4o', spellcheck: 'false' });
-        var apiKey = input({ value: profile.apiKey, type: 'password', placeholder: 'sk-...', autocomplete: 'new-password' });
+        var name = input({ value: profile.name, name: 'profile-name', maxlength: '60', placeholder: '例如：内网 GPT-4o' });
+        var baseUrl = input({ value: profile.baseUrl, name: 'profile-base-url', placeholder: 'http://10.0.0.8:8000/v1', spellcheck: 'false' });
+        var modelId = input({ value: profile.modelId, name: 'profile-model', placeholder: '例如 qwen2.5-72b-instruct', spellcheck: 'false' });
+        var apiKey = input({ value: profile.apiKey, name: 'profile-api-key', type: 'password', placeholder: 'sk-...', autocomplete: 'new-password' });
         var apiFormat = util.e('select', { class: 'nc-select', name: 'apiFormat', 'aria-label': 'API 格式' });
         apiFormat.appendChild(util.e('option', { value: 'openai', text: 'openai（标准 OpenAI 兼容）' }));
         apiFormat.appendChild(util.e('option', { value: 'bocai', text: 'bocai（BOCAI 网关）' }));
@@ -380,6 +380,15 @@
 
         var temp = profile.temperature;
         var topP = profile.topP;
+        var advanced = profile.enableAdvanced !== false;
+        var advancedRow = util.e('div', { class: 'sp-row sp-form-full' });
+        advancedRow.appendChild(util.e('span', { class: 'sp-row__label', text: '采样参数' }));
+        advancedRow.appendChild(switchField(
+            '发送 temperature / top_p（推理类模型如 o1/o3/gpt-5 会自动跳过）',
+            advanced,
+            function (v) { advanced = !!v; }
+        ));
+        form.appendChild(advancedRow);
         form.appendChild(rangeRow('Temperature', temp, '0.1', function (v) { temp = v; }));
         form.appendChild(rangeRow('Top P', topP, '0.05', function (v) { topP = v; }));
         wrap.appendChild(form);
@@ -420,6 +429,7 @@
                     modelId: modelId.value,
                     apiFormat: apiFormat.value,
                     capabilities: caps,
+                    enableAdvanced: advanced,
                     chatSystemPrompt: prompt.value,
                     temperature: temp,
                     topP: topP
@@ -678,22 +688,373 @@
             small: true, icon: 'download',
             onClick: exportEverything
         }));
+        chatActions.appendChild(button('从备份恢复', {
+            small: true, icon: 'upload',
+            onClick: importEverything
+        }));
         chatCard.appendChild(chatActions);
         container.appendChild(chatCard);
+
+        container.appendChild(renderSnapshotCard());
+        container.appendChild(renderLegacyCard());
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 分区：数据 —— 历史版本数据清理
+     * 迁移后旧键一直留着（为了可回退），但它们会实实在在占用 3.5MB 预算。
+     * 这里只列出"确定可删"的旧键，并让用户显式确认后再删。
+     * ------------------------------------------------------------------ */
+    var LEGACY_KEYS = [
+        { key: 'ntools_todo', label: '待办 v1 旧数据' },
+        { key: 'ntools.todo.v1_backup', label: '待办 v1 迁移备份' },
+        { key: 'nchat-conversation', label: '聊天 v1 旧数据' },
+        { key: 'nchat-conversation.v2', label: '聊天 v2 旧数据' },
+        { key: 'nchat-settings', label: '旧 nChat 端点配置' },
+        { key: 'boc_email_system_groups_v1', label: '邮件旧分组键' },
+        { key: 'boc_email_system_emails_v1', label: '邮件旧地址键' }
+    ];
+
+    function listLegacyEntries() {
+        var out = [];
+        LEGACY_KEYS.forEach(function (item) {
+            var raw = null;
+            try { raw = global.localStorage.getItem(item.key); } catch (err) { raw = null; }
+            if (raw == null) return;
+            out.push({ key: item.key, label: item.label, bytes: raw.length });
+        });
+        try {
+            NC.storage.keys().forEach(function (name) {
+                if (!name || name.indexOf('.corrupt.') === -1) return;
+                var raw = global.localStorage.getItem(name);
+                out.push({ key: name, label: '损坏数据备份', bytes: raw ? raw.length : 0 });
+            });
+        } catch (err) { /* ignore */ }
+        return out;
+    }
+
+    function renderLegacyCard() {
+        var card = util.e('div', { class: 'sp-data-card' });
+        card.appendChild(util.e('div', { class: 'sp-data-card__title', text: '历史版本数据' }));
+        card.appendChild(util.e('div', {
+            class: 'sp-data-card__desc',
+            text: '迁移到新格式后保留的旧键，占用的仍是同一份本地存储配额。确认新数据无误后可清理。'
+        }));
+
+        var listEl = util.e('div', { class: 'sp-snap-list' });
+        card.appendChild(listEl);
+
+        function renderList() {
+            listEl.textContent = '';
+            var entries = listLegacyEntries();
+            if (!entries.length) {
+                listEl.appendChild(util.e('div', { class: 'sp-hint', text: '没有需要清理的旧数据' }));
+                return;
+            }
+            var total = 0;
+            entries.forEach(function (item) {
+                total += item.bytes;
+                var row = util.e('div', { class: 'sp-snap-row' });
+                row.appendChild(util.e('span', { class: 'sp-snap-row__time', text: item.label }));
+                row.appendChild(util.e('span', { class: 'sp-snap-row__meta', text: util.formatBytes(item.bytes) }));
+                listEl.appendChild(row);
+            });
+            listEl.appendChild(util.e('div', {
+                class: 'sp-hint',
+                text: '合计约 ' + util.formatBytes(total) + '，共 ' + entries.length + ' 个旧键'
+            }));
+
+            var actions = util.e('div', { class: 'sp-data-card__actions' });
+            actions.appendChild(button('清理旧数据', {
+                small: true, danger: true, icon: 'trash',
+                onClick: function () {
+                    ui.confirm(
+                        '将删除 ' + entries.length + ' 个历史键（约 ' + util.formatBytes(total) + '）。' +
+                        '它们只用于回退到旧版本，删除后不可恢复。建议先「导出全部本地数据」。',
+                        { title: '清理历史版本数据', confirmText: '删除', danger: true }
+                    ).then(function (ok) {
+                        if (!ok) return;
+                        var removed = 0;
+                        entries.forEach(function (item) {
+                            try { global.localStorage.removeItem(item.key); removed += 1; } catch (err) { /* ignore */ }
+                        });
+                        toast('已清理 ' + removed + ' 个历史键', 'success');
+                        renderList();
+                    });
+                }
+            }));
+            listEl.appendChild(actions);
+        }
+
+        renderList();
+        return card;
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 分区：数据 —— 环形快照恢复
+     * ------------------------------------------------------------------ */
+    function renderSnapshotCard() {
+        var card = util.e('div', { class: 'sp-data-card' });
+        card.appendChild(util.e('div', { class: 'sp-data-card__title', text: '待办快照' }));
+        card.appendChild(util.e('div', {
+            class: 'sp-data-card__desc',
+            text: '自动保留最近 3 份待办快照（约每 10 分钟或每 20 次保存一次），主数据损坏时可回滚。'
+        }));
+        var listEl = util.e('div', { class: 'sp-snap-list' });
+        card.appendChild(listEl);
+
+        var store = NC.store.todo;
+        if (!store || typeof store.listSnapshots !== 'function') {
+            listEl.appendChild(util.e('div', { class: 'sp-hint', text: '待办模块未加载' }));
+            return card;
+        }
+
+        function renderList() {
+            listEl.textContent = '';
+            store.listSnapshots().then(function (items) {
+                if (!items || !items.length) {
+                    listEl.appendChild(util.e('div', { class: 'sp-hint', text: '还没有快照（首次自动保存后生成）' }));
+                    return;
+                }
+                items.forEach(function (item) {
+                    var row = util.e('div', { class: 'sp-snap-row' });
+                    var when = util.formatDateTime(item.at);
+                    var count = item.summary && util.isFiniteNum(item.summary.tasks) ? item.summary.tasks + ' 条任务' : '';
+                    row.appendChild(util.e('span', { class: 'sp-snap-row__time', text: when }));
+                    row.appendChild(util.e('span', { class: 'sp-snap-row__meta', text: count }));
+                    row.appendChild(button('恢复', {
+                        small: true, ghost: true,
+                        onClick: function () {
+                            ui.confirm('用 ' + when + ' 的快照覆盖当前待办？当前状态会先自动存一份快照。', {
+                                title: '恢复快照',
+                                confirmText: '恢复',
+                                danger: true
+                            }).then(function (ok) {
+                                if (!ok) return;
+                                store.restoreSnapshot(item.slot).then(function (res) {
+                                    if (res && res.ok) {
+                                        toast('已恢复 ' + res.tasks + ' 条任务', 'success');
+                                        renderSection('data');
+                                    } else {
+                                        toast('恢复失败：' + ((res && res.reason) || '未知原因'), 'error');
+                                    }
+                                });
+                            });
+                        }
+                    }));
+                    listEl.appendChild(row);
+                });
+            }).catch(function () {
+                listEl.appendChild(util.e('div', { class: 'sp-hint', text: '快照读取失败' }));
+            });
+        }
+
+        renderList();
+        return card;
+    }
+
+    var EMAIL_DOC_KEY = 'ntools.email.v1';
+    var LEGACY_EMAIL_KEYS = { groups: 'boc_email_system_groups_v1', emails: 'boc_email_system_emails_v1' };
+
+    function readEmailData() {
+        try {
+            var doc = util.parseJSON(global.localStorage.getItem(EMAIL_DOC_KEY), null);
+            if (doc && util.isPlainObject(doc) && Array.isArray(doc.groups) && Array.isArray(doc.emails)) {
+                return { schemaVersion: doc.schemaVersion || 1, groups: doc.groups, emails: doc.emails };
+            }
+            /* 尚未迁移到 v1 文档时，回退读两个旧键 */
+            var groups = util.parseJSON(global.localStorage.getItem(LEGACY_EMAIL_KEYS.groups), null);
+            var emails = util.parseJSON(global.localStorage.getItem(LEGACY_EMAIL_KEYS.emails), null);
+            if (Array.isArray(groups) || Array.isArray(emails)) {
+                return {
+                    groups: Array.isArray(groups) ? groups : [],
+                    emails: Array.isArray(emails) ? emails : []
+                };
+            }
+        } catch (err) { /* ignore */ }
+        return null;
+    }
+
+    /**
+     * 聊天栈是懒加载的。导出/导入全量备份前必须先把它拉起来，
+     * 否则"全量备份"会静默漏掉聊天记录——这正是数据安全最不该出现的行为。
+     */
+    function withChatStore(fn) {
+        var store = NC.store && NC.store.conversation;
+        if (store && typeof store.exportAllSessions === 'function') return fn();
+        if (typeof NC.loadChatBundle !== 'function') return fn();
+        toast('正在准备聊天数据…', 'info');
+        NC.loadChatBundle().then(function () { fn(); }, function () { fn(); });
     }
 
     function exportEverything() {
+        withChatStore(doExportEverything);
+    }
+
+    function doExportEverything() {
         var payload = {
             app: 'nTools',
+            kind: 'full-backup',
+            version: NC.version,
             exportedAt: new Date().toISOString(),
             llm: store().exportAll({ includeKeys: false }),
-            todo: null
+            todo: null,
+            chats: null,
+            email: null
         };
         if (NC.store.todo && typeof NC.store.todo.exportData === 'function') {
             try { payload.todo = NC.store.todo.exportData(); } catch (err) { payload.todo = null; }
         }
-        util.downloadBlob('ntools-backup-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(payload, null, 2), 'application/json');
-        toast('已导出（不含密钥）', 'success');
+        if (NC.store.conversation && typeof NC.store.conversation.exportAllSessions === 'function') {
+            try { payload.chats = NC.store.conversation.exportAllSessions(); } catch (err) { payload.chats = null; }
+        }
+        payload.email = readEmailData();
+
+        var json = JSON.stringify(payload, null, 2);
+        var name = 'ntools-backup-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '') + '.json';
+        var ok = util.downloadBlob(name, json, 'application/json');
+        if (!ok) {
+            ui.openModal({
+                title: '导出失败',
+                message: '浏览器阻止了自动下载。下面是备份内容，请手动复制保存。',
+                size: 'lg',
+                content: util.e('textarea', { class: 'nc-input', rows: 12, value: json, readonly: true })
+            });
+            return;
+        }
+        toast('已导出全量备份（不含密钥）', 'success');
+    }
+
+    function importEverything() {
+        var inputEl = document.createElement('input');
+        inputEl.type = 'file';
+        inputEl.accept = '.json,application/json';
+        inputEl.addEventListener('change', function () {
+            var file = inputEl.files && inputEl.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function (event) {
+                var data = util.parseJSON(event.target.result, null);
+                if (!util.isPlainObject(data)) {
+                    toast('文件不是有效的 JSON 备份', 'error');
+                    return;
+                }
+                var summary = describeBackup(data);
+                if (!summary.ok) {
+                    toast('备份格式不完整：' + summary.reason, 'error');
+                    return;
+                }
+                ui.confirm(summary.text + '\n\n导入会覆盖现有的待办、聊天与邮件数据（端点配置为合并）。继续？', {
+                    title: '从备份恢复',
+                    confirmText: '导入并覆盖',
+                    danger: true
+                }).then(function (ok) {
+                    if (ok) applyBackup(data);
+                });
+            };
+            reader.onerror = function () { toast('读取文件失败', 'error'); };
+            reader.readAsText(file);
+        });
+        inputEl.click();
+    }
+
+    function describeBackup(data) {
+        var parts = [];
+        var hasAny = false;
+        if (data.todo && Array.isArray(data.todo.tasks)) {
+            parts.push('待办 ' + data.todo.tasks.length + ' 条');
+            hasAny = true;
+        }
+        if (data.chats && Array.isArray(data.chats.sessions)) {
+            var msgCount = 0;
+            data.chats.sessions.forEach(function (s) { msgCount += (s.messages || []).length; });
+            parts.push('会话 ' + data.chats.sessions.length + ' 个 / 消息 ' + msgCount + ' 条');
+            hasAny = true;
+        }
+        if (data.email && (data.email.groups || data.email.emails)) {
+            var g = (data.email.groups || []).length;
+            var e = (data.email.emails || []).length;
+            parts.push('邮件分组 ' + g + ' 个 / 地址 ' + e + ' 条');
+            hasAny = true;
+        }
+        if (data.llm) {
+            var p = data.llm.profiles || (data.llm.state && data.llm.state.profiles) || [];
+            parts.push('端点 ' + p.length + ' 个（合并）');
+            hasAny = true;
+        }
+        if (!hasAny) return { ok: false, reason: '没有可导入的数据段', text: '' };
+        return { ok: true, text: '备份包含：' + parts.join('；') + '。' };
+    }
+
+    function applyBackup(data, chatLoaded) {
+        /* 聊天栈懒加载：先拉起来再恢复聊天记录，失败也只尝试一次，避免死循环 */
+        if (!chatLoaded && data.chats && Array.isArray(data.chats.sessions) &&
+            !(NC.store && NC.store.conversation)) {
+            withChatStore(function () { applyBackup(data, true); });
+            return;
+        }
+        var done = [];
+        var failed = [];
+        var todoStore = NC.store.todo;
+        if (data.todo && Array.isArray(data.todo.tasks) && todoStore && todoStore.importDoc) {
+            try {
+                if (todoStore.isReadOnly && todoStore.isReadOnly()) {
+                    failed.push('待办处于只读状态');
+                } else {
+                    todoStore.importDoc(data.todo, 'replace');
+                    done.push('待办');
+                }
+            } catch (err) { failed.push('待办'); }
+        }
+        if (data.email && (data.email.groups || data.email.emails)) {
+            try {
+                var prevEmail = util.parseJSON(global.localStorage.getItem(EMAIL_DOC_KEY), null);
+                if (prevEmail) {
+                    /* 覆盖前留一份，误导入可回退 */
+                    global.localStorage.setItem(EMAIL_DOC_KEY + '.preimport', JSON.stringify(prevEmail));
+                }
+                var prevRev = prevEmail && util.isFiniteNum(prevEmail.revision) ? prevEmail.revision : 0;
+                global.localStorage.setItem(EMAIL_DOC_KEY, JSON.stringify({
+                    schemaVersion: 1,
+                    revision: prevRev + 1,
+                    updatedAt: Date.now(),
+                    groups: Array.isArray(data.email.groups) ? data.email.groups : [],
+                    emails: Array.isArray(data.email.emails) ? data.email.emails : []
+                }));
+                done.push('邮件');
+                events.emit('email:imported');
+            } catch (err) { failed.push('邮件'); }
+        }
+        if (data.llm) {
+            try {
+                var result = store().importAll(data.llm, { merge: true });
+                if (result && result.ok) done.push('端点');
+                else failed.push('端点');
+            } catch (err) { failed.push('端点'); }
+        }
+        var finishChats = function () {
+            toast(
+                '导入完成：' + (done.length ? done.join('、') : '无') +
+                (failed.length ? '；失败：' + failed.join('、') : ''),
+                failed.length ? 'warn' : 'success'
+            );
+            renderSection('data');
+        };
+        if (data.chats && Array.isArray(data.chats.sessions) &&
+            NC.store.conversation && NC.store.conversation.importAllSessions) {
+            NC.store.conversation.importAllSessions(data.chats).then(function (res) {
+                if (res && res.ok) done.push('会话');
+                else failed.push('会话');
+                if (NC.chatEmbed && NC.chatEmbed.renderConversation) {
+                    try { NC.chatEmbed.renderConversation(''); } catch (err) { /* ignore */ }
+                }
+                finishChats();
+            }).catch(function () {
+                failed.push('会话');
+                finishChats();
+            });
+            return;
+        }
+        finishChats();
     }
 
     /* ------------------------------------------------------------------ *

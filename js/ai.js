@@ -112,12 +112,23 @@
         return false;
     }
 
+    /**
+     * 与 NC.api.buildUrl 共用同一套解析（schema-chat.resolveChatEndpoint）：
+     * 带 query 的网关地址不会再被拼坏。schema 未加载时退回本地实现。
+     */
     function buildEndpoint(baseUrl) {
+        var schemaChat = NC.schema && NC.schema.chat;
+        if (schemaChat && typeof schemaChat.resolveChatEndpoint === 'function') {
+            return schemaChat.resolveChatEndpoint(baseUrl);
+        }
         var base = String(baseUrl == null ? '' : baseUrl).trim();
         if (!base || /[\s\u0000-\u001f]/.test(base)) return '';
-        base = base.replace(/\/+$/, '');
-        if (/\/chat\/completions$/i.test(base)) return base;
-        return base + '/chat/completions';
+        var cut = base.indexOf('?');
+        var path = cut === -1 ? base : base.slice(0, cut);
+        var query = cut === -1 ? '' : base.slice(cut);
+        path = path.replace(/\/+$/, '');
+        if (!/\/chat\/completions$/i.test(path)) path += '/chat/completions';
+        return path + query;
     }
 
     function normalizeMessages(options) {

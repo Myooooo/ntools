@@ -134,6 +134,41 @@
         var history = source.map(function (message) {
             return { role: message.role, content: contentForApi(message) };
         });
+        /* 图片先自检：不合法 URL 会在 api 层被静默剔除，
+         * 用户在界面上完全看不出来"图没发出去"，所以这里先提示。 */
+        if (NC.api && typeof NC.api.isAllowedImageUrl === 'function') {
+            var droppedImages = 0;
+            history.forEach(function (message) {
+                if (!Array.isArray(message.content)) return;
+                message.content.forEach(function (part) {
+                    if (!part || part.type !== 'image_url') return;
+                    var url = part.image_url && typeof part.image_url === 'object' ? part.image_url.url : null;
+                    if (!NC.api.isAllowedImageUrl(url)) droppedImages += 1;
+                });
+            });
+            if (droppedImages > 0) {
+                ui.toast(droppedImages + ' 张图片格式不受支持，已跳过发送（仅支持 data:image/*）', {
+                    type: 'warn',
+                    duration: 4600
+                });
+            }
+        }
+
+        /* 上下文预算：超限时从最老的整轮开始丢，避免服务端 400 后用户一脸茫然 */
+        if (NC.api && typeof NC.api.trimMessagesForBudget === 'function') {
+            var budget = util.isFiniteNum(config && config.contextBudget) && config.contextBudget > 0
+                ? config.contextBudget
+                : 32000;
+            var fitted = NC.api.trimMessagesForBudget(history, { budget: budget });
+            if (fitted.trimmed > 0) {
+                history = fitted.messages;
+                ui.toast(
+                    '已省略最早 ' + fitted.trimmed + ' 条历史以适配上下文预算（约 ' +
+                    Math.round(fitted.tokens / 1000) + 'k / ' + Math.round(budget / 1000) + 'k token）',
+                    { type: 'info', duration: 4200 }
+                );
+            }
+        }
         composer().setBusy(true);
         messages().setStreaming(true);
         messages().setTyping(true);
@@ -199,6 +234,8 @@
         messages().update(draft.id, {
             content: draft.content,
             reasoning: draft.reasoning,
+            /* 显式标记：message-view 据此走增量渲染，避免每帧全量重解析 */
+            streaming: true,
             reasoningStreaming: !!draft.reasoning && !draft.content,
             reasoningTime: draft.reasoningTime != null ? draft.reasoningTime : null
         });
@@ -281,6 +318,9 @@
         stream.added = false;
         composer().focus();
         if (aborted) ui.toast('已停止生成，已保留当前内容', { type: 'info' });
+        else if (result && result.finishReason === 'length') {
+            ui.toast('输出达到模型长度上限，内容可能被截断', { type: 'warn', duration: 4600 });
+        }
     }
 
     function onError(error) {
@@ -550,8 +590,36 @@
     /* ------------------------------------------------------------------ *
      * 初始化
      * ------------------------------------------------------------------ */
+    var lifecycleBound = false;
+
+    /**
+     * 页面卸载/切走：中止在途请求并把已生成内容落盘。
+     * 不做的话，长回答途中关窗会连连接带内容一起消失。
+     */
+    function bindLifecycle() {
+        if (lifecycleBound) return;
+        lifecycleBound = true;
+        global.addEventListener('pagehide', function () {
+            if (stream.active && stream.controller) {
+                try { stream.controller.abort(); } catch (err) { /* ignore */ }
+            }
+            var conv = NC.store && NC.store.conversation;
+            if (conv && typeof conv.saveNow === 'function') {
+                try { conv.saveNow(); } catch (err) { /* ignore */ }
+            }
+        });
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden) return;
+            var conv = NC.store && NC.store.conversation;
+            if (conv && typeof conv.saveNow === 'function') {
+                try { conv.saveNow(); } catch (err) { /* ignore */ }
+            }
+        });
+    }
+
     function init(options) {
         deps = options || {};
+        bindLifecycle();
 
         var map = {
             'export-conversation-btn': exportMarkdown,

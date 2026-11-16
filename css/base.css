@@ -45,11 +45,11 @@ h1, h2, h3, h4, h5, h6 {
     margin: 0;
     font-weight: 600;
     line-height: var(--nc-lh-tight);
-    letter-spacing: -0.018em;
+    letter-spacing: var(--nc-track-title);
 }
 
-h1 { font-size: var(--nc-fs-2xl); }
-h2 { font-size: var(--nc-fs-xl); letter-spacing: -0.012em; }
+h1 { font-size: var(--nc-fs-2xl); letter-spacing: var(--nc-track-display); }
+h2 { font-size: var(--nc-fs-xl); letter-spacing: var(--nc-track-title); }
 h3 { font-size: var(--nc-fs-lg); letter-spacing: -0.008em; }
 
 p {
@@ -311,6 +311,11 @@ fieldset {
     to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes nc-fade-up {
+    from { opacity: 0; transform: translateY(var(--nc-enter-y, 6px)); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes nc-slide-up {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
@@ -358,14 +363,14 @@ fieldset {
 .nc-page-title {
     font-size: var(--nc-fs-2xl);
     font-weight: 650;
-    letter-spacing: -0.02em;
+    letter-spacing: var(--nc-track-display);
 }
 
 .nc-page-subtitle {
     margin-top: 3px;
     font-size: var(--nc-fs-sm);
     color: var(--nc-text-3);
-    letter-spacing: 0.002em;
+    letter-spacing: var(--nc-track-meta);
 }
 
 .nc-hr {
