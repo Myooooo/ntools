@@ -49,6 +49,8 @@
 <script defer src="../js/theme.js"></script>
 <script defer src="../js/schema-todo.js"></script>
 <script defer src="../js/schema-chat.js"></script>
+<script defer src="../js/schema-notes.js"></script>
+<script defer src="../js/notes-index.js"></script>
 <script defer src="../js/markdown-enhance.js"></script>
 <script defer src="../js/message-view.js"></script>
 <script defer src="../js/sse.js"></script>
@@ -370,6 +372,246 @@
             eq(host.querySelectorAll('pre').length, 1, '代码块应只有一个');
             assert(host.textContent.indexOf('abc') > -1, '代码内容应保留');
             host.parentNode.removeChild(host);
+        });
+
+        /* ---------------- schema.notes（笔记契约） ---------------- */
+        t('schema.notes', 'normalizeTitle：裁空白 / 折叠 / 去分隔符 / 限长', function () {
+            var f = NC.schema.notes.normalizeTitle;
+            eq(f('  季度  报告  '), '季度 报告');
+            eq(f('a[[b|c]]d'), 'a b c d');
+            eq(f('   '), '');
+            eq(f(null), '');
+            eq(f(new Array(400).join('长')).length, 200);
+        });
+        t('schema.notes', 'uniqueTitle：冲突自动加序号', function () {
+            var f = NC.schema.notes.uniqueTitle;
+            var used = new Set();
+            eq(f('项目', used), '项目');
+            used.add('项目');
+            eq(f('项目', used), '项目 2');
+            used.add('项目 2');
+            eq(f('项目', used), '项目 3');
+        });
+        t('schema.notes', 'parseLinks：四类语法', function () {
+            var list = NC.schema.notes.parseLinks(
+                '看 [[A]] 与 [[B|别名]] 还有 [[C#小节]] 以及 ![[图.png]]'
+            );
+            eq(list.length, 4);
+            eq(list[0].target, 'A');
+            eq(list[0].isEmbed, false);
+            eq(list[1].target, 'B');
+            eq(list[1].alias, '别名');
+            eq(list[2].target, 'C');
+            eq(list[2].anchor, '小节');
+            eq(list[3].isEmbed, true);
+            eq(list[3].target, '图.png');
+        });
+        t('schema.notes', 'parseLinks：围栏代码 / 行内代码 / HTML 注释内一律忽略', function () {
+            var text = [
+                '正文 [[真链接]]',
+                '```',
+                '[[代码块里的假链接]]',
+                '```',
+                '行内 `[[行内代码假链接]]` 后面 [[真链接二]]',
+                '<!-- [[注释假链接]] -->'
+            ].join('\n');
+            var targets = NC.schema.notes.parseLinks(text).map(function (i) { return i.target; });
+            eq(targets.length, 2, '应只解析两条：' + JSON.stringify(targets));
+            eq(targets[0], '真链接');
+            eq(targets[1], '真链接二');
+        });
+        t('schema.notes', 'parseLinks：空标题 / 只有锚点', function () {
+            eq(NC.schema.notes.parseLinks('[[]]').length, 0);
+            eq(NC.schema.notes.parseLinks('[[#小节]]').length, 1, '只有锚点时保留');
+            eq(NC.schema.notes.parseLinks('[[#小节]]')[0].target, '');
+        });
+        t('schema.notes', 'maskCode：遮罩后长度与换行不变', function () {
+            var text = 'a `b` c\n```\nd\n```\ne';
+            var mask = NC.schema.notes.maskCode(text);
+            eq(mask.length, text.length, '长度必须一致');
+            eq(mask.split('\n').length, text.split('\n').length, '行数必须一致');
+            eq(mask.indexOf('`'), -1, '不应残留反引号');
+        });
+        t('schema.notes', 'parseTags：CJK / 去重 / 跳过标题井号', function () {
+            var tags = NC.schema.notes.parseTags('# 这是标题\n正文 #工作 #工作 #季度/报告（#全角括号）');
+            assert(tags.indexOf('工作') > -1, '应有 工作');
+            eq(tags.filter(function (t) { return t === '工作'; }).length, 1, '重复标签去重');
+            assert(tags.indexOf('季度/报告') > -1, '应支持带斜杠的标签');
+            eq(tags.indexOf('这是标题'), -1, '标题井号不是标签');
+        });
+        t('schema.notes', 'parseTags：代码块内的 # 不算标签', function () {
+            var tags = NC.schema.notes.parseTags('正文 #真标签\n```\n#不是标签\n```');
+            eq(tags.length, 1);
+            eq(tags[0], '真标签');
+        });
+        t('schema.notes', 'extractHeadings / firstHeadingTitle', function () {
+            var text = '前言\n\n## 二级\n\n# 一级标题\n\n```\n# 代码里的假标题\n```';
+            var heads = NC.schema.notes.extractHeadings(text);
+            eq(heads.length, 2, JSON.stringify(heads));
+            eq(heads[0].level, 2);
+            eq(heads[1].text, '一级标题');
+            eq(NC.schema.notes.firstHeadingTitle(text), '一级标题', '优先取一级标题');
+            eq(NC.schema.notes.firstHeadingTitle('## 只有二级'), '只有二级');
+            eq(NC.schema.notes.firstHeadingTitle('没有标题'), '');
+        });
+        t('schema.notes', 'tokenize：拉丁 / 中文 bigram / 单字 / 去重', function () {
+            var t1 = NC.schema.notes.tokenize('Hello world');
+            assert(t1.indexOf('hello') > -1);
+            assert(t1.indexOf('world') > -1);
+            var t2 = NC.schema.notes.tokenize('季度报告');
+            eq(t2.sort().join(','), ['季度', '度报', '报告'].sort().join(','));
+            var t3 = NC.schema.notes.tokenize('猫');
+            eq(t3.length, 1);
+            eq(t3[0], '猫');
+            var t4 = NC.schema.notes.tokenize('API 接口 api 接口');
+            eq(t4.filter(function (x) { return x === 'api'; }).length, 1, '重复 token 去重');
+            assert(t4.indexOf('接口') > -1);
+        });
+        t('schema.notes', 'normalizeVault：重复标题 / 重复 id / 悬挂文件夹', function () {
+            var res = NC.schema.notes.normalizeVault({
+                schemaVersion: 1,
+                folders: [{ id: 'f1', name: '工作' }],
+                notes: [
+                    { id: 'n1', title: '同名', content: 'a', folderId: 'f1' },
+                    { id: 'n1', title: '同名', content: 'b' },
+                    { id: 'n3', title: '', content: '# 从标题推出来\n正文' },
+                    { id: 'n4', title: '悬挂', content: '', folderId: 'no-such-folder' }
+                ]
+            });
+            eq(res.doc.notes.length, 4);
+            var titles = res.doc.notes.map(function (n) { return n.title; });
+            eq(titles[0], '同名');
+            eq(titles[1], '同名 2', '重复标题自动加序号');
+            eq(titles[2], '从标题推出来', '无标题时取首个标题');
+            eq(titles[3], '悬挂');
+            var ids = res.doc.notes.map(function (n) { return n.id; });
+            eq(new Set(ids).size, 4, 'id 必须唯一');
+            eq(res.doc.notes[3].folderId, null, '悬挂文件夹置空');
+            eq(res.doc.notes[0].folderId, 'f1');
+        });
+        t('schema.notes', 'normalizeVault：超限截断会产 destructive issue', function () {
+            var notes = [];
+            for (var i = 0; i < 2100; i += 1) notes.push({ id: 'x' + i, title: 'T' + i, content: '' });
+            var res = NC.schema.notes.normalizeVault({ notes: notes });
+            eq(res.doc.notes.length, 2000);
+            var d = NC.schema.notes.destructiveIssues(res.issues);
+            eq(d.length, 1);
+            eq(d[0].code, 'notes-truncated');
+        });
+        t('schema.notes', 'migrateLegacyMarkdown：标题推导与空内容', function () {
+            var note = NC.schema.notes.migrateLegacyMarkdown('# 旧草稿\n\n正文');
+            assert(!!note);
+            eq(note.title, '旧草稿');
+            eq(note.id, 'n-legacy-md');
+            assert(note.content.indexOf('正文') > -1);
+            eq(NC.schema.notes.migrateLegacyMarkdown('   '), null);
+            eq(NC.schema.notes.migrateLegacyMarkdown(null), null);
+            var untitled = NC.schema.notes.migrateLegacyMarkdown('没有标题的草稿');
+            eq(untitled.title, 'Markdown 草稿');
+        });
+        t('schema.notes', 'exportVault / parseImport 往返', function () {
+            var doc = NC.schema.notes.normalizeVault({
+                notes: [{ id: 'n1', title: '甲', content: '看 [[乙]]' }],
+                folders: [{ id: 'f1', name: '夹' }]
+            }).doc;
+            var dump = NC.schema.notes.exportVault(doc);
+            eq(dump.kind, 'notes-vault');
+            var back = NC.schema.notes.parseImport(JSON.stringify(dump));
+            eq(back.doc.notes.length, 1);
+            eq(back.doc.notes[0].title, '甲');
+            eq(back.doc.folders.length, 1);
+        });
+        t('schema.notes', 'parseImport：纯数组 / 非法输入不抛错', function () {
+            var arr = NC.schema.notes.parseImport([{ title: '只有数组', content: 'x' }]);
+            eq(arr.doc.notes.length, 1);
+            eq(NC.schema.notes.parseImport('{oops').doc, null);
+            eq(NC.schema.notes.parseImport('{"a":1}').doc, null);
+            eq(NC.schema.notes.parseImport(null).doc, null);
+        });
+
+        /* ---------------- notes-index（链接与检索） ---------------- */
+        function makeNotesIndex(list) {
+            return NC.notesIndex.build(NC.schema.notes.normalizeVault({ notes: list }).doc.notes);
+        }
+        t('notes-index', '出链 / 反链 / 未解析', function () {
+            var idx = makeNotesIndex([
+                { id: 'a', title: '甲', content: '链接到 [[乙]] 和 [[不存在]]' },
+                { id: 'b', title: '乙', content: '回到 [[甲]]' },
+                { id: 'c', title: '丙', content: '没有链接' }
+            ]);
+            eq(NC.notesIndex.outlinks(idx, 'a').length, 1);
+            eq(NC.notesIndex.outlinks(idx, 'a')[0].id, 'b');
+            eq(NC.notesIndex.backlinks(idx, 'a').length, 1);
+            eq(NC.notesIndex.backlinks(idx, 'a')[0].id, 'b');
+            eq(NC.notesIndex.unresolvedFor(idx, 'a').length, 1);
+            var broken = NC.notesIndex.brokenLinks(idx);
+            eq(broken.length, 1);
+            eq(broken[0].title, '不存在');
+            eq(NC.notesIndex.outlinks(idx, 'c').length, 0);
+        });
+        t('notes-index', '增量 addNote / removeNote 不残留', function () {
+            var idx = makeNotesIndex([{ id: 'a', title: '甲', content: '[[乙]] #标签' }]);
+            eq(NC.notesIndex.tagList(idx).length, 1);
+            NC.notesIndex.addNote(idx, { id: 'b', title: '乙', content: '', updatedAt: 1 });
+            NC.notesIndex.rebuildLinks(idx);
+            eq(NC.notesIndex.unresolvedFor(idx, 'a').length, 0, '乙存在后未解析应清空');
+            eq(NC.notesIndex.backlinks(idx, 'b').length, 1);
+            NC.notesIndex.removeNote(idx, 'a');
+            eq(NC.notesIndex.backlinks(idx, 'b').length, 0, '移除来源后反链清空');
+            eq(NC.notesIndex.tagList(idx).length, 0, '标签也应清理');
+            eq(NC.notesIndex.search(idx, '乙').length, 1, '乙仍在索引里');
+        });
+        t('notes-index', 'search：标题优先于正文，中文两字词可命中', function () {
+            var idx = makeNotesIndex([
+                { id: 't', title: '季度报告', content: '正文无关', updatedAt: 1 },
+                { id: 'c', title: '杂记', content: '写了一份季度报告', updatedAt: 2 }
+            ]);
+            var res = NC.notesIndex.search(idx, '季度');
+            eq(res.length, 2);
+            eq(res[0].id, 't', '标题命中应排第一');
+            eq(res[0].match, 'title');
+            eq(res[1].match, 'content');
+            assert(res[1].snippet.indexOf('季度') > -1, '片段应包含关键词');
+            eq(NC.notesIndex.search(idx, '').length, 0);
+        });
+        t('notes-index', 'search：拉丁词与大小写不敏感', function () {
+            var idx = makeNotesIndex([{ id: 'x', title: 'API 设计', content: '关于 api 的约定' }]);
+            eq(NC.notesIndex.search(idx, 'api').length, 1);
+            eq(NC.notesIndex.search(idx, 'API').length, 1);
+            eq(NC.notesIndex.search(idx, 'apix').length, 0);
+        });
+        t('notes-index', 'quickSwitch：前缀 / 子串 / 子序列 / 空查询按更新时间', function () {
+            var idx = makeNotesIndex([
+                { id: 'a', title: '项目计划', content: '', updatedAt: 1 },
+                { id: 'b', title: '读书笔记', content: '', updatedAt: 3 },
+                { id: 'c', title: '季度项目复盘', content: '', updatedAt: 2 }
+            ]);
+            eq(NC.notesIndex.quickSwitch(idx, '项目')[0].id, 'a', '前缀命中排第一');
+            eq(NC.notesIndex.quickSwitch(idx, '复盘')[0].id, 'c', '子串命中');
+            eq(NC.notesIndex.quickSwitch(idx, '读笔')[0].id, 'b', '子序列命中');
+            var recent = NC.notesIndex.quickSwitch(idx, '');
+            eq(recent.length, 3);
+            eq(recent[0].id, 'b', '空查询按更新时间倒序');
+        });
+        t('notes-index', 'tagList / resolveTitle', function () {
+            var idx = makeNotesIndex([
+                { id: 'a', title: '甲', content: '#工作 #工作 #生活' },
+                { id: 'b', title: '乙', content: '#工作' }
+            ]);
+            var tags = NC.notesIndex.tagList(idx);
+            eq(tags.length, 2);
+            eq(tags[0].tag, '工作');
+            eq(tags[0].count, 2);
+            eq(NC.notesIndex.resolveTitle(idx, ' 甲 '), 'a');
+            eq(NC.notesIndex.resolveTitle(idx, '不存在'), null);
+        });
+        t('notes-index', '空库与异常输入不抛错', function () {
+            var idx = NC.notesIndex.create();
+            eq(NC.notesIndex.search(idx, '任意').length, 0);
+            eq(NC.notesIndex.quickSwitch(idx, '任意').length, 0);
+            eq(NC.notesIndex.tagList(idx).length, 0);
+            eq(NC.notesIndex.backlinks(idx, 'no-such').length, 0);
+            eq(typeof NC.notesIndex.brokenLinks(idx), 'object');
         });
 
         /* ---------------- storage ---------------- */
