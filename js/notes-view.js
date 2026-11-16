@@ -299,6 +299,47 @@
         return head;
     }
 
+    /** 树里的行内输入：回车提交、Esc 取消、失焦提交 */
+    var inlineInput = null;
+
+    function closeInlineInput() {
+        if (inlineInput && inlineInput.parentNode) inlineInput.parentNode.removeChild(inlineInput.wrap);
+        inlineInput = null;
+    }
+
+    function openInlineInput(options) {
+        closeInlineInput();
+        var opts = options || {};
+        var wrap = document.createElement('div');
+        wrap.className = 'notes-row notes-row--inline';
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'notes-inline-input';
+        input.placeholder = opts.placeholder || '';
+        input.value = opts.value || '';
+        input.maxLength = 60;
+        wrap.appendChild(input);
+        if (opts.after && opts.after.parentNode) opts.after.parentNode.insertBefore(wrap, opts.after.nextSibling);
+        else if (els.tree) els.tree.appendChild(wrap);
+        inlineInput = { wrap: wrap, input: input };
+        var done = false;
+        var finish = function (commit) {
+            if (done) return;
+            done = true;
+            var value = String(input.value || '').trim();
+            closeInlineInput();
+            if (commit && value) opts.onCommit(value);
+        };
+        input.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+            else if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+        });
+        input.addEventListener('blur', function () { finish(true); });
+        input.focus();
+        input.select();
+        return wrap;
+    }
+
     function folderRow(folder, count) {
         var row = document.createElement('button');
         row.type = 'button';
@@ -321,7 +362,57 @@
             state.collapsed[folder.id] = !state.collapsed[folder.id];
             renderTree();
         });
+
+        var more = document.createElement('button');
+        more.type = 'button';
+        more.className = 'notes-row__more';
+        more.setAttribute('aria-label', '文件夹操作');
+        more.appendChild(icon('more', 13));
+        more.addEventListener('click', function (event) {
+            event.stopPropagation();
+            openFolderMenu(folder, more);
+        });
+        row.appendChild(more);
         return row;
+    }
+
+    function openFolderMenu(folder, anchor) {
+        NC.ui.openMenu(anchor, [
+            {
+                label: '重命名',
+                icon: 'edit',
+                onSelect: function () {
+                    openInlineInput({
+                        value: folder.name,
+                        placeholder: '文件夹名称',
+                        onCommit: function (value) {
+                            store.renameFolder(folder.id, value);
+                            renderTree();
+                        }
+                    });
+                }
+            },
+            {
+                label: '删除文件夹',
+                icon: 'trash',
+                danger: true,
+                onSelect: function () {
+                    var count = 0;
+                    store.quickSwitch('').forEach(function (item) {
+                        var note = store.getNote(item.id);
+                        if (note && note.folderId === folder.id) count += 1;
+                    });
+                    NC.ui.confirm(
+                        '删除文件夹「' + folder.name + '」？里面的 ' + count + ' 篇笔记会移到未分组，不会被删除。',
+                        { confirmText: '删除文件夹', danger: true }
+                    ).then(function (ok) {
+                        if (!ok) return;
+                        store.deleteFolder(folder.id);
+                        renderTree();
+                    });
+                }
+            }
+        ]);
     }
 
     function matchesFilter(note) {
@@ -416,8 +507,8 @@
         }
 
         var folders = store.getFolders();
-        if (folders.length) {
-            els.tree.appendChild(groupTitle('文件夹'));
+        els.tree.appendChild(groupTitle('文件夹'));
+        {
             folders.forEach(function (folder) {
                 var list = byFolder[folder.id] || [];
                 els.tree.appendChild(folderRow(folder, list.length));
@@ -426,6 +517,25 @@
                 }
             });
         }
+        var addFolder = document.createElement('button');
+        addFolder.type = 'button';
+        addFolder.className = 'notes-row notes-row--add';
+        addFolder.appendChild(icon('plus', 12));
+        var addLabel = document.createElement('span');
+        addLabel.className = 'notes-row__label';
+        addLabel.textContent = '新建文件夹';
+        addFolder.appendChild(addLabel);
+        addFolder.addEventListener('click', function () {
+            openInlineInput({
+                placeholder: '文件夹名称，回车创建',
+                after: addFolder,
+                onCommit: function (value) {
+                    var folder = store.createFolder(value);
+                    if (folder) renderTree();
+                }
+            });
+        });
+        els.tree.appendChild(addFolder);
 
         var tags = store.tags();
         if (tags.length) {
@@ -817,6 +927,24 @@
                 });
             }
         });
+        var folders = store.getFolders();
+        if (folders.length && !note.deletedAt) {
+            folders.slice(0, 6).forEach(function (folder) {
+                if (folder.id === note.folderId) return;
+                items.push({
+                    label: '移到「' + folder.name + '」',
+                    icon: 'folder',
+                    onSelect: function () { store.moveNote(note.id, folder.id); renderTree(); }
+                });
+            });
+            if (note.folderId) {
+                items.push({
+                    label: '移出文件夹',
+                    icon: 'folder',
+                    onSelect: function () { store.moveNote(note.id, null); renderTree(); }
+                });
+            }
+        }
         if (note.deletedAt) {
             items.push({ label: '恢复', icon: 'refresh', onSelect: function () { store.restoreNote(note.id); toast('已恢复', 'success'); } });
             items.push({ label: '彻底删除', icon: 'trash', danger: true, onSelect: removeActive });
