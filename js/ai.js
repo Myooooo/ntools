@@ -238,6 +238,24 @@
             var cleaned = stripThinkTags(output.text);
             return { text: cleaned.text, reasoning: output.reasoning + cleaned.reasoning };
         }
+        /* 网关包装：{ data | result | response: { choices / content … } } */
+        var nestedKeys = ['data', 'result', 'response'];
+        for (var i = 0; i < nestedKeys.length; i += 1) {
+            var nested = data[nestedKeys[i]];
+            if (nested && typeof nested === 'object') {
+                var deep = readResponseContent(nested);
+                if (deep.text) return deep;
+            }
+        }
+        /* 末级兜底：顶层直接给文本字段 */
+        var textKeys = ['answer', 'content', 'text', 'output', 'response', 'message'];
+        for (var j = 0; j < textKeys.length; j += 1) {
+            var value = data[textKeys[j]];
+            if (typeof value === 'string' && value.trim()) {
+                var plain = stripThinkTags(value);
+                return { text: plain.text, reasoning: plain.reasoning };
+            }
+        }
         return { text: '', reasoning: '' };
     }
 

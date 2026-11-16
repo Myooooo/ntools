@@ -517,6 +517,7 @@
         init: init,
         renderList: renderList,
         syncHeatClass: syncHeatClass,
-        updateDueLabel: updateDueLabel
+        updateDueLabel: updateDueLabel,
+        beginInlineEdit: beginInlineEdit
     };
 })(window);

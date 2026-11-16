@@ -709,6 +709,33 @@
             }
             // 无 choices 的兼容形状：顶层 output_text
             var output = contentParts(json.output_text);
+            if (!output.text) {
+                // 网关包装：{ data | result | response: { choices / content … } }
+                var nestedKeys = ['data', 'result', 'response'];
+                for (var ni = 0; ni < nestedKeys.length; ni += 1) {
+                    var nested = json[nestedKeys[ni]];
+                    if (nested && typeof nested === 'object') {
+                        var inner = contentParts(nested.output_text);
+                        if (!inner.text) {
+                            var innerChoice = nested.choices && nested.choices[0];
+                            if (innerChoice) {
+                                var innerSource = innerChoice.message || innerChoice.delta || innerChoice;
+                                inner = contentParts(innerSource && innerSource.content);
+                                if (!inner.text && innerSource && innerSource.text != null) inner = contentParts(innerSource.text);
+                            }
+                        }
+                        if (inner.text) { output = inner; break; }
+                    }
+                }
+                // 末级兜底：顶层直接给文本字段
+                if (!output.text) {
+                    var textKeys = ['answer', 'content', 'text', 'output', 'response', 'message'];
+                    for (var ti = 0; ti < textKeys.length; ti += 1) {
+                        var value = json[textKeys[ti]];
+                        if (typeof value === 'string' && value.trim()) { output = contentParts(value); break; }
+                    }
+                }
+            }
             emitStructuredReasoning(output.reasoning);
             if (output.text) thinkFilter.feed(output.text);
         }
@@ -794,6 +821,7 @@
                 contentType = '';
             }
             var jsonMode = false;
+            var rawJsonMode = false;
             if (/application\/json/i.test(contentType)) {
                 var jsonText = await safeText(response, 8 * 1024 * 1024);
                 var jsonBody = null;
@@ -816,17 +844,44 @@
                 };
                 if (controller) controller.signal.addEventListener('abort', abortHook);
                 try {
+                    /* 首个分片嗅探：部分内网网关忽略 stream:true，直接用 text/plain 回一整个 JSON。
+                     * 这类响应里没有 data: 行，如果硬按 SSE 解析会一直等不到事件直到超时。 */
+                    var sniffed = false;
+                    var rawJson = '';
                     while (true) {
                         var chunk = await reader.read();
                         if (chunk.done) break;
                         armIdle();
-                        parser.feed(decoder.decode(chunk.value, { stream: true }));
+                        var textChunk = decoder.decode(chunk.value, { stream: true });
+                        if (!sniffed) {
+                            sniffed = true;
+                            var head = textChunk.replace(/^\ufeff/, '').replace(/^\s+/, '');
+                            var first = head.charAt(0);
+                            if (first === '{' || first === '[') {
+                                rawJsonMode = true;
+                                jsonMode = true;
+                            }
+                        }
+                        if (rawJsonMode) {
+                            rawJson += textChunk;
+                            continue;
+                        }
+                        parser.feed(textChunk);
                         if (parser.isDone() || apiErrorMessage) {
                             try { reader.cancel(); } catch (err) { /* ignore */ }
                             break;
                         }
                     }
-                    if (!parser.isDone()) parser.end();
+                    if (rawJsonMode) {
+                        var parsedWhole = null;
+                        try { parsedWhole = JSON.parse(rawJson.replace(/^\ufeff/, '').trim()); } catch (parseErr3) { parsedWhole = null; }
+                        if (parsedWhole) {
+                            handleJson(parsedWhole);
+                            clearPhase();
+                        }
+                    } else if (!parser.isDone()) {
+                        parser.end();
+                    }
                 } catch (error) {
                     if (timedOut) return errorResult({ type: 'timeout', message: timeoutMessage(), phase: timeoutPhase });
                     if (aborted) return { ok: true, aborted: true, usage: usage, content: answerText, reasoning: reasoningText };

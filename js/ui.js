@@ -1204,8 +1204,12 @@
      * 全局错误兜底
      * ------------------------------------------------------------------ */
     function installGlobalErrorHandlers() {
+        /* ResizeObserver 的 "loop limit exceeded" 是浏览器在布局抖动时给的良性提示，
+         * Chrome 会把它当 error 事件抛出；它不是程序错误，不该污染控制台与错误上报。 */
+        var BENIGN_ERROR_RE = /ResizeObserver loop/i;
         global.addEventListener('error', function (event) {
             if (event && event.target && event.target !== global) return; // 资源加载错误单独处理
+            if (event && BENIGN_ERROR_RE.test(String(event.message || ''))) return;
             console.error('[NC] uncaught error:', event.error || event.message);
             events.emit('app:error', { error: event.error, message: event.message });
         });

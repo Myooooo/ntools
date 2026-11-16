@@ -1288,6 +1288,15 @@
         return row.updateDueLabel(el, task, now);
     }
 
+    /* 行内编辑入口：todo-row 拆出后必须在这里转发，否则点击「编辑」会 ReferenceError */
+    function beginInlineEdit(id) {
+        var row = rowApi();
+        if (row && typeof row.beginInlineEdit === 'function') return row.beginInlineEdit(id);
+        /* 兜底：至少让 store 进入编辑态，下一次渲染仍会生成输入框 */
+        if (store && typeof store.startEdit === 'function') return store.startEdit(id);
+        return false;
+    }
+
 
     /* ---- 空状态 ---- */
     function renderEmpty(visible, ui, doc) {
