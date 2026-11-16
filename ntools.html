@@ -55,7 +55,6 @@
     <script defer src="js/todo.js"></script>
     <!-- 页面模块：工具叶子（由 platform-compat 提供，未就位时 ntools-app.js 做降级） -->
     <script defer src="js/qr.js"></script>
-    <script defer src="js/markdown.js"></script>
     <script defer src="js/image.js"></script>
     <!-- 组合根 -->
     <script defer src="js/ntools-app.js"></script>
@@ -88,9 +87,9 @@
                 <span class="tools-nav__icon" data-icon="grid"></span>
                 <span class="tools-nav__label">二维码</span>
             </a>
-            <a class="tools-nav__item" href="#md" data-tab="md" title="Markdown 渲染">
-                <span class="tools-nav__icon" data-icon="edit"></span>
-                <span class="tools-nav__label">Markdown</span>
+            <a class="tools-nav__item" href="#md" data-tab="md" title="笔记">
+                <span class="tools-nav__icon" data-icon="file"></span>
+                <span class="tools-nav__label">笔记</span>
             </a>
             <a class="tools-nav__item" href="#image" data-tab="image" title="图片与 Base64">
                 <span class="tools-nav__icon" data-icon="image"></span>
@@ -349,39 +348,68 @@
             </section>
 
             <!-- ---------------- Tab 3：Markdown ---------------- -->
-            <section class="tools-page" id="page-md" data-panel="md" data-page="md" aria-label="Markdown 渲染" hidden>
-                <header class="tools-head">
-                    <div class="tools-head__text">
-                        <h1 class="tools-title">Markdown 渲染</h1>
-                        <p class="tools-subtitle">实时预览，内容经 DOMPurify 净化，草稿自动保存在本地。</p>
-                    </div>
-                    <div class="tools-head__actions">
-                        <span class="md-stats" id="md-stats">0 字符</span>
-                        <button type="button" class="nc-btn nc-btn--sm" id="md-import-btn">
-                            <span data-icon="upload" data-icon-size="15"></span>
-                            <span>导入 .md</span>
-                        </button>
-                        <button type="button" class="nc-btn nc-btn--primary nc-btn--sm" id="md-export">
-                            <span data-icon="download" data-icon-size="15"></span>
-                            <span>导出 .md</span>
-                        </button>
-                    </div>
-                </header>
-                <div class="tool-layout tool-layout--md">
-                    <div class="tool-card md-pane">
-                        <div class="md-pane__head">
-                            <span>编辑区</span>
-                            <span class="tool-note">支持 GFM 表格与代码块</span>
+            <!-- ---------------- Tab 3：笔记（原 Markdown 工具） ---------------- -->
+            <section class="tools-page tools-page--notes" id="page-md" data-panel="md" data-page="md" aria-label="笔记" hidden>
+                <div class="notes-shell" id="notes-shell">
+                    <aside class="notes-side" aria-label="笔记列表">
+                        <div class="notes-side__head">
+                            <button type="button" class="nc-btn nc-btn--sm nc-btn--primary" id="notes-new-btn" title="新建笔记（Ctrl+N）">
+                                <span data-icon="plus" data-icon-size="15"></span>
+                                <span>新建</span>
+                            </button>
+                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-side-close" aria-label="关闭笔记列表" title="关闭列表">
+                                <span data-icon="chevron-left" data-icon-size="15"></span>
+                            </button>
                         </div>
-                        <textarea id="md-input" class="md-editor" spellcheck="false" placeholder="# 输入 Markdown…"></textarea>
+                        <div class="notes-side__search">
+                            <span class="notes-side__search-icon" data-icon="search" data-icon-size="15" aria-hidden="true"></span>
+                            <input type="search" id="notes-filter" class="notes-filter" placeholder="筛选笔记…" aria-label="筛选笔记">
+                        </div>
+                        <div class="notes-tree nc-scroll" id="notes-tree" role="tree" aria-label="笔记与文件夹"></div>
+                    </aside>
+
+                    <div class="notes-main">
+                        <header class="notes-head">
+                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost notes-head__toggle" id="notes-side-open" aria-label="打开笔记列表" title="笔记列表">
+                                <span data-icon="panel-left" data-icon-size="16"></span>
+                            </button>
+                            <input type="text" id="notes-title" class="notes-title" placeholder="未命名笔记" aria-label="笔记标题" maxlength="200" spellcheck="false">
+                            <div class="notes-head__actions">
+                                <button type="button" class="nc-btn nc-btn--sm" id="notes-mode-btn" title="切换编辑 / 阅读（Ctrl+E）">阅读</button>
+                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-info-btn" aria-label="信息面板" title="信息面板">
+                                    <span data-icon="panel-left" data-icon-size="16"></span>
+                                </button>
+                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-more-btn" aria-label="更多操作" title="更多操作" aria-haspopup="menu">
+                                    <span data-icon="more" data-icon-size="16"></span>
+                                </button>
+                            </div>
+                        </header>
+                        <div class="notes-body" id="notes-body">
+                            <textarea id="notes-editor" class="notes-editor" spellcheck="false" placeholder="开始写…  支持 Markdown 与 [[双向链接]]" aria-label="笔记正文"></textarea>
+                            <div id="notes-preview" class="notes-preview md-preview nc-scroll" role="article" aria-label="预览" hidden></div>
+                            <div class="notes-empty" id="notes-empty" hidden>
+                                <p class="notes-empty__title">还没有选中笔记</p>
+                                <p class="notes-empty__hint">点「新建」开始，或从左侧选择一篇。</p>
+                            </div>
+                        </div>
+                        <footer class="notes-status">
+                            <span class="notes-status__stats" id="notes-stats">0 字 · 0 行</span>
+                            <span class="notes-status__save" id="notes-save" role="status" aria-live="polite"></span>
+                        </footer>
                     </div>
-                    <div class="tool-card md-pane">
-                        <div class="md-pane__head"><span>预览</span></div>
-                        <div id="md-preview" class="md-preview nc-scroll"></div>
-                    </div>
+
+                    <aside class="notes-info" id="notes-info" aria-label="笔记信息" hidden>
+                        <div class="notes-info__head">
+                            <span>信息</span>
+                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-info-close" aria-label="关闭信息面板">
+                                <span data-icon="x" data-icon-size="15"></span>
+                            </button>
+                        </div>
+                        <div class="notes-info__body nc-scroll" id="notes-info-body"></div>
+                    </aside>
+                    <div class="notes-scrim" id="notes-scrim" hidden></div>
                 </div>
-                <input type="file" id="md-import" accept=".md,.txt,text/markdown,text/plain" hidden>
-                <div class="tool-module-note" id="md-module-note" hidden></div>
+                <div class="tool-module-note" id="notes-module-note" hidden></div>
             </section>
 
             <!-- ---------------- Tab 4：图片转换 ---------------- -->

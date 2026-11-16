@@ -98,7 +98,14 @@
         };
         if (extra) Object.keys(extra).forEach(function (key) { payload[key] = extra[key]; });
         listeners.slice().forEach(function (fn) {
-            try { fn(payload); } catch (err) { /* 视图异常不影响状态层 */ }
+            try {
+                fn(payload);
+            } catch (err) {
+                /* 视图异常不影响状态层，但必须留下痕迹，否则排查时一片空白 */
+                if (global.console && global.console.warn) {
+                    global.console.warn('[notes] subscriber failed:', err && err.message ? err.message : err);
+                }
+            }
         });
         events.emit('notes:changed', payload);
     }
@@ -792,11 +799,13 @@
             return init(options);
         },
         subscribe: subscribe,
+        listenerCount: function () { return listeners.length; },
         isReady: function () { return state.ready; },
         getMode: function () { return state.mode; },
         getActiveId: function () { return state.activeId; },
         getActiveNote: getActiveNote,
         getNote: getNote,
+        getFolders: function () { return folderList(); },
         setActive: setActive,
         createNote: createNote,
         updateNote: updateNote,

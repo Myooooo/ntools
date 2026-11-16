@@ -519,11 +519,12 @@
 }
 
 /* ==========================================================================
- * 5. Markdown 工作台
+ * 5. 笔记（原 Markdown 工作台）
+ *   三栏：笔记栏 / 编辑·阅读 / 信息面板；≤1100px 时后两者变为覆盖层。
  * ========================================================================== */
-.tool-layout--md {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+.notes-shell {
+    position: relative;
+    display: flex;
     flex: 1;
     min-height: 0;
     overflow: hidden;
@@ -532,68 +533,432 @@
     background: var(--nc-surface);
 }
 
-.md-pane {
+/* ---------- 左：笔记栏 ---------- */
+.notes-side {
     display: flex;
+    flex: 0 0 244px;
     flex-direction: column;
-    min-width: 0;
     min-height: 0;
-    overflow: hidden;
+    min-width: 0;
+    border-right: 1px solid var(--nc-border);
+    background: var(--nc-surface-2);
 }
 
-.md-pane + .md-pane {
-    border-left: 1px solid var(--nc-border);
-}
-
-.md-pane__head {
+.notes-side__head {
+    display: flex;
     flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 10px 8px;
+}
+
+.notes-side__head .nc-btn--primary {
+    flex: 1;
+    justify-content: center;
+}
+
+#notes-side-close {
+    display: none;
+}
+
+.notes-side__search {
+    position: relative;
+    flex: 0 0 auto;
+    padding: 0 10px 8px;
+}
+
+.notes-side__search-icon {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-60%);
+    color: var(--nc-text-3);
+    pointer-events: none;
+}
+
+.notes-filter {
+    width: 100%;
+    height: 32px;
+    padding: 0 10px 0 30px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-input-bg);
+    color: var(--nc-text);
+    font-size: var(--nc-fs-sm);
+    outline: none;
+}
+
+.notes-filter:focus {
+    border-color: var(--nc-accent-ring);
+    box-shadow: 0 0 0 3px var(--nc-accent-soft);
+}
+
+.notes-filter::-webkit-search-cancel-button {
+    filter: grayscale(1) opacity(.6);
+}
+
+.notes-tree {
+    flex: 1;
+    min-height: 0;
+    padding: 0 6px 12px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.notes-group {
+    margin: 8px 0 2px;
+    padding: 0 6px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    font-weight: 600;
+    letter-spacing: var(--nc-track-meta);
+    text-transform: uppercase;
+}
+
+.notes-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    height: 38px;
-    padding: 0 16px;
-    border-bottom: 1px solid var(--nc-border-faint);
+    gap: 7px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
     color: var(--nc-text-2);
     font-size: var(--nc-fs-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.notes-row:hover {
+    background: var(--nc-surface-hover);
+    color: var(--nc-text);
+}
+
+.notes-row.is-active {
+    background: var(--nc-accent-soft);
+    color: var(--nc-text);
+}
+
+.notes-row__label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notes-row__meta {
+    flex: 0 0 auto;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-xs);
+    font-variant-numeric: tabular-nums;
+}
+
+.notes-row__star {
+    flex: 0 0 auto;
+    color: var(--nc-time);
+}
+
+.notes-row--folder .notes-row__label {
     font-weight: 500;
 }
 
-.md-editor {
+.notes-row--trash {
+    color: var(--nc-text-3);
+}
+
+.notes-tree__empty {
+    padding: 18px 10px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-sm);
+    text-align: center;
+}
+
+/* ---------- 中：编辑 / 阅读 ---------- */
+.notes-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.notes-head {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    height: 46px;
+    padding: 0 10px 0 14px;
+    border-bottom: 1px solid var(--nc-border-faint);
+}
+
+.notes-head__toggle {
+    display: none;
+}
+
+.notes-title {
+    flex: 1;
+    min-width: 0;
+    height: 30px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-text);
+    font-size: var(--nc-fs-lg);
+    font-weight: 600;
+    letter-spacing: var(--nc-track-title, -0.01em);
+    outline: none;
+}
+
+.notes-title:focus {
+    background: var(--nc-surface-2);
+}
+
+.notes-title::placeholder {
+    color: var(--nc-text-3);
+    font-weight: 500;
+}
+
+.notes-head__actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+}
+
+.notes-body {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.notes-editor {
     flex: 1;
     width: 100%;
-    min-height: 240px;
-    padding: 16px;
+    padding: 20px 24px 40px;
     border: 0;
     background: transparent;
     color: var(--nc-text);
     font-family: var(--nc-font-mono);
     font-size: var(--nc-fs-md);
-    line-height: 1.7;
+    line-height: 1.75;
     resize: none;
     outline: none;
 }
 
-.md-editor:focus {
-    box-shadow: inset 0 0 0 1px var(--nc-accent-ring);
+.notes-editor:focus {
+    box-shadow: none;
 }
 
-.md-preview {
+.notes-preview {
     flex: 1;
-    min-height: 240px;
-    padding: 18px 20px 28px;
+    min-height: 0;
+    padding: 20px 26px 48px;
     overflow-y: auto;
     overscroll-behavior: contain;
     color: var(--nc-text-2);
     font-size: var(--nc-fs-base);
-    line-height: 1.7;
+    line-height: 1.72;
     overflow-wrap: anywhere;
 }
 
-.md-stats {
+.notes-preview[hidden],
+.notes-editor[hidden] {
+    display: none;
+}
+
+.notes-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--nc-surface);
+    color: var(--nc-text-3);
+    text-align: center;
+}
+
+.notes-empty[hidden] {
+    display: none;
+}
+
+.notes-empty__title {
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-md);
+}
+
+.notes-empty__hint {
+    font-size: var(--nc-fs-sm);
+}
+
+.notes-status {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    height: 30px;
+    padding: 0 14px;
+    border-top: 1px solid var(--nc-border-faint);
     color: var(--nc-text-3);
     font-size: var(--nc-fs-xs);
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+}
+
+.notes-status__save.is-error {
+    color: var(--nc-danger);
+}
+
+.notes-status__save.is-pending {
+    color: var(--nc-warning);
+}
+
+/* ---------- 右：信息面板 ---------- */
+.notes-info {
+    display: flex;
+    flex: 0 0 272px;
+    flex-direction: column;
+    min-height: 0;
+    border-left: 1px solid var(--nc-border);
+    background: var(--nc-surface-2);
+}
+
+.notes-info[hidden] {
+    display: none;
+}
+
+.notes-info__head {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    height: 42px;
+    padding: 0 8px 0 14px;
+    border-bottom: 1px solid var(--nc-border-faint);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    font-weight: 600;
+}
+
+.notes-info__body {
+    flex: 1;
+    min-height: 0;
+    padding: 10px 14px 20px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.notes-section {
+    margin-bottom: 16px;
+}
+
+.notes-section__title {
+    margin-bottom: 6px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    font-weight: 600;
+    letter-spacing: var(--nc-track-meta);
+    text-transform: uppercase;
+}
+
+.notes-meta-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 3px 0;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-xs);
+}
+
+.notes-meta-row span:last-child {
+    color: var(--nc-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.notes-outline__item {
+    display: block;
+    width: 100%;
+    padding: 3px 0;
+    border: 0;
+    background: transparent;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-xs);
+    text-align: left;
+    cursor: pointer;
+}
+
+.notes-outline__item:hover {
+    color: var(--nc-accent);
+}
+
+.notes-outline__item[data-level="2"] { padding-left: 10px; }
+.notes-outline__item[data-level="3"] { padding-left: 20px; }
+.notes-outline__item[data-level="4"],
+.notes-outline__item[data-level="5"],
+.notes-outline__item[data-level="6"] { padding-left: 30px; }
+
+.notes-scrim {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    background: var(--nc-overlay);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--nc-dur) var(--nc-ease);
+}
+
+/* ---------- 窄桌面：≤1100px（含 1080p 分屏） ---------- */
+@media (max-width: 1100px) {
+    .notes-side {
+        position: absolute;
+        z-index: 6;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: min(280px, 82%);
+        flex-basis: auto;
+        border-right-color: var(--nc-border-strong);
+        box-shadow: var(--nc-shadow-3);
+        transform: translateX(-102%);
+        transition: transform var(--nc-dur-panel) var(--nc-ease-drawer);
+    }
+
+    .notes-shell.is-side-open .notes-side {
+        transform: translateX(0);
+    }
+
+    #notes-side-close,
+    .notes-head__toggle {
+        display: inline-flex;
+    }
+
+    .notes-info {
+        position: absolute;
+        z-index: 6;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(300px, 84%);
+        box-shadow: var(--nc-shadow-3);
+    }
+
+    .notes-shell.is-info-open .notes-scrim {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .notes-editor,
+    .notes-preview {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
 }
 
 /* Markdown 预览排版 */
@@ -2673,16 +3038,6 @@ html[data-lite="true"] .todo-scroll {
         display: inline-flex;
     }
 
-    .tool-layout--md {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: minmax(220px, 1fr) minmax(220px, 1fr);
-    }
-
-    .md-pane + .md-pane {
-        border-left: 0;
-        border-top: 1px solid var(--nc-border);
-    }
-
     .tool-layout--image {
         grid-template-columns: minmax(0, 1fr);
         overflow-y: auto;
@@ -3193,12 +3548,8 @@ html[data-lite="true"] .todo-scroll {
         align-content: start;
     }
 
-    .tool-layout--md {
-        grid-template-rows: minmax(200px, 42vh) minmax(200px, 1fr);
-    }
-
-    .md-editor,
-    .md-preview {
+    .notes-editor,
+    .notes-preview {
         min-height: 180px;
     }
 
@@ -3307,15 +3658,6 @@ html[data-lite="true"] .todo-scroll {
     .tool-card,
     .image-pane {
         padding: 12px;
-    }
-
-    .md-pane__head {
-        padding: 0 12px;
-    }
-
-    .md-editor {
-        padding: 12px;
-        font-size: var(--nc-fs-sm);
     }
 
     .md-preview {

@@ -16,7 +16,7 @@
         todo: '待办事项',
         email: '邮件管理',
         qr: '二维码生成',
-        md: 'Markdown 渲染',
+        md: '笔记',
         image: '图片与 Base64',
         nchat: 'nChat'
     };
@@ -54,7 +54,6 @@
 
         /* 工具叶子模块：由 platform-compat 提供，缺失时降级展示说明 */
         initLeafModule('qr', 'page-qr', 'qr-module-note');
-        initLeafModule('markdown', 'page-md', 'md-module-note');
         initLeafModule('image', 'page-image', 'image-module-note');
 
         routeFromHash(true);
@@ -242,6 +241,7 @@
 
         if (updateHash) setHash(target);
         if (target === 'nchat') initChat();
+        if (target === 'md') initNotes();
         if (target === 'todo' && NC.view && NC.view.todo && NC.view.todo.render) {
             /* 回到待办时刷新时间标签，确保跨分钟准确 */
             NC.view.todo.refreshTimes();
@@ -324,6 +324,49 @@
         }, Promise.resolve());
         return chatBundlePromise;
     }
+
+    /* 笔记栈（约 80KB）同样首发不加载：第一次进「笔记」页才注入。
+     * 顺序有依赖：schema-notes → notes-index → notes-db → notes-store → notes-view */
+    var NOTES_SCRIPTS = [
+        'js/schema-notes.js',
+        'js/notes-index.js',
+        'js/notes-db.js',
+        'js/notes-store.js',
+        'js/notes-view.js'
+    ];
+    var notesBundlePromise = null;
+    var notesInited = false;
+
+    function loadNotesBundle() {
+        if (notesBundlePromise) return notesBundlePromise;
+        var util = NC.util;
+        if (!util || typeof util.loadScript !== 'function') {
+            return Promise.reject(new Error('loader unavailable'));
+        }
+        notesBundlePromise = NOTES_SCRIPTS.reduce(function (chain, src) {
+            return chain.then(function () { return util.loadScript(src); });
+        }, Promise.resolve());
+        return notesBundlePromise;
+    }
+
+    function initNotes() {
+        if (notesInited) return;
+        notesInited = true;
+        loadNotesBundle().then(function () {
+            var view = NC.view && NC.view.notes;
+            if (view && typeof view.init === 'function') view.init();
+        }).catch(function (err) {
+            notesInited = false;
+            var note = document.getElementById('notes-module-note');
+            if (note) {
+                note.hidden = false;
+                note.textContent = '笔记模块加载失败（js/notes-*.js），请检查文件是否齐全后刷新：' +
+                    (err && err.message ? err.message : err);
+            }
+        });
+    }
+
+    NC.initNotes = initNotes;
 
     /* 供设置面板使用：导出/导入全量备份前，确保聊天栈已就绪 */
     NC.loadChatBundle = loadChatBundle;
