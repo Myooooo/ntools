@@ -137,6 +137,10 @@
                     var resolvedId = (store && token.target) ? store.resolveTitle(token.target) : null;
                     var cls = (token.embed ? 'note-embed' : 'note-link') + (resolvedId ? '' : ' is-unresolved');
                     var hint = resolvedId ? '' : '未创建，点击新建';
+                    if (token.embed) {
+                        return '<span class="note-embed" data-file="' + escapeAttr(token.target) + '">' +
+                            escapeHtml(token.target) + '</span>';
+                    }
                     return '<span class="' + cls + '" role="link" tabindex="0"' +
                         ' data-note="' + escapeAttr(token.target) + '"' +
                         (token.anchor ? ' data-anchor="' + escapeAttr(token.anchor) + '"' : '') +
@@ -146,6 +150,28 @@
                 }
             }]
         });
+    }
+
+    /** 把 ![[文件名]] 的占位换成真实 Blob 图片 */
+    function hydrateEmbeds(host) {
+        if (!host || !store) return;
+        var slots = host.querySelectorAll('.note-embed[data-file]');
+        for (var i = 0; i < slots.length; i += 1) {
+            (function (slot) {
+                var name = slot.getAttribute('data-file');
+                var record = store.resolveFile(name);
+                if (!record) return;
+                store.getFileUrl(record.id).then(function (url) {
+                    if (!url || !slot.parentNode) return;
+                    var img = document.createElement('img');
+                    img.src = url;
+                    img.alt = name;
+                    img.loading = 'lazy';
+                    img.className = 'note-img';
+                    slot.parentNode.replaceChild(img, slot);
+                });
+            })(slots[i]);
+        }
     }
 
     function renderMarkdown(host, text) {
@@ -183,6 +209,7 @@
                     links[i].setAttribute('rel', 'noopener noreferrer');
                 }
             }
+            hydrateEmbeds(host);
             var images = host.querySelectorAll('img[src]');
             for (var j = 0; j < images.length; j += 1) {
                 if (/^https?:/i.test(images[j].getAttribute('src') || '')) {
@@ -816,6 +843,124 @@
     }
 
     /* ------------------------------------------------------------------ *
+     * 编辑增强：列表续行、缩进、包裹、图片粘贴
+     * ------------------------------------------------------------------ */
+    function insertText(text) {
+        var ed = els.editor;
+        if (!ed) return;
+        ed.focus();
+        var ok = false;
+        try { ok = document.execCommand('insertText', false, text); } catch (err) { ok = false; }
+        if (!ok) {
+            var start = ed.selectionStart;
+            ed.value = ed.value.slice(0, start) + text + ed.value.slice(ed.selectionEnd);
+            ed.setSelectionRange(start + text.length, start + text.length);
+        }
+        if (!state.applying) {
+            scheduleCommit();
+            renderStatus();
+            acUpdate();
+        }
+    }
+
+    function wrapSelection(before, after) {
+        var ed = els.editor;
+        if (!ed) return;
+        var start = ed.selectionStart;
+        var end = ed.selectionEnd;
+        var selected = ed.value.slice(start, end);
+        var placeholder = selected || '文本';
+        ed.setSelectionRange(start, end);
+        insertText(before + placeholder + after);
+        ed.setSelectionRange(start + before.length, start + before.length + placeholder.length);
+    }
+
+    function linePrefixInfo() {
+        var ed = els.editor;
+        var pos = ed.selectionStart;
+        if (pos !== ed.selectionEnd) return null;
+        var lineStart = ed.value.lastIndexOf('\n', pos - 1) + 1;
+        var line = ed.value.slice(lineStart, pos);
+        var bullet = /^(\s*)([-*+])\s+(\[[ xX]\]\s+)?/.exec(line);
+        if (bullet) {
+            return {
+                kind: 'bullet',
+                lineStart: lineStart,
+                lineLength: line.length,
+                prefix: bullet[1] + bullet[2] + ' ' + (bullet[3] ? '[ ] ' : ''),
+                body: line.slice(bullet[0].length)
+            };
+        }
+        var ordered = /^(\s*)(\d+)\.\s+/.exec(line);
+        if (ordered) {
+            return {
+                kind: 'ordered',
+                lineStart: lineStart,
+                lineLength: line.length,
+                prefix: ordered[1] + (parseInt(ordered[2], 10) + 1) + '. ',
+                body: line.slice(ordered[0].length)
+            };
+        }
+        return null;
+    }
+
+    function handleEnter() {
+        var info = linePrefixInfo();
+        if (!info) return false;
+        if (!info.body.trim()) {
+            /* 空列表项：回车结束列表 */
+            els.editor.setSelectionRange(info.lineStart, els.editor.selectionStart);
+            insertText('');
+            return true;
+        }
+        insertText('\n' + info.prefix);
+        return true;
+    }
+
+    function handleTab(shift) {
+        var ed = els.editor;
+        var start = ed.selectionStart;
+        if (shift) {
+            var lineStart = ed.value.lastIndexOf('\n', start - 1) + 1;
+            var head = ed.value.slice(lineStart, start);
+            var trimmed = head.replace(/ {1,2}$/, '');
+            if (trimmed !== head) {
+                ed.setSelectionRange(lineStart + trimmed.length, start);
+                insertText('');
+              }
+            return true;
+        }
+        insertText('  ');
+        return true;
+    }
+
+    function handleEditorKey(event) {
+        if (state.mode !== 'edit' || store.isReadOnly()) return false;
+        var meta = event.ctrlKey || event.metaKey;
+        if (event.key === 'Enter' && !event.shiftKey && !meta) return handleEnter();
+        if (event.key === 'Tab') { event.preventDefault(); return handleTab(event.shiftKey); }
+        if (meta && (event.key === 'b' || event.key === 'B')) { event.preventDefault(); wrapSelection('**', '**'); return true; }
+        if (meta && (event.key === 'i' || event.key === 'I')) { event.preventDefault(); wrapSelection('*', '*'); return true; }
+        if (meta && event.key === '`') { event.preventDefault(); wrapSelection('`', '`'); return true; }
+        return false;
+    }
+
+    function handleImageFile(file) {
+        if (!file) return;
+        var type = file.type || 'image/png';
+        var ext = (type.split('/')[1] || 'png').toLowerCase().replace('jpeg', 'jpg');
+        var stamp = new Date();
+        var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+        var name = 'image-' + stamp.getFullYear() + pad(stamp.getMonth() + 1) + pad(stamp.getDate()) +
+            '-' + pad(stamp.getHours()) + pad(stamp.getMinutes()) + pad(stamp.getSeconds()) + '.' + ext;
+        var saved = store.addImage(file, name);
+        if (!saved) return;
+        insertText('![[' + saved + ']]');
+        toast('已插入图片 ' + saved, 'success');
+        if (state.mode === 'read') { state.mode = 'edit'; applyMode(); }
+    }
+
+    /* ------------------------------------------------------------------ *
      * 快速切换（Ctrl+O）
      * ------------------------------------------------------------------ */
     var palette = { open: false, items: [], index: 0 };
@@ -1130,7 +1275,32 @@
             });
             els.editor.addEventListener('keydown', function (event) {
                 if (acKey(event)) return;
+                if (handleEditorKey(event)) return;
                 if (event.key === 'Escape') acHide();
+            });
+            els.editor.addEventListener('paste', function (event) {
+                var items = event.clipboardData && event.clipboardData.items;
+                if (!items) return;
+                for (var i = 0; i < items.length; i += 1) {
+                    if (items[i].kind === 'file' && String(items[i].type || '').indexOf('image/') === 0) {
+                        var file = items[i].getAsFile();
+                        if (!file) continue;
+                        event.preventDefault();
+                        handleImageFile(file);
+                        return;
+                    }
+                }
+            });
+            els.editor.addEventListener('dragover', function (event) { event.preventDefault(); });
+            els.editor.addEventListener('drop', function (event) {
+                var files = event.dataTransfer && event.dataTransfer.files;
+                if (!files || !files.length) return;
+                for (var i = 0; i < files.length; i += 1) {
+                    if (String(files[i].type || '').indexOf('image/') !== 0) continue;
+                    event.preventDefault();
+                    handleImageFile(files[i]);
+                    return;
+                }
             });
             els.editor.addEventListener('click', acUpdate);
             els.editor.addEventListener('blur', function () {

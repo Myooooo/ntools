@@ -888,6 +888,15 @@
     font-size: var(--nc-fs-xs);
 }
 
+.note-img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 10px 0;
+    border-radius: var(--nc-radius-md);
+    border: 1px solid var(--nc-border-faint);
+}
+
 .note-embed.is-unresolved {
     color: var(--nc-text-3);
     border: 1px dashed var(--nc-border-strong);

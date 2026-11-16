@@ -42,7 +42,9 @@
         lastSavedAt: 0,
         saveCount: 0,
         retryDelay: 0,
-        collapsed: Object.create(null)
+        collapsed: Object.create(null),
+        files: new Map(),          // nameLower -> {id, name, type, size}
+        fileUrls: new Map()        // fileId -> objectURL
     };
 
     var listeners = [];
@@ -584,6 +586,80 @@
     function resolveTitle(title) { return state.index ? indexer().resolveTitle(state.index, title) : null; }
 
     /* ------------------------------------------------------------------ *
+     * 附件（图片）
+     * 图片本体存在 notesDb.files（Blob），名称索引存在 meta.files，
+     * 正文里只写 ![[文件名]]。
+     * ------------------------------------------------------------------ */
+    function loadFileIndex(list) {
+        state.files = new Map();
+        (Array.isArray(list) ? list : []).forEach(function (item) {
+            if (!item || !item.id || !item.name) return;
+            state.files.set(String(item.name).toLowerCase(), item);
+        });
+    }
+
+    function persistFileIndex() {
+        var list = [];
+        state.files.forEach(function (item) { list.push(item); });
+        return db().setMeta('files', list).catch(function () { /* ignore */ });
+    }
+
+    function uniqueFileName(name) {
+        var base = String(name || 'image').replace(/[\\/:*?"<>|]/g, '_');
+        var dot = base.lastIndexOf('.');
+        var stem = dot > 0 ? base.slice(0, dot) : base;
+        var ext = dot > 0 ? base.slice(dot) : '';
+        var candidate = base;
+        var n = 2;
+        while (state.files.has(candidate.toLowerCase())) {
+            candidate = stem + '-' + n + ext;
+            n += 1;
+        }
+        return candidate;
+    }
+
+    /** 保存一张图片，返回可写进正文的文件名 */
+    function addImage(blob, name) {
+        if (state.readOnly) return null;
+        if (state.mode !== 'idb') {
+            events.emit('notes:error', { code: 'no-files', message: '当前为降级模式，暂不支持图片附件' });
+            return null;
+        }
+        if (!blob) return null;
+        var s = schema();
+        var fileName = uniqueFileName(name || ('image-' + Date.now() + '.png'));
+        var id = s.newId('img');
+        var record = { id: id, name: fileName, type: blob.type || '', size: blob.size || 0 };
+        state.files.set(fileName.toLowerCase(), record);
+        db().putFile(id, blob, record).catch(function () { /* ignore */ });
+        persistFileIndex();
+        return fileName;
+    }
+
+    function resolveFile(name) {
+        return state.files.get(String(name || '').toLowerCase()) || null;
+    }
+
+    function getFileUrl(id) {
+        if (!id) return Promise.resolve(null);
+        if (state.fileUrls.has(id)) return Promise.resolve(state.fileUrls.get(id));
+        return db().getFile(id).then(function (record) {
+            if (!record || !record.blob || !global.URL || !URL.createObjectURL) return null;
+            var url = URL.createObjectURL(record.blob);
+            state.fileUrls.set(id, url);
+            return url;
+        }).catch(function () { return null; });
+    }
+
+    function revokeFileUrls() {
+        if (!global.URL || !URL.revokeObjectURL) return;
+        state.fileUrls.forEach(function (url) {
+            try { URL.revokeObjectURL(url); } catch (err) { /* ignore */ }
+        });
+        state.fileUrls = new Map();
+    }
+
+    /* ------------------------------------------------------------------ *
      * 快照 / 导入导出
      * ------------------------------------------------------------------ */
     function maybeSnapshot(force) {
@@ -666,6 +742,8 @@
     function resetAll() {
         if (state.readOnly) return Promise.resolve(false);
         maybeSnapshot(true);
+        revokeFileUrls();
+        state.files = new Map();
         return db().clearAll().then(function () {
             state.notes = new Map();
             state.folders = new Map();
@@ -729,7 +807,7 @@
         var s = schema();
         initPromise = db().open().then(function (mode) {
             state.mode = mode;
-            return Promise.all([db().getAllNotes(), db().getAllFolders(), db().getMeta('activeNoteId')]);
+            return Promise.all([db().getAllNotes(), db().getAllFolders(), db().getMeta('activeNoteId'), db().getMeta('files')]);
         }).then(function (results) {
             var rawNotes = results[0] || [];
             var folders = results[1] || [];
@@ -740,6 +818,7 @@
             var destructive = s.destructiveIssues(issues);
 
             adoptNotes(normalized.doc.notes, normalized.doc.folders);
+            loadFileIndex(results[3]);
             state.activeId = activeId && state.notes.has(activeId) ? activeId : null;
 
             /* 迁移旧的单文档 Markdown：仅在库为空时做一次 */
@@ -830,6 +909,9 @@
         unresolved: unresolved,
         headings: headings,
         resolveTitle: resolveTitle,
+        addImage: addImage,
+        resolveFile: resolveFile,
+        getFileUrl: getFileUrl,
         exportBundle: exportBundle,
         importVault: importVault,
         resetAll: resetAll,
