@@ -409,6 +409,14 @@
                     </aside>
                     <div class="notes-scrim" id="notes-scrim" hidden></div>
                 </div>
+                <div class="notes-palette" id="notes-palette" hidden>
+                    <div class="notes-palette__panel" role="dialog" aria-modal="true" aria-label="快速切换笔记">
+                        <input type="text" id="notes-palette-input" class="notes-palette__input"
+                               placeholder="搜索或跳转到笔记…（↑↓ 选择、回车打开、Esc 关闭）"
+                               aria-controls="notes-palette-list" aria-autocomplete="list" autocomplete="off" spellcheck="false">
+                        <div class="notes-palette__list" id="notes-palette-list" role="listbox"></div>
+                    </div>
+                </div>
                 <div class="tool-module-note" id="notes-module-note" hidden></div>
             </section>
 

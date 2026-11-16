@@ -575,6 +575,7 @@
     function backlinks(id) { return state.index ? indexer().backlinks(state.index, id) : []; }
     function outlinks(id) { return state.index ? indexer().outlinks(state.index, id) : []; }
     function tags() { return state.index ? indexer().tagList(state.index) : []; }
+    function notesWithTag(tag) { return state.index ? indexer().notesForTag(state.index, tag) : []; }
     function brokenLinks() { return state.index ? indexer().brokenLinks(state.index) : []; }
     function unresolved(id) { return state.index ? indexer().unresolvedTitles(state.index, id) : []; }
     function headings(id) {
@@ -824,6 +825,7 @@
         backlinks: backlinks,
         outlinks: outlinks,
         tags: tags,
+        notesWithTag: notesWithTag,
         brokenLinks: brokenLinks,
         unresolved: unresolved,
         headings: headings,

@@ -32,6 +32,8 @@
         sideOpen: false,
         trashView: false,
         collapsed: Object.create(null),
+        tagFilter: '',
+        searchResults: null,   // null=普通列表；数组=搜索结果
         applying: false,       // 回填 DOM 时抑制 input 事件
         pendingId: null,
         lastRenderedId: null
@@ -230,6 +232,39 @@
         return row;
     }
 
+    function searchRow(item) {
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'notes-row notes-row--result';
+        row.setAttribute('data-note-id', item.id);
+        if (item.id === store.getActiveId()) row.classList.add('is-active');
+        var label = document.createElement('span');
+        label.className = 'notes-row__label';
+        label.textContent = item.title || '未命名笔记';
+        row.appendChild(label);
+        if (item.snippet) {
+            var snippet = document.createElement('span');
+            snippet.className = 'notes-row__snippet';
+            var text = item.snippet;
+            var at = text.toLowerCase().indexOf(String(state.filter || '').toLowerCase());
+            if (at > -1 && state.filter) {
+                snippet.appendChild(document.createTextNode(text.slice(0, at)));
+                var mark = document.createElement('mark');
+                mark.textContent = text.slice(at, at + state.filter.length);
+                snippet.appendChild(mark);
+                snippet.appendChild(document.createTextNode(text.slice(at + state.filter.length)));
+            } else {
+                snippet.textContent = text;
+            }
+            row.appendChild(snippet);
+        }
+        row.addEventListener('click', function () {
+            selectNote(item.id);
+            if (state.sideOpen) toggleSide(false);
+        });
+        return row;
+    }
+
     function groupTitle(text) {
         var head = document.createElement('div');
         head.className = 'notes-group';
@@ -271,14 +306,30 @@
         if (!els.tree) return;
         els.tree.textContent = '';
 
+        /* 有搜索词时只显示搜索结果 */
+        if (state.filter) {
+            var results = storageSearch(state.filter);
+            els.tree.appendChild(groupTitle('搜索结果 · ' + results.length));
+            if (!results.length) {
+                var noResult = document.createElement('div');
+                noResult.className = 'notes-tree__empty';
+                noResult.textContent = '没有匹配「' + state.filter + '」的笔记';
+                els.tree.appendChild(noResult);
+                return;
+            }
+            results.forEach(function (item) { els.tree.appendChild(searchRow(item)); });
+            return;
+        }
+
         var all = store.quickSwitch('');
         var live = [];
         var trashed = [];
+        var allowed = state.tagFilter ? new Set(store.notesWithTag(state.tagFilter)) : null;
         all.forEach(function (item) {
             var note = store.getNote(item.id);
             if (!note) return;
             if (note.deletedAt) trashed.push(note);
-            else if (matchesFilter(note)) live.push(note);
+            else if (!allowed || allowed.has(note.id)) live.push(note);
         });
 
         if (state.trashView) {
@@ -292,6 +343,26 @@
             }
             trashed.slice(0, TREE_LIMIT).forEach(function (note) { els.tree.appendChild(noteRow(note)); });
             return;
+        }
+
+        if (state.tagFilter) {
+            var chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'notes-row notes-row--filter';
+            chip.appendChild(icon('tag', 13));
+            var chipLabel = document.createElement('span');
+            chipLabel.className = 'notes-row__label';
+            chipLabel.textContent = '#' + state.tagFilter;
+            chip.appendChild(chipLabel);
+            var clear = document.createElement('span');
+            clear.className = 'notes-row__meta';
+            clear.textContent = '清除';
+            chip.appendChild(clear);
+            chip.addEventListener('click', function () {
+                state.tagFilter = '';
+                renderTree();
+            });
+            els.tree.appendChild(chip);
         }
 
         var starred = [];
@@ -329,6 +400,31 @@
             });
         }
 
+        var tags = store.tags();
+        if (tags.length) {
+            els.tree.appendChild(groupTitle('标签'));
+            tags.slice(0, 30).forEach(function (tag) {
+                var row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'notes-row notes-row--tag' + (state.tagFilter === tag.key ? ' is-active' : '');
+                row.appendChild(icon('tag', 12));
+                var label = document.createElement('span');
+                label.className = 'notes-row__label';
+                label.textContent = tag.tag;
+                row.appendChild(label);
+                var meta = document.createElement('span');
+                meta.className = 'notes-row__meta';
+                meta.textContent = String(tag.count);
+                row.appendChild(meta);
+                row.addEventListener('click', function () {
+                    state.tagFilter = state.tagFilter === tag.key ? '' : tag.key;
+                    state.trashView = false;
+                    renderTree();
+                });
+                els.tree.appendChild(row);
+            });
+        }
+
         if (trashed.length) {
             var trashRow = document.createElement('button');
             trashRow.type = 'button';
@@ -349,12 +445,22 @@
             els.tree.appendChild(trashRow);
         }
 
-        if (!live.length && !trashed.length) {
+        if (!live.length && !trashed.length && !tags.length) {
             var hint = document.createElement('div');
             hint.className = 'notes-tree__empty';
-            hint.textContent = state.filter ? '没有匹配的笔记' : '还没有笔记，点上方「新建」';
+            hint.textContent = '还没有笔记，点上方「新建」';
             els.tree.appendChild(hint);
         }
+    }
+
+    /** 带缓存与上限的全文搜索（空查询不查） */
+    var searchCache = { query: '', at: 0, results: [] };
+    function storageSearch(query) {
+        var now = Date.now();
+        if (searchCache.query === query && now - searchCache.at < 800) return searchCache.results;
+        var results = store.search(query);
+        searchCache = { query: query, at: now, results: results };
+        return results;
     }
 
     /* ------------------------------------------------------------------ *
@@ -710,6 +816,105 @@
     }
 
     /* ------------------------------------------------------------------ *
+     * 快速切换（Ctrl+O）
+     * ------------------------------------------------------------------ */
+    var palette = { open: false, items: [], index: 0 };
+
+    function paletteClose() {
+        palette.open = false;
+        palette.items = [];
+        palette.index = 0;
+        if (els.palette) els.palette.hidden = true;
+    }
+
+    function paletteRender() {
+        if (!els.paletteList) return;
+        els.paletteList.textContent = '';
+        if (!palette.items.length) {
+            var empty = document.createElement('div');
+            empty.className = 'notes-palette__empty';
+            empty.textContent = '没有匹配的笔记';
+            els.paletteList.appendChild(empty);
+            return;
+        }
+        palette.items.forEach(function (item, index) {
+            var row = document.createElement('button');
+            row.type = 'button';
+            row.className = 'notes-palette__item' + (index === palette.index ? ' is-active' : '');
+            row.setAttribute('role', 'option');
+            row.setAttribute('aria-selected', index === palette.index ? 'true' : 'false');
+            var label = document.createElement('span');
+            if (item.kind === 'create') {
+                label.textContent = item.label;
+            } else {
+                var title = item.title || '';
+                var at = paletteQuery ? title.toLowerCase().indexOf(paletteQuery.toLowerCase()) : -1;
+                if (at > -1) {
+                    label.appendChild(document.createTextNode(title.slice(0, at)));
+                    var mark = document.createElement('mark');
+                    mark.textContent = title.slice(at, at + paletteQuery.length);
+                    label.appendChild(mark);
+                    label.appendChild(document.createTextNode(title.slice(at + paletteQuery.length)));
+                } else {
+                    label.textContent = title;
+                }
+            }
+            row.appendChild(label);
+            var hint = document.createElement('span');
+            hint.className = 'notes-palette__hint';
+            hint.textContent = item.kind === 'create' ? '新建' : fmtTime(item.updatedAt);
+            row.appendChild(hint);
+            row.addEventListener('mousedown', function (event) {
+                event.preventDefault();
+                paletteAccept(index);
+            });
+            els.paletteList.appendChild(row);
+        });
+    }
+
+    var paletteQuery = '';
+
+    function paletteUpdate(query) {
+        paletteQuery = String(query || '');
+        var list = store.quickSwitch(paletteQuery).slice(0, 12).map(function (item) {
+            return { kind: 'note', id: item.id, title: item.title, updatedAt: item.updatedAt };
+        });
+        if (paletteQuery && !list.length) {
+            list.push({ kind: 'create', label: '新建「' + paletteQuery + '」', title: paletteQuery });
+        }
+        palette.items = list;
+        palette.index = 0;
+        paletteRender();
+    }
+
+    function paletteAccept(index) {
+        var item = palette.items[typeof index === 'number' ? index : palette.index];
+        if (!item) return;
+        if (item.kind === 'create') {
+            var note = store.createNote({ title: item.title });
+            paletteClose();
+            if (note) {
+                selectNote(note.id);
+                if (els.title) { els.title.focus(); els.title.select(); }
+            }
+            return;
+        }
+        paletteClose();
+        selectNote(item.id);
+    }
+
+    function paletteOpen() {
+        if (!els.palette) return;
+        palette.open = true;
+        els.palette.hidden = false;
+        if (els.paletteInput) {
+            els.paletteInput.value = '';
+            els.paletteInput.focus();
+        }
+        paletteUpdate('');
+    }
+
+    /* ------------------------------------------------------------------ *
      * [[ 与 # 的自动补全
      * ------------------------------------------------------------------ */
     var ac = { open: false, items: [], index: 0, ctx: null, el: null };
@@ -903,10 +1108,15 @@
         if (els.newBtn) els.newBtn.addEventListener('click', newNote);
 
         if (els.filter) {
+            var filterTimer = null;
             els.filter.addEventListener('input', function () {
                 state.filter = String(els.filter.value || '').trim().toLowerCase();
                 state.trashView = false;
-                renderTree();
+                if (filterTimer) global.clearTimeout(filterTimer);
+                filterTimer = global.setTimeout(function () {
+                    filterTimer = null;
+                    renderTree();
+                }, 120);
             });
         }
 
@@ -961,6 +1171,36 @@
         if (els.sideClose) els.sideClose.addEventListener('click', function () { toggleSide(false); });
         if (els.scrim) els.scrim.addEventListener('click', function () { toggleSide(false); toggleInfo(false); });
 
+        if (els.palette) {
+            els.palette.addEventListener('mousedown', function (event) {
+                if (event.target === els.palette) paletteClose();
+            });
+            if (els.paletteInput) {
+                els.paletteInput.addEventListener('input', function () {
+                    paletteUpdate(els.paletteInput.value);
+                });
+                els.paletteInput.addEventListener('keydown', function (event) {
+                    if (event.key === 'ArrowDown') {
+                        event.preventDefault();
+                        if (!palette.items.length) return;
+                        palette.index = (palette.index + 1) % palette.items.length;
+                        paletteRender();
+                    } else if (event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        if (!palette.items.length) return;
+                        palette.index = (palette.index - 1 + palette.items.length) % palette.items.length;
+                        paletteRender();
+                    } else if (event.key === 'Enter') {
+                        event.preventDefault();
+                        paletteAccept();
+                    } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        paletteClose();
+                    }
+                });
+            }
+        }
+
         if (els.preview) {
             els.preview.addEventListener('click', function (event) {
                 var link = event.target && event.target.closest ? event.target.closest('[data-note]') : null;
@@ -983,7 +1223,12 @@
             var meta = event.ctrlKey || event.metaKey;
             if (!meta) return;
             var key = event.key.toLowerCase();
-            if (key === 'n' && !event.shiftKey) { event.preventDefault(); newNote(); }
+            if (key === 'o' && !event.shiftKey) { event.preventDefault(); paletteOpen(); }
+            else if (key === 'f' && event.shiftKey) {
+                event.preventDefault();
+                if (els.filter) { els.filter.focus(); els.filter.select(); }
+            }
+            else if (key === 'n' && !event.shiftKey) { event.preventDefault(); newNote(); }
             else if (key === 'e') { event.preventDefault(); toggleMode(); }
             else if (key === 's') { event.preventDefault(); commitNow(); store.flush(); toast('已保存', 'success'); }
             else if (key === 'z' && !event.shiftKey) { event.preventDefault(); var label = store.undo(); if (label) toast('已撤销：' + label); }
@@ -1025,6 +1270,9 @@
         els.sideClose = $('notes-side-close');
         els.scrim = $('notes-scrim');
         els.moduleNote = $('notes-module-note');
+        els.palette = $('notes-palette');
+        els.paletteInput = $('notes-palette-input');
+        els.paletteList = $('notes-palette-list');
     }
 
     function scheduleRender(payload) {

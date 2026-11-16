@@ -522,6 +522,10 @@
  * 5. 笔记（原 Markdown 工作台）
  *   三栏：笔记栏 / 编辑·阅读 / 信息面板；≤1100px 时后两者变为覆盖层。
  * ========================================================================== */
+.tools-page--notes {
+    position: relative;
+}
+
 .notes-shell {
     position: relative;
     display: flex;
@@ -663,6 +667,35 @@
 
 .notes-row--folder .notes-row__label {
     font-weight: 500;
+}
+
+.notes-row--result {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+}
+
+.notes-row__snippet {
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notes-row__snippet mark {
+    background: var(--nc-accent-soft);
+    color: var(--nc-accent);
+    border-radius: 2px;
+}
+
+.notes-row--tag .notes-row__label::before {
+    content: '';
+}
+
+.notes-row--filter {
+    color: var(--nc-accent);
 }
 
 .notes-row--trash {
@@ -926,6 +959,94 @@
     flex: 0 0 auto;
     color: var(--nc-text-3);
     font-size: var(--nc-fs-2xs);
+}
+
+/* ---------- 快速切换（Ctrl+O） ---------- */
+.notes-palette {
+    position: absolute;
+    inset: 0;
+    z-index: 12;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 8vh 16px 16px;
+    background: var(--nc-overlay);
+}
+
+.notes-palette[hidden] {
+    display: none;
+}
+
+.notes-palette__panel {
+    width: min(560px, 100%);
+    max-height: 62vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-elevated);
+    box-shadow: var(--nc-shadow-3);
+}
+
+.notes-palette__input {
+    flex: 0 0 auto;
+    height: 46px;
+    padding: 0 16px;
+    border: 0;
+    border-bottom: 1px solid var(--nc-border-faint);
+    background: transparent;
+    color: var(--nc-text);
+    font-size: var(--nc-fs-md);
+    outline: none;
+}
+
+.notes-palette__list {
+    flex: 1;
+    min-height: 0;
+    padding: 6px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.notes-palette__item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    text-align: left;
+    cursor: pointer;
+}
+
+.notes-palette__item.is-active {
+    background: var(--nc-accent-soft);
+    color: var(--nc-text);
+}
+
+.notes-palette__item mark {
+    background: transparent;
+    color: var(--nc-accent);
+    font-weight: 600;
+}
+
+.notes-palette__hint {
+    flex: 0 0 auto;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+}
+
+.notes-palette__empty {
+    padding: 16px 10px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-sm);
+    text-align: center;
 }
 
 /* ---------- 右：信息面板 ---------- */

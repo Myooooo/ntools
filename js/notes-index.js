@@ -251,6 +251,11 @@
         return out;
     }
 
+    function notesForTag(index, tagKey) {
+        var set = index.tags.get(String(tagKey || '').toLowerCase());
+        return set ? Array.from(set) : [];
+    }
+
     function tagList(index) {
         var out = [];
         index.tags.forEach(function (ids, key) {
@@ -406,6 +411,7 @@
         unresolvedTitles: unresolvedTitles,
         brokenLinks: brokenLinks,
         tagList: tagList,
+        notesForTag: notesForTag,
         search: search,
         quickSwitch: quickSwitch,
         fuzzyScore: fuzzyScore,
