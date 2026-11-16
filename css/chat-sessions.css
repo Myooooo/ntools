@@ -120,7 +120,7 @@
 
 .chat-session-item {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     gap: 6px;
     flex: 1;
     min-width: 0;
@@ -160,10 +160,15 @@
     opacity: 0;
 }
 
-.chat-session-row:hover .chat-session-more,
 .chat-session-row:focus-within .chat-session-more,
 .chat-session-row.is-active .chat-session-more {
     opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .chat-session-row:hover .chat-session-more {
+        opacity: 1;
+    }
 }
 
 @media (hover: none) {

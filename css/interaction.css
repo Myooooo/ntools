@@ -124,7 +124,13 @@
 .todo-search__clear,
 .todo-composer__more,
 .todo-ai-btn,
-.chat-session-more {
+.chat-session-more,
+.notes-row__more,
+.notes-ac__item,
+.notes-palette__item,
+.chat-versions__btn,
+.chat-code__copy,
+.chat-file-chip__remove {
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -145,14 +151,21 @@
 .todo-search__clear:active,
 .todo-composer__more:active,
 .todo-ai-btn:active,
-.chat-session-more:active {
+.chat-session-more:active,
+.notes-row__more:active,
+.notes-ac__item:active,
+.notes-palette__item:active,
+.chat-versions__btn:active,
+.chat-code__copy:active,
+.chat-file-chip__remove:active {
     transform: scale(var(--nc-press-scale));
 }
 
 /* 禁用项按下无反馈，避免“能按动”的错觉 */
 .nc-menu__item:disabled:active,
 .nc-select-pop__option.is-disabled:active,
-.chat-msg__action:disabled:active {
+.chat-msg__action:disabled:active,
+.chat-versions__btn:disabled:active {
     transform: none;
 }
 
@@ -162,8 +175,35 @@
 .chat-new-session:active,
 .sp-nav:active,
 .chat-session-item:active,
-.chat-suggest__item:active {
+.chat-suggest__item:active,
+.notes-row:active,
+.notes-link-row:active,
+.notes-outline__item:active {
     background: var(--nc-surface-3);
+}
+
+/* --------------------------------------------------------------------------
+ * 1.1 统一「仪器刻度」激活语言（v6.0）
+ * 以 TodoList 为基准：所有二级侧边栏导航的选中态 = 淡强调底 + 左侧 2px 竖线。
+ * 主导轨（.tools-nav__item）的刻度在栏外左侧，单独处理。
+ * -------------------------------------------------------------------------- */
+.notes-row,
+.todo-view-item,
+.notes-link-row {
+    position: relative;
+}
+
+.notes-row.is-active::before,
+.todo-view-item.is-active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 7px;
+    bottom: 7px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--nc-accent);
+    pointer-events: none;
 }
 
 /* 自定义下拉的触发层：按下时给底色，明确“已按住” */
@@ -324,15 +364,5 @@ html[data-lite="true"] .settings-sheet__panel {
     box-shadow: none;
 }
 
-/* v4.5 设计 QA：QR 工作台收拢，避免 1440 下两列间距过大与下方空置 */
-@media (min-width: 901px) {
-    .tool-layout--qr {
-        max-width: 920px;
-        grid-template-columns: minmax(0, 1fr) 320px;
-        gap: 28px;
-    }
-
-    .qr-form {
-        padding-left: 24px;
-    }
-}
+/* v6.0：QR 工作台改为与图片工具同构的整块双栏面板（布局在 tools.css §4 定义），
+ * 这里不再收窄 max-width —— 居中悬浮会让页面在宽屏下显得空。 */

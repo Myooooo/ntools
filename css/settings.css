@@ -1330,98 +1330,8 @@
     gap: 12px;
 }
 
-/* ---------- Range：自定义 track / thumb ---------- */
-.sp-range__input {
-    -webkit-appearance: none;
-    appearance: none;
-    height: 22px;
-    min-width: 0;
-    padding: 0;
-    background: transparent;
-    cursor: pointer;
-    accent-color: var(--nc-accent);
-}
-
-.sp-range__input:focus {
-    outline: none;
-}
-
-.sp-range__input:focus-visible {
-    border-radius: var(--nc-radius-pill);
-    box-shadow: var(--nc-focus-ring);
-}
-
-.sp-range__input::-webkit-slider-runnable-track {
-    height: 5px;
-    border-radius: 999px;
-    background: linear-gradient(
-        to right,
-        var(--nc-accent) 0,
-        var(--nc-accent) var(--sp-range-progress, 0%),
-        var(--nc-border-strong) var(--sp-range-progress, 0%),
-        var(--nc-border-strong) 100%
-    );
-    box-shadow: inset 0 0 0 1px var(--nc-border-faint);
-}
-
-.sp-range__input::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 15px;
-    height: 15px;
-    margin-top: -5px;
-    border: 2px solid var(--nc-accent);
-    border-radius: 50%;
-    background: var(--nc-surface);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28), 0 0 0 3px var(--nc-accent-faint);
-    transition: transform var(--nc-dur-fast) var(--nc-ease), box-shadow var(--nc-dur-fast) var(--nc-ease);
-}
-
-@media (hover: hover) and (pointer: fine) {
-    .sp-range__input:hover::-webkit-slider-thumb {
-        transform: scale(1.08);
-    }
-}
-
-.sp-range__input:focus-visible::-webkit-slider-thumb {
-    box-shadow: var(--nc-focus-ring), 0 1px 3px rgba(0, 0, 0, 0.28);
-}
-
-.sp-range__input::-moz-range-track {
-    height: 5px;
-    border-radius: 999px;
-    background: var(--nc-border-strong);
-}
-
-.sp-range__input::-moz-range-progress {
-    height: 5px;
-    border-radius: 999px;
-    background: var(--nc-accent);
-}
-
-.sp-range__input::-moz-range-thumb {
-    width: 13px;
-    height: 13px;
-    border: 2px solid var(--nc-accent);
-    border-radius: 50%;
-    background: var(--nc-surface);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
-}
-
-/* 浅色模式：轨道进一步加深，避免白底上几乎不可见 */
-html[data-theme="light"] .sp-range__input::-webkit-slider-runnable-track {
-    background: linear-gradient(
-        to right,
-        var(--nc-accent) 0,
-        var(--nc-accent) var(--sp-range-progress, 0%),
-        rgba(20, 24, 32, 0.5) var(--sp-range-progress, 0%),
-        rgba(20, 24, 32, 0.5) 100%
-    );
-}
-
-html[data-theme="light"] .sp-range__input::-moz-range-track {
-    background: rgba(20, 24, 32, 0.5);
-}
+/* ---------- Range：样式已上提为公共组件 .nc-range（components.css） ---------- */
+/* 设置面板的 .sp-range__input 作为别名保留，无需在这里重复声明。 */
 
 /* ---------- 数据 / 通用操作按钮对齐 ---------- */
 .sp-data-card__actions,
@@ -1531,4 +1441,29 @@ html[data-theme="light"] .sp-range__input::-moz-range-track {
 
 .sp-capabilities .nc-switch {
     min-height: 26px;
+}
+
+/* ==========================================================================
+ * v6.0：设置分区导航分组标题（核心 / 工作台模块 / 系统）
+ * 与待办侧栏的 .todo-views__label 同构：小字号、无全大写、安静。
+ * ========================================================================== */
+.sp-nav-group {
+    padding: 12px 12px 4px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    font-weight: 600;
+    letter-spacing: var(--nc-track-meta);
+    line-height: 1.4;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.settings-sheet__nav > .sp-nav-group:first-child {
+    padding-top: 2px;
+}
+
+@media (max-width: 900px) {
+    .sp-nav-group {
+        display: none;
+    }
 }

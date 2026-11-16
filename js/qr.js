@@ -25,6 +25,7 @@
     var MIN_SIZE = 96;
     var MAX_SIZE = 1024;
     var DEFAULT_SIZE = 256;
+    var SIZE_KEY = 'ntools.qr.size';
 
     var state = {
         initialized: false,
@@ -80,6 +81,14 @@
         els.download.disabled = !state.dataUrl;
         if (state.dataUrl) els.download.removeAttribute('aria-disabled');
         else els.download.setAttribute('aria-disabled', 'true');
+    }
+
+    /** 设置面板里保存的默认尺寸（不存在或非法时回退 256） */
+    function savedSize() {
+        var raw = null;
+        try { raw = global.localStorage.getItem(SIZE_KEY); } catch (err) { raw = null; }
+        var n = parseInt(raw, 10);
+        return isFinite(n) ? n : DEFAULT_SIZE;
     }
 
     function readSize() {
@@ -241,7 +250,12 @@
         if (els.generate) els.generate.addEventListener('click', generate);
         if (els.download) els.download.addEventListener('click', download);
         if (els.size) {
+            var pref = String(savedSize());
+            for (var i = 0; i < els.size.options.length; i += 1) {
+                if (els.size.options[i].value === pref) { els.size.value = pref; break; }
+            }
             els.size.addEventListener('change', function () {
+                try { global.localStorage.setItem(SIZE_KEY, els.size.value); } catch (err) { /* ignore */ }
                 if (state.dataUrl || (els.input && els.input.value.trim())) generate();
             });
         }

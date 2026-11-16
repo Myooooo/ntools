@@ -111,7 +111,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" id="rail-version" title="版本">v5.3</span>
+            <span class="tools-rail__version" id="rail-version" title="版本">v6.0</span>
         </div>
     </aside>
 
@@ -190,7 +190,10 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="todo-views__stats" id="todo-stats">今日完成 0 · 本周完成 0</div>
+                        <div class="todo-views__stats" id="todo-stats">
+                            <span class="todo-stat" data-stat="today">今日完成 0</span>
+                            <span class="todo-stat" data-stat="week">本周完成 0</span>
+                        </div>
                     </aside>
 
                     <!-- 中栏：任务列表 -->
@@ -345,6 +348,12 @@
                         <div class="tool-module-note" id="qr-module-note" hidden></div>
                     </div>
                 </div>
+                <footer class="tool-foot">
+                    <span class="tool-foot__note">支持 128 / 256 / 512 px，下载为 PNG</span>
+                    <span class="tool-foot__hints" aria-hidden="true">
+                        <span><kbd class="nc-kbd">Enter</kbd> 生成</span>
+                    </span>
+                </footer>
             </section>
 
             <!-- ---------------- Tab 3：Markdown ---------------- -->
@@ -366,7 +375,11 @@
                         </div>
                         <div class="notes-side__search">
                             <span class="notes-side__search-icon" data-icon="search" data-icon-size="15" aria-hidden="true"></span>
-                            <input type="search" id="notes-filter" class="notes-filter" placeholder="筛选笔记…" aria-label="筛选笔记">
+                            <input type="search" id="notes-filter" class="notes-filter" placeholder="筛选笔记…" aria-label="筛选笔记" autocomplete="off" spellcheck="false">
+                            <button type="button" class="notes-search__clear" id="notes-filter-clear" aria-label="清除筛选" title="清除筛选" hidden>
+                                <span data-icon="x" data-icon-size="13"></span>
+                            </button>
+                            <kbd class="nc-kbd notes-side__kbd">Ctrl+O</kbd>
                         </div>
                         <div class="notes-tree nc-scroll" id="notes-tree" role="tree" aria-label="笔记与文件夹"></div>
                     </aside>
@@ -378,9 +391,12 @@
                             </button>
                             <input type="text" id="notes-title" class="notes-title" placeholder="未命名笔记" aria-label="笔记标题" maxlength="200" spellcheck="false">
                             <div class="notes-head__actions">
-                                <button type="button" class="nc-btn nc-btn--sm" id="notes-mode-btn" title="切换编辑 / 阅读（Ctrl+E）">阅读</button>
-                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-info-btn" aria-label="信息面板" title="信息面板">
-                                    <span data-icon="panel-left" data-icon-size="16"></span>
+                                <div class="nc-seg notes-mode-seg" id="notes-mode-seg" role="group" aria-label="笔记模式">
+                                    <button type="button" class="nc-seg__btn is-active" data-mode="edit" aria-pressed="true" title="编辑（Ctrl+E）">编辑</button>
+                                    <button type="button" class="nc-seg__btn" data-mode="read" aria-pressed="false" title="阅读（Ctrl+E）">阅读</button>
+                                </div>
+                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-info-btn" aria-label="信息面板" title="信息面板" aria-expanded="false">
+                                    <span data-icon="info" data-icon-size="16"></span>
                                 </button>
                                 <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-more-btn" aria-label="更多操作" title="更多操作" aria-haspopup="menu">
                                     <span data-icon="more" data-icon-size="16"></span>
@@ -391,13 +407,26 @@
                             <textarea id="notes-editor" class="notes-editor" spellcheck="false" placeholder="开始写…  支持 Markdown 与 [[双向链接]]" aria-label="笔记正文"></textarea>
                             <div id="notes-preview" class="notes-preview md-preview nc-scroll" role="article" aria-label="预览" hidden></div>
                             <div class="notes-empty" id="notes-empty" hidden>
+                                <span class="notes-empty__icon" data-icon="file" data-icon-size="20" aria-hidden="true"></span>
                                 <p class="notes-empty__title">还没有选中笔记</p>
-                                <p class="notes-empty__hint">点「新建」开始，或从左侧选择一篇。</p>
+                                <p class="notes-empty__hint">新建一篇开始写，或按 Ctrl+O 从已有笔记里跳转。</p>
+                                <div class="notes-empty__actions">
+                                    <button type="button" class="nc-btn nc-btn--primary nc-btn--sm" id="notes-empty-new">新建笔记</button>
+                                    <button type="button" class="nc-btn nc-btn--sm" id="notes-empty-palette">快速切换</button>
+                                </div>
                             </div>
                         </div>
                         <footer class="notes-status">
-                            <span class="notes-status__stats" id="notes-stats">0 字 · 0 行</span>
+                            <span class="notes-status__stats" id="notes-stats">
+                                <span class="notes-status__stat" data-stat="chars">0 字</span>
+                                <span class="notes-status__stat" data-stat="lines">0 行</span>
+                            </span>
                             <span class="notes-status__save" id="notes-save" role="status" aria-live="polite"></span>
+                            <span class="notes-status__hints" aria-hidden="true">
+                                <span><kbd class="nc-kbd">Ctrl+O</kbd> 切换</span>
+                                <span><kbd class="nc-kbd">Ctrl+E</kbd> 阅读</span>
+                                <span><kbd class="nc-kbd">[[</kbd> 链接</span>
+                            </span>
                         </footer>
                     </div>
 
@@ -453,7 +482,7 @@
                         <div class="image-controls">
                             <div class="range-row">
                                 <label class="nc-label" for="img-scale">缩放比例</label>
-                                <input type="range" id="img-scale" min="10" max="100" value="100">
+                                <input type="range" id="img-scale" class="nc-range" min="10" max="100" value="100">
                                 <span class="range-row__value" id="img-scale-label">100%</span>
                             </div>
                             <div class="tool-meta">目标尺寸：<span id="img-res-target">-</span></div>
@@ -479,6 +508,12 @@
                     </div>
                 </div>
                 <div class="tool-module-note" id="image-module-note" hidden></div>
+                <footer class="tool-foot">
+                    <span class="tool-foot__note">支持 PNG / JPEG / WebP / GIF / BMP，单张上限 20 MB</span>
+                    <span class="tool-foot__hints" aria-hidden="true">
+                        <span><kbd class="nc-kbd">拖拽</kbd> 载入图片</span>
+                    </span>
+                </footer>
             </section>
 
             <!-- ---------------- Tab 5：nChat（原生嵌入） ---------------- -->

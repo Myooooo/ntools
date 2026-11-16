@@ -369,12 +369,19 @@
     border-bottom: 1px solid var(--nc-border-faint);
 }
 
-/* 主 CTA 在工具页内使用仪器蓝单色（去掉渐变语法） */
-.tools-page:not(.tools-page--nchat) .nc-btn--primary {
+/* 主 CTA 在全部工具页（含 nChat 内嵌弹层）使用仪器蓝单色：渐变只留给品牌标记 */
+.tools-page .nc-btn--primary {
     border-color: transparent;
     background: var(--nc-accent);
     color: var(--nc-text-invert);
     box-shadow: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .tools-page .nc-btn--primary:hover {
+        background: var(--nc-accent-hover);
+        filter: none;
+    }
 }
 
 /* ==========================================================================
@@ -437,20 +444,28 @@
 /* ==========================================================================
  * 4. 二维码工作台
  * ========================================================================== */
+/* 二维码工作台：与图片工具同构的「发丝外框双栏面板」，不再居中悬浮 */
 .tool-layout--qr {
-    grid-template-columns: minmax(0, 1fr) 340px;
-    align-items: center;
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: stretch;
+    align-content: stretch;
     width: 100%;
-    max-width: 1000px;
-    margin: 0 auto;
-    align-content: center;
+    max-width: none;
+    margin: 0;
+    gap: 0;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-surface);
+    overflow: hidden;
 }
 
 .qr-stage-card {
     align-items: center;
     justify-content: center;
-    gap: 18px;
-    padding: 8px 0;
+    gap: 16px;
+    padding: 24px;
 }
 
 .qr-stage {
@@ -458,7 +473,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: min(292px, 100%);
+    width: min(340px, 100%);
     aspect-ratio: 1 / 1;
     padding: 16px;
     border-radius: var(--nc-radius-lg);
@@ -510,8 +525,9 @@
 
 .qr-form {
     gap: 14px;
-    padding-left: 28px;
-    border-left: 1px solid var(--nc-border-faint);
+    padding: 20px;
+    align-self: stretch;
+    border-left: 1px solid var(--nc-border);
 }
 
 .qr-form .nc-field {
@@ -549,12 +565,12 @@
 /* ---------- 左：笔记栏 ---------- */
 .notes-side {
     display: flex;
-    flex: 0 0 244px;
+    flex: 0 0 248px;
     flex-direction: column;
     min-height: 0;
     min-width: 0;
     border-right: 1px solid var(--nc-border);
-    background: var(--nc-surface-2);
+    background: var(--nc-surface);
 }
 
 .notes-side__head {
@@ -619,13 +635,42 @@
 }
 
 .notes-group {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
     margin: 8px 0 2px;
     padding: 0 6px;
     color: var(--nc-text-3);
     font-size: var(--nc-fs-2xs);
     font-weight: 600;
     letter-spacing: var(--nc-track-meta);
-    text-transform: uppercase;
+}
+
+.notes-group__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notes-group__count {
+    flex: 0 0 auto;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+.notes-section__title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.notes-section__count {
+    color: var(--nc-text-3);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
 }
 
 .notes-row {
@@ -633,25 +678,27 @@
     align-items: center;
     gap: 7px;
     width: 100%;
-    padding: 6px 8px;
+    min-height: 30px;
+    padding: 0 8px;
     border: 0;
     border-radius: var(--nc-radius-sm);
     background: transparent;
     color: var(--nc-text-2);
-    font-size: var(--nc-fs-sm);
+    font-size: var(--nc-fs-md);
     text-align: left;
     cursor: pointer;
     transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
 }
 
-.notes-row:hover {
-    background: var(--nc-surface-hover);
+/* 选中态与 Todo / 会话栏一致：淡强调底 + 左侧 2px 刻度（interaction.css 统一提供） */
+.notes-row.is-active {
+    background: var(--nc-accent-faint);
     color: var(--nc-text);
 }
 
-.notes-row.is-active {
-    background: var(--nc-accent-soft);
-    color: var(--nc-text);
+/* 搜索结果行是两行结构，需要恢复上下内边距 */
+.notes-row--result {
+    padding: 5px 8px;
 }
 
 .notes-row__label {
@@ -682,25 +729,15 @@
     cursor: pointer;
 }
 
-.notes-row--folder:hover .notes-row__more,
 .notes-row__more:focus-visible {
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
 
-.notes-row__more:hover {
-    background: var(--nc-surface-3);
-    color: var(--nc-text);
-}
-
 .notes-row--add {
     color: var(--nc-text-3);
     font-size: var(--nc-fs-xs);
-}
-
-.notes-row--add:hover {
-    color: var(--nc-accent);
 }
 
 .notes-row--inline {
@@ -922,10 +959,6 @@
     transition: background-color var(--nc-dur-fast) var(--nc-ease);
 }
 
-.note-link:hover {
-    background: var(--nc-accent-soft);
-}
-
 .note-link:focus-visible {
     outline: 2px solid var(--nc-accent-ring);
     outline-offset: 1px;
@@ -985,11 +1018,6 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     cursor: pointer;
-}
-
-.notes-link-row:hover {
-    background: var(--nc-surface-hover);
-    color: var(--nc-text);
 }
 
 .notes-link-row.is-unresolved {
@@ -1172,7 +1200,6 @@
     font-size: var(--nc-fs-2xs);
     font-weight: 600;
     letter-spacing: var(--nc-track-meta);
-    text-transform: uppercase;
 }
 
 .notes-meta-row {
@@ -1199,10 +1226,6 @@
     font-size: var(--nc-fs-xs);
     text-align: left;
     cursor: pointer;
-}
-
-.notes-outline__item:hover {
-    color: var(--nc-accent);
 }
 
 .notes-outline__item[data-level="2"] { padding-left: 10px; }
@@ -1513,35 +1536,11 @@
     text-align: right;
 }
 
-input[type="range"] {
+/* 滑杆外观统一由公共组件 .nc-range 提供（components.css）；
+ * 这里只补布局，不再覆盖轨道/滑块，避免同一控件两套皮。 */
+.range-row .nc-range {
     flex: 1;
     width: auto;
-    height: 20px;
-    margin: 0;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    accent-color: var(--nc-accent);
-    cursor: pointer;
-    -webkit-appearance: none;
-    appearance: none;
-}
-
-input[type="range"]::-webkit-slider-runnable-track {
-    height: 3px;
-    border-radius: var(--nc-radius-pill);
-    background: var(--nc-surface-3);
-}
-
-input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 12px;
-    height: 12px;
-    margin-top: -4.5px;
-    border: 1px solid var(--nc-border-strong);
-    border-radius: 50%;
-    background: var(--nc-accent);
 }
 
 .image-output {
@@ -1728,6 +1727,9 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .todo-views__stats {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     flex: 0 0 auto;
     padding: 10px 8px 0;
     border-top: 1px solid var(--nc-border-faint);
@@ -1735,6 +1737,12 @@ input[type="range"]::-webkit-slider-thumb {
     font-size: var(--nc-fs-2xs);
     line-height: 1.5;
     font-variant-numeric: tabular-nums;
+}
+
+/* 统计按行分列，不再用「A · B」中点串 */
+.todo-stat {
+    display: block;
+    white-space: nowrap;
 }
 
 /* ---- 8.2 中栏：列表 ---- */
@@ -3066,6 +3074,40 @@ input[type="range"]::-webkit-slider-thumb {
  * 12. Hover：只在真正支持 hover 的精确指针下启用
  * ========================================================================== */
 @media (hover: hover) and (pointer: fine) {
+    /* ---- 笔记：悬停态（v6.0 门控；触屏不产生粘滞 hover） ---- */
+    .notes-row:hover {
+        background: var(--nc-surface-hover);
+        color: var(--nc-text);
+    }
+
+    .notes-row--folder:hover .notes-row__more {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .notes-row__more:hover {
+        background: var(--nc-surface-3);
+        color: var(--nc-text);
+    }
+
+    .notes-row--add:hover {
+        color: var(--nc-accent);
+    }
+
+    .note-link:hover {
+        background: var(--nc-accent-soft);
+    }
+
+    .notes-link-row:hover {
+        background: var(--nc-surface-hover);
+        color: var(--nc-text);
+    }
+
+    .notes-outline__item:hover {
+        color: var(--nc-accent);
+    }
+
     .tools-head__actions .nc-btn:not(.nc-btn--primary):hover {
         background: var(--nc-surface-2);
         border-color: var(--nc-border);
@@ -4559,5 +4601,290 @@ html[data-lite="true"] .todo-detail.is-detail-closing .todo-detail__inner {
     .todo-detail.is-detail-opening .todo-detail__inner,
     .todo-detail.is-detail-closing .todo-detail__inner {
         animation: none;
+    }
+}
+
+/* ==========================================================================
+ * 19. v6.0：笔记工作台向 Todo 基准对齐
+ *  - 搜索框：图标 / 清除按钮 / 快捷键提示，与 #todo-search 同构
+ *  - 页头：编辑·阅读分段控制器；信息面板按钮带激活态
+ *  - 空状态 / 底部状态栏：工作台标准结构，去掉中点串
+ * ========================================================================== */
+
+/* ---- 19.1 侧栏搜索 ---- */
+.notes-side__search-icon {
+    top: 16px;
+    transform: translateY(-50%);
+}
+
+.notes-filter {
+    padding-right: 54px;
+}
+
+.notes-filter::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+}
+
+.notes-search__clear {
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--nc-radius-xs);
+    color: var(--nc-text-3);
+}
+
+.notes-search__clear[hidden] {
+    display: none !important;
+}
+
+.notes-side__kbd {
+    position: absolute;
+    top: 7px;
+    right: 10px;
+    height: 18px;
+    min-width: 18px;
+    padding: 0 5px;
+    font-size: 9.5px;
+    opacity: 0.75;
+    pointer-events: none;
+}
+
+/* 有输入时让位给清除按钮 */
+.notes-filter:not(:placeholder-shown) ~ .notes-side__kbd {
+    display: none;
+}
+
+.notes-filter:focus ~ .notes-side__kbd {
+    opacity: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .notes-search__clear:hover {
+        color: var(--nc-text);
+        background: var(--nc-surface-2);
+    }
+}
+
+/* ---- 19.2 页头：编辑 / 阅读分段控制器 ---- */
+.notes-mode-seg {
+    flex: 0 0 auto;
+}
+
+.notes-mode-seg .nc-seg__btn {
+    height: 26px;
+    padding: 0 10px;
+    font-size: var(--nc-fs-xs);
+}
+
+#notes-info-btn.is-active {
+    color: var(--nc-accent);
+    background: var(--nc-accent-faint);
+}
+
+/* ---- 19.3 空状态：工作台标准结构 ---- */
+.notes-empty {
+    gap: 6px;
+    padding: 24px;
+}
+
+.notes-empty__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-bottom: 4px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-surface-2);
+    color: var(--nc-text-3);
+}
+
+.notes-empty__title {
+    font-size: var(--nc-fs-base);
+    font-weight: 600;
+}
+
+.notes-empty__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* ---- 19.4 底部状态栏：统计分段 + 快捷键提示 ---- */
+.notes-status {
+    height: 30px;
+    gap: 14px;
+}
+
+.notes-status__stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+.notes-status__stat + .notes-status__stat {
+    padding-left: 10px;
+    border-left: 1px solid var(--nc-border);
+}
+
+.notes-status__save {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notes-status__hints {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+    flex: 0 0 auto;
+}
+
+.notes-status__hints > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.notes-status__hints .nc-kbd {
+    min-width: 17px;
+    height: 17px;
+    font-size: 9.5px;
+}
+
+@media (max-width: 1100px) {
+    .notes-status__hints {
+        display: none;
+    }
+}
+
+/* ---- 19.5 右侧信息面板：桌面进出过渡（与 .todo-detail 同节奏） ---- */
+@keyframes notes-info-in {
+    from {
+        opacity: 0;
+        transform: translateX(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes notes-info-out {
+    from {
+        opacity: 1;
+        transform: none;
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(10px);
+    }
+}
+
+@media (min-width: 1101px) {
+    .notes-info.is-opening {
+        animation: notes-info-in 180ms var(--nc-ease-out) both;
+    }
+
+    .notes-info.is-closing {
+        animation: notes-info-out 140ms var(--nc-ease-out) both;
+        pointer-events: none;
+    }
+}
+
+html[data-lite="true"] .notes-info.is-opening,
+html[data-lite="true"] .notes-info.is-closing {
+    animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .notes-info.is-opening,
+    .notes-info.is-closing {
+        animation: none;
+    }
+}
+
+/* ---- 19.6 正文阅读版心：超宽屏下限制行宽（<80ch） ---- */
+@media (min-width: 1440px) {
+    .notes-editor,
+    .notes-preview {
+        padding-left: max(24px, calc((100% - 76ch) / 2));
+        padding-right: max(24px, calc((100% - 76ch) / 2));
+    }
+}
+
+/* ==========================================================================
+ * 20. v6.0：工具页底部状态条（与 .todo-foot 同构）
+ * 让二维码 / 图片工具也有「我在哪、能怎么操作」的常驻提示。
+ * ========================================================================== */
+.tool-foot {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 24px;
+    padding: 0 2px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    font-variant-numeric: tabular-nums;
+}
+
+.tool-foot__note {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tool-foot__hints {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+
+.tool-foot__hints > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.tool-foot__hints .nc-kbd {
+    min-width: 17px;
+    height: 17px;
+    font-size: 9.5px;
+}
+
+/* 图片工具主操作与二维码保持同一层级：内联按钮，不做通栏大块 */
+.image-controls .nc-btn--block {
+    width: auto;
+    align-self: flex-start;
+}
+
+/* ---- 19.7 快速切换面板：键盘高频动作，只做 120ms 极短入场 ---- */
+@media (prefers-reduced-motion: no-preference) {
+    html:not([data-lite="true"]) .notes-palette:not([hidden]) {
+        animation: nc-fade-in 120ms var(--nc-ease-out) both;
+    }
+
+    html:not([data-lite="true"]) .notes-palette:not([hidden]) .notes-palette__panel {
+        animation: nc-pop-in 120ms var(--nc-ease-out) both;
     }
 }

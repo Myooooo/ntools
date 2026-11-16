@@ -12,6 +12,7 @@
 
     var NC = global.NC = global.NC || {};
     var view = NC.view = NC.view || {};
+    var util = NC.util;
 
     var TREE_LIMIT = 300;
     var EDIT_COMMIT_DELAY = 400;
@@ -292,10 +293,14 @@
         return row;
     }
 
-    function groupTitle(text) {
+    /** 分组标题：名称 + 右侧计数（结构化两列，不用「A · N」中点串） */
+    function groupTitle(text, count) {
         var head = document.createElement('div');
         head.className = 'notes-group';
-        head.textContent = text;
+        head.appendChild(util.e('span', { class: 'notes-group__label', text: text }));
+        if (count != null) {
+            head.appendChild(util.e('span', { class: 'notes-group__count', text: String(count) }));
+        }
         return head;
     }
 
@@ -427,7 +432,7 @@
         /* 有搜索词时只显示搜索结果 */
         if (state.filter) {
             var results = storageSearch(state.filter);
-            els.tree.appendChild(groupTitle('搜索结果 · ' + results.length));
+            els.tree.appendChild(groupTitle('搜索结果', results.length));
             if (!results.length) {
                 var noResult = document.createElement('div');
                 noResult.className = 'notes-tree__empty';
@@ -451,7 +456,7 @@
         });
 
         if (state.trashView) {
-            els.tree.appendChild(groupTitle('回收站 · ' + trashed.length));
+            els.tree.appendChild(groupTitle('回收站', trashed.length));
             if (!trashed.length) {
                 var emptyTrash = document.createElement('div');
                 emptyTrash.className = 'notes-tree__empty';
@@ -497,7 +502,7 @@
             starred.slice(0, 50).forEach(function (note) { els.tree.appendChild(noteRow(note)); });
         }
 
-        els.tree.appendChild(groupTitle('全部笔记 · ' + live.length));
+        els.tree.appendChild(groupTitle('全部笔记', live.length));
         loose.slice(0, TREE_LIMIT).forEach(function (note) { els.tree.appendChild(noteRow(note)); });
         if (live.length > TREE_LIMIT) {
             var more = document.createElement('div');
@@ -607,18 +612,45 @@
         var read = state.mode === 'read';
         setHidden(els.editor, read);
         setHidden(els.preview, !read);
-        if (els.modeBtn) els.modeBtn.textContent = read ? '编辑' : '阅读';
+        syncModeSeg();
         if (read) {
             var note = store.getActiveNote();
             renderMarkdown(els.preview, note ? note.content : '');
         }
     }
 
+    /** 分段控制器与 state.mode 同步（编辑 / 阅读） */
+    function syncModeSeg() {
+        if (!els.modeSeg) return;
+        var buttons = els.modeSeg.querySelectorAll('.nc-seg__btn');
+        for (var i = 0; i < buttons.length; i += 1) {
+            var active = buttons[i].getAttribute('data-mode') === state.mode;
+            buttons[i].classList.toggle('is-active', active);
+            buttons[i].setAttribute('aria-pressed', active ? 'true' : 'false');
+        }
+    }
+
+    /** 搜索框有内容时才显示清除按钮 */
+    function syncFilterClear() {
+        if (!els.filterClear) return;
+        var has = !!(els.filter && String(els.filter.value || '').length);
+        els.filterClear.hidden = !has;
+    }
+
     function renderStatus() {
         var note = store.getActiveNote();
         var chars = note ? (note.content || '').length : 0;
         var lines = note && note.content ? note.content.split(/\r\n|\r|\n/).length : 0;
-        if (els.stats) els.stats.textContent = chars + ' 字 · ' + lines + ' 行';
+        if (els.stats) {
+            var charNode = els.stats.querySelector('[data-stat="chars"]');
+            var lineNode = els.stats.querySelector('[data-stat="lines"]');
+            if (charNode && lineNode) {
+                charNode.textContent = chars + ' 字';
+                lineNode.textContent = lines + ' 行';
+            } else {
+                els.stats.textContent = chars + ' 字　' + lines + ' 行';
+            }
+        }
         var info = store.saveState();
         if (!els.save) return;
         els.save.classList.remove('is-error', 'is-pending');
@@ -632,7 +664,7 @@
             els.save.textContent = '保存中…';
             els.save.classList.add('is-pending');
         } else {
-            els.save.textContent = info.saveCount ? '已保存 · ' + fmtTime(info.lastSavedAt) : '已就绪';
+            els.save.textContent = info.saveCount ? '已保存　' + fmtTime(info.lastSavedAt) : '已就绪';
         }
     }
 
@@ -697,7 +729,10 @@
         box.className = 'notes-section';
         var head = document.createElement('div');
         head.className = 'notes-section__title';
-        head.textContent = title + (items.length ? ' · ' + items.length : '');
+        head.appendChild(util.e('span', { text: title }));
+        if (items.length) {
+            head.appendChild(util.e('span', { class: 'notes-section__count', text: String(items.length) }));
+        }
         box.appendChild(head);
         if (!items.length) {
             var none = document.createElement('div');
@@ -865,11 +900,41 @@
         if (els.shell) els.shell.classList.toggle('is-side-open', state.sideOpen);
     }
 
+    var infoHideTimer = null;
+
     function toggleInfo(force) {
-        state.infoOpen = typeof force === 'boolean' ? force : !state.infoOpen;
-        setHidden(els.info, !state.infoOpen);
-        if (els.shell) els.shell.classList.toggle('is-info-open', state.infoOpen);
-        renderInfo();
+        var next = typeof force === 'boolean' ? force : !state.infoOpen;
+        if (infoHideTimer) { global.clearTimeout(infoHideTimer); infoHideTimer = null; }
+        state.infoOpen = next;
+        if (els.shell) els.shell.classList.toggle('is-info-open', next);
+        if (els.infoBtn) {
+            els.infoBtn.classList.toggle('is-active', next);
+            els.infoBtn.setAttribute('aria-expanded', next ? 'true' : 'false');
+        }
+        if (!els.info) return;
+        els.info.classList.remove('is-opening', 'is-closing');
+        if (next) {
+            setHidden(els.info, false);
+            /* 强制一次样式计算，让 180ms 过渡从关闭态开始 */
+            void els.info.offsetWidth;
+            els.info.classList.add('is-opening');
+            renderInfo();
+            return;
+        }
+        if (els.info.hidden) return;
+        /* Lite / reduced-motion：即时收起，不等待过渡 */
+        var instant = document.documentElement.getAttribute('data-lite') === 'true' ||
+            (NC.util && NC.util.prefersReducedMotion && NC.util.prefersReducedMotion());
+        if (instant) {
+            setHidden(els.info, true);
+            return;
+        }
+        els.info.classList.add('is-closing');
+        infoHideTimer = global.setTimeout(function () {
+            infoHideTimer = null;
+            els.info.classList.remove('is-closing', 'is-opening');
+            if (!state.infoOpen) setHidden(els.info, true);
+        }, 150);
     }
 
     function newNote() {
@@ -1137,16 +1202,21 @@
             return box;
         }
 
+        /* 逻辑坐标固定 480×360；按 devicePixelRatio 放大位图，避免 HiDPI 下发虚 */
+        var LOGICAL_W = 480;
+        var LOGICAL_H = 360;
+        var dpr = Math.min(2, Math.max(1, global.devicePixelRatio || 1));
         var canvas = document.createElement('canvas');
         canvas.className = 'notes-graph';
-        canvas.width = 480;
-        canvas.height = 360;
+        canvas.width = Math.round(LOGICAL_W * dpr);
+        canvas.height = Math.round(LOGICAL_H * dpr);
         canvas.setAttribute('role', 'img');
         canvas.setAttribute('aria-label', '当前笔记的关系图');
         box.appendChild(canvas);
 
         var ctx = canvas.getContext ? canvas.getContext('2d') : null;
         if (!ctx) return box;
+        if (ctx.setTransform) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
         var styles = global.getComputedStyle ? global.getComputedStyle(document.documentElement) : null;
         var color = function (name, fallback) {
@@ -1158,8 +1228,8 @@
         var surface = color('--nc-surface', '#131922');
         var border = color('--nc-border-strong', 'rgba(255,255,255,.14)');
 
-        var w = canvas.width;
-        var h = canvas.height;
+        var w = LOGICAL_W;
+        var h = LOGICAL_H;
         var cx = w / 2;
         var cy = h / 2;
         var radius = Math.min(w, h) / 2 - 46;
@@ -1205,8 +1275,9 @@
 
         canvas.addEventListener('click', function (event) {
             var rect = canvas.getBoundingClientRect();
-            var scaleX = canvas.width / rect.width;
-            var scaleY = canvas.height / rect.height;
+            if (!rect.width || !rect.height) return;
+            var scaleX = LOGICAL_W / rect.width;
+            var scaleY = LOGICAL_H / rect.height;
             var x = (event.clientX - rect.left) * scaleX;
             var y = (event.clientY - rect.top) * scaleY;
             for (var i = 0; i < points.length; i += 1) {
@@ -1348,6 +1419,7 @@
         palette.open = false;
         palette.items = [];
         palette.index = 0;
+        if (paletteTrapRelease) { paletteTrapRelease(); paletteTrapRelease = null; }
         if (els.palette) els.palette.hidden = true;
     }
 
@@ -1427,10 +1499,13 @@
         selectNote(item.id);
     }
 
+    var paletteTrapRelease = null;
+
     function paletteOpen() {
         if (!els.palette) return;
         palette.open = true;
         els.palette.hidden = false;
+        if (NC.ui && NC.ui.trapFocus) paletteTrapRelease = NC.ui.trapFocus(els.palette);
         if (els.paletteInput) {
             els.paletteInput.value = '';
             els.paletteInput.focus();
@@ -1644,6 +1719,7 @@
             els.filter.addEventListener('input', function () {
                 state.filter = String(els.filter.value || '').trim().toLowerCase();
                 state.trashView = false;
+                syncFilterClear();
                 if (filterTimer) global.clearTimeout(filterTimer);
                 filterTimer = global.setTimeout(function () {
                     filterTimer = null;
@@ -1720,7 +1796,29 @@
             els.title.addEventListener('blur', commitTitle);
         }
 
-        if (els.modeBtn) els.modeBtn.addEventListener('click', function () { toggleMode(); });
+        if (els.modeSeg) {
+            els.modeSeg.addEventListener('click', function (event) {
+                var btn = event.target && event.target.closest ? event.target.closest('.nc-seg__btn') : null;
+                if (!btn) return;
+                var mode = btn.getAttribute('data-mode');
+                if (!mode || mode === state.mode) return;
+                toggleMode(mode);
+            });
+        }
+        if (els.filterClear) {
+            els.filterClear.addEventListener('click', function () {
+                if (els.filter) { els.filter.value = ''; els.filter.focus(); }
+                state.filter = '';
+                state.trashView = false;
+                syncFilterClear();
+                renderTree();
+            });
+        }
+        if (els.emptyNew) els.emptyNew.addEventListener('click', function () { newNote(); });
+        if (els.emptyPalette) els.emptyPalette.addEventListener('click', function () { paletteOpen(); });
+        NC.events.on('theme:changed', function () {
+            if (state.infoOpen) renderInfo();
+        });
         if (els.infoBtn) els.infoBtn.addEventListener('click', function () { toggleInfo(); });
         if (els.infoClose) els.infoClose.addEventListener('click', function () { toggleInfo(false); });
         if (els.moreBtn) els.moreBtn.addEventListener('click', openMoreMenu);
@@ -1817,7 +1915,10 @@
         els.empty = $('notes-empty');
         els.stats = $('notes-stats');
         els.save = $('notes-save');
-        els.modeBtn = $('notes-mode-btn');
+        els.modeSeg = $('notes-mode-seg');
+        els.filterClear = $('notes-filter-clear');
+        els.emptyNew = $('notes-empty-new');
+        els.emptyPalette = $('notes-empty-palette');
         els.infoBtn = $('notes-info-btn');
         els.infoClose = $('notes-info-close');
         els.moreBtn = $('notes-more-btn');
@@ -1850,6 +1951,10 @@
     function init() {
         if (state.initialized) return NC.view.notes;
         cacheEls();
+        try {
+            var prefMode = global.localStorage.getItem('ntools.notes.mode');
+            if (prefMode === 'read' || prefMode === 'edit') state.mode = prefMode;
+        } catch (err) { /* ignore */ }
         store = NC.store && NC.store.notes;
         schema = NC.schema && NC.schema.notes;
         if (!store || !schema) {

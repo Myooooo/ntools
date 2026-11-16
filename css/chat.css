@@ -2261,10 +2261,15 @@ html[data-lite="true"] #chat-profile-select + .nc-select__trigger {
     transition: opacity var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
 }
 
-.chat-code:hover .chat-code__copy,
 .chat-code:focus-within .chat-code__copy,
 .chat-code__copy.is-copied {
     opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .chat-code:hover .chat-code__copy {
+        opacity: 1;
+    }
 }
 
 @media (hover: hover) and (pointer: fine) {

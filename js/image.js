@@ -32,6 +32,7 @@
     var MAX_DIMENSION = 8192;
     var MAX_PIXELS = 24 * 1000 * 1000;
     var JPEG_QUALITY = 0.92;
+    var QUALITY_KEY = 'ntools.image.quality';
     var ALLOWED_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/bmp'];
 
     var state = {
@@ -71,6 +72,15 @@
         return (n / 1024 / 1024).toFixed(2) + ' MB';
     }
 
+    /** 设置面板里保存的 JPEG 质量（非法值回退 0.92） */
+    function jpegQuality() {
+        var raw = null;
+        try { raw = global.localStorage.getItem(QUALITY_KEY); } catch (err) { raw = null; }
+        var n = parseFloat(raw);
+        if (!isFinite(n) || n <= 0 || n > 1) return JPEG_QUALITY;
+        return Math.min(1, Math.max(0.1, n));
+    }
+
     function currentScale() {
         var raw = els.scale ? parseInt(els.scale.value, 10) : 100;
         if (!isFinite(raw)) raw = 100;
@@ -104,12 +114,24 @@
     /* ------------------------------------------------------------------ *
      * 信息展示
      * ------------------------------------------------------------------ */
+    /** 滑块已滑过部分的高亮进度（.nc-range 读取 --sp-range-progress） */
+    function paintRangeProgress() {
+        if (!els.scale) return;
+        var min = Number(els.scale.min) || 0;
+        var max = Number(els.scale.max) || 100;
+        var value = Number(els.scale.value) || 0;
+        var ratio = max > min ? (value - min) / (max - min) : 0;
+        var pct = Math.max(0, Math.min(100, ratio * 100));
+        els.scale.style.setProperty('--sp-range-progress', pct + '%');
+    }
+
     function updateInfo() {
         var pct = currentScale();
         var size = targetSize();
         state.targetW = size.w;
         state.targetH = size.h;
 
+        paintRangeProgress();
         if (els.scaleLabel) els.scaleLabel.textContent = pct + '%';
         if (els.resOriginal) {
             els.resOriginal.textContent = state.origW > 0 ? state.origW + ' × ' + state.origH : '—';
@@ -201,7 +223,7 @@
         }
         var dataUrl = '';
         try {
-            dataUrl = canvas.toDataURL(state.mime, JPEG_QUALITY);
+            dataUrl = canvas.toDataURL(state.mime, jpegQuality());
         } catch (err) {
             // 部分内核在图片过大时 toDataURL 会失败
             toast('生成 Base64 失败：图片可能过大', 'error');

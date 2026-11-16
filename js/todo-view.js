@@ -1111,7 +1111,14 @@
             }
         });
         if (els.stats) {
-            els.stats.textContent = '今日完成 ' + counts.completedToday + '　本周完成 ' + counts.completedWeek;
+            var todayStat = els.stats.querySelector('[data-stat="today"]');
+            var weekStat = els.stats.querySelector('[data-stat="week"]');
+            if (todayStat && weekStat) {
+                todayStat.textContent = '今日完成 ' + counts.completedToday;
+                weekStat.textContent = '本周完成 ' + counts.completedWeek;
+            } else {
+                els.stats.textContent = '今日完成 ' + counts.completedToday + '　本周完成 ' + counts.completedWeek;
+            }
         }
         if (els.subtitle) {
             var list = ui.listId ? findList(doc, ui.listId) : null;

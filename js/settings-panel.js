@@ -44,34 +44,58 @@
         }, 2400);
     }
 
+    /* 分区导航分组：10 个入口按「核心 / 工作台模块 / 系统」分三组，扫读更快 */
+    var NAV_GROUPS = [
+        { id: 'core', title: '核心' },
+        { id: 'modules', title: '工作台模块' },
+        { id: 'system', title: '系统' }
+    ];
+
     function sectionMeta() {
         return [
-            { id: 'general', title: '通用', desc: '主题、Light 性能模式、上下班时间', icon: 'settings' },
-            { id: 'profiles', title: 'AI 端点', desc: '聊天与 Todo AI 共用的 OpenAI 兼容端点', icon: 'layers' },
-            { id: 'todo', title: '待办', desc: 'Todo AI 识别与列表行为', icon: 'check-circle' },
-            { id: 'notes', title: '笔记', desc: '笔记库、双向链接与保存策略', icon: 'file' },
-            { id: 'email', title: '邮件', desc: '邮箱维护工具与数据', icon: 'mail' },
-            { id: 'qr', title: '二维码', desc: '二维码生成的默认参数', icon: 'grid' },
-            { id: 'image', title: '图片', desc: '图片压缩与格式转换', icon: 'image' },
-            { id: 'nchat', title: 'nChat', desc: '聊天界面与消息行为', icon: 'command' },
-            { id: 'data', title: '数据', desc: '导入导出与本地数据清理', icon: 'download' },
-            { id: 'about', title: '关于', desc: '版本、兼容性与快捷键', icon: 'info' }
-        ].concat(sections);
+            { id: 'general', title: '通用', desc: '主题、Light 性能模式、上下班时间', icon: 'settings', group: 'core' },
+            { id: 'profiles', title: 'AI 端点', desc: '聊天与 Todo AI 共用的 OpenAI 兼容端点', icon: 'layers', group: 'core' },
+            { id: 'todo', title: '待办', desc: 'Todo AI 识别与列表行为', icon: 'check-circle', group: 'modules' },
+            { id: 'notes', title: '笔记', desc: '笔记库状态、默认视图与导出', icon: 'file', group: 'modules' },
+            { id: 'email', title: '邮件', desc: '邮箱数据用量与备份入口', icon: 'mail', group: 'modules' },
+            { id: 'qr', title: '二维码', desc: '默认生成尺寸', icon: 'grid', group: 'modules' },
+            { id: 'image', title: '图片', desc: 'Base64 导出的 JPEG 质量', icon: 'image', group: 'modules' },
+            { id: 'nchat', title: 'nChat', desc: '当前端点与聊天入口', icon: 'command', group: 'modules' },
+            { id: 'data', title: '数据', desc: '导入导出与本地数据清理', icon: 'download', group: 'system' },
+            { id: 'about', title: '关于', desc: '版本、兼容性与快捷键', icon: 'info', group: 'system' }
+        ].concat(sections.map(function (section) {
+            section.group = section.group || 'modules';
+            return section;
+        }));
     }
 
-    /* 模块占位：暂无配置项也保留入口，避免"设置里找不到某个模块" */
+    function sectionGroup(id) {
+        return id || 'modules';
+    }
+
+    /* 模块分区：保留入口，并给出「实时状态 + 实用默认值 + 快捷跳转」，
+     * 不再显示「暂无可配置项」这种消极占位。 */
     var MODULE_TABS = ['notes', 'email', 'qr', 'image', 'nchat'];
-    var MODULE_NOTES = {
-        notes: '笔记的保存、链接与备份策略已经按最优默认值运行：300ms 防抖落盘、写后校验、' +
-            '失败自动重试、破坏性操作前自动快照，旧 Markdown 草稿会自动迁移。' +
-            '全库可在「数据」里导出（含图片），或在笔记页侧栏「⋮」单独导出 JSON / ZIP。',
-        email: '邮箱数据保存在单文档 ntools.email.v1，写后校验、导入先预览；' +
-            '页面主题与 Lite 模式由主应用统一下发。备份与恢复在邮件页「备份恢复」里，' +
-            '也会包含在「数据 → 导出全部」中。',
-        qr: '二维码工具目前无需配置：纠错级别、尺寸与下载格式在页面内随用随选。',
-        image: '图片工具目前无需配置：压缩质量与目标格式在页面内选择。',
-        nchat: '聊天界面暂无可配置项：模型与采样参数在「AI 端点」里配置，消息与会话行为使用默认值。'
+
+    var PREF_KEYS = {
+        qrSize: 'ntools.qr.size',
+        imageQuality: 'ntools.image.quality',
+        notesMode: 'ntools.notes.mode'
     };
+
+    function prefGet(key, fallback) {
+        try {
+            var raw = global.localStorage.getItem(key);
+            return raw == null ? fallback : raw;
+        } catch (err) { return fallback; }
+    }
+
+    function prefSet(key, value) {
+        try {
+            global.localStorage.setItem(key, String(value));
+            return true;
+        } catch (err) { return false; }
+    }
 
     /* ------------------------------------------------------------------ *
      * 基础组件
@@ -508,7 +532,7 @@
         renderTodoAi(container);
     }
 
-    /** 模块占位 tab（笔记 / 邮件 / 二维码 / 图片 / nChat） */
+    /** 模块 tab：实时状态 + 默认偏好 + 快捷操作 */
     function renderModuleTab(container, id) {
         var meta = sectionMeta().filter(function (item) { return item.id === id; })[0] || {};
         var head = util.e('div', { class: 'sp-section-head' });
@@ -518,41 +542,211 @@
         head.appendChild(info);
         container.appendChild(head);
 
-        var card = util.e('div', { class: 'sp-data-card' });
-        card.appendChild(util.e('div', { class: 'sp-data-card__title', text: '暂无可配置项' }));
-        card.appendChild(util.e('div', {
-            class: 'sp-data-card__desc',
-            text: MODULE_NOTES[id] || '该模块当前使用默认行为，保留此入口以便后续扩展。'
-        }));
+        if (id === 'notes') renderNotesModule(container);
+        else if (id === 'email') renderEmailModule(container);
+        else if (id === 'qr') renderQrModule(container);
+        else if (id === 'image') renderImageModule(container);
+        else if (id === 'nchat') renderChatModule(container);
+    }
 
-        var actions = util.e('div', { class: 'sp-data-card__actions' });
-        if (id === 'notes') {
-            actions.appendChild(button('打开笔记', {
-                small: true,
-                icon: 'file',
-                onClick: function () { close(); if (NC.switchTab) NC.switchTab('md', true); }
-            }));
-            actions.appendChild(button('查看笔记存储用量', {
-                small: true,
-                ghost: true,
-                icon: 'info',
-                onClick: function () { reportNotesUsage(card); }
-            }));
-        } else if (id === 'email') {
-            actions.appendChild(button('打开邮件', {
-                small: true,
-                icon: 'mail',
-                onClick: function () { close(); if (NC.switchTab) NC.switchTab('email', true); }
-            }));
-            actions.appendChild(button('查看邮件数据量', {
-                small: true,
-                ghost: true,
-                icon: 'info',
-                onClick: function () { reportEmailUsage(card); }
-            }));
-        }
-        if (actions.children.length) card.appendChild(actions);
-        container.appendChild(card);
+    function moduleCard(title, desc) {
+        var card = util.e('div', { class: 'sp-data-card' });
+        card.appendChild(util.e('div', { class: 'sp-data-card__title', text: title }));
+        if (desc) card.appendChild(util.e('div', { class: 'sp-data-card__desc', text: desc }));
+        return card;
+    }
+
+    function moduleRows(card, pairs) {
+        var rows = util.e('div', { class: 'sp-rows' });
+        pairs.forEach(function (pair) {
+            var row = util.e('div', { class: 'sp-row' });
+            row.appendChild(util.e('span', { class: 'sp-row__label', text: pair[0] }));
+            row.appendChild(util.e('span', { class: 'sp-row__value', text: pair[1] }));
+            rows.appendChild(row);
+        });
+        card.appendChild(rows);
+        return rows;
+    }
+
+    function modulePrefRow(card, label, options, value, onChange) {
+        var row = util.e('div', { class: 'sp-row' });
+        row.appendChild(util.e('span', { class: 'sp-row__label', text: label }));
+        row.appendChild(segmented(options, value, function (next) {
+            prefSet(onChange && onChange.key ? onChange.key : '', next);
+            onChange.onChange(next);
+        }));
+        card.appendChild(row);
+        return row;
+    }
+
+    function openModule(tab) {
+        close();
+        if (NC.switchTab) NC.switchTab(tab, true);
+    }
+
+    function renderNotesModule(container) {
+        var notesStore = NC.store && NC.store.notes;
+        var ready = !!(notesStore && notesStore.isReady && notesStore.isReady());
+        var count = 0;
+        var folders = 0;
+        var engine = '尚未加载';
+        try {
+            if (ready) {
+                count = notesStore.quickSwitch('').length;
+                folders = (notesStore.getFolders() || []).length;
+                var st = notesStore.saveState ? notesStore.saveState() : {};
+                engine = st.mode === 'idb' ? 'IndexedDB' : 'localStorage 降级';
+                if (st.readOnly) engine += ' · 只读镜像';
+            }
+        } catch (err) { /* ignore */ }
+
+        var status = moduleCard('模块状态', '打开一次「笔记」后这里会显示真实用量。');
+        moduleRows(status, [
+            ['笔记', ready ? count + ' 篇' : '尚未加载'],
+            ['文件夹', ready ? folders + ' 个' : '—'],
+            ['存储', engine]
+        ]);
+        container.appendChild(status);
+
+        var prefs = moduleCard('默认偏好', '打开笔记时使用的初始视图（可随时用 Ctrl+E 切换）。');
+        var current = prefGet(PREF_KEYS.notesMode, 'edit') === 'read' ? 'read' : 'edit';
+        modulePrefRow(prefs, '打开时', [
+            { value: 'edit', label: '编辑' },
+            { value: 'read', label: '阅读' }
+        ], current, {
+            key: PREF_KEYS.notesMode,
+            onChange: function () { setStatus('已保存笔记默认视图'); }
+        });
+        container.appendChild(prefs);
+
+        var actions = moduleCard('快捷操作');
+        var bar = util.e('div', { class: 'sp-data-card__actions' });
+        bar.appendChild(button('打开笔记', { small: true, icon: 'file', onClick: function () { openModule('md'); } }));
+        bar.appendChild(button('导出 JSON', {
+            small: true, ghost: true, icon: 'download',
+            onClick: function () { exportNotes('json'); }
+        }));
+        bar.appendChild(button('导出 ZIP（含图片）', {
+            small: true, ghost: true, icon: 'download',
+            onClick: function () { exportNotes('zip'); }
+        }));
+        actions.appendChild(bar);
+        container.appendChild(actions);
+    }
+
+    function renderEmailModule(container) {
+        var doc = readEmailData();
+        var groups = doc && Array.isArray(doc.groups) ? doc.groups.length : 0;
+        var emails = doc && Array.isArray(doc.emails) ? doc.emails.length : 0;
+        var bytes = 0;
+        try {
+            var raw = global.localStorage.getItem(EMAIL_DOC_KEY);
+            bytes = raw ? raw.length : 0;
+        } catch (err) { bytes = 0; }
+
+        var status = moduleCard('模块状态', '邮件数据保存在本机单文档 ntools.email.v1，写后校验。');
+        moduleRows(status, [
+            ['邮箱地址', emails + ' 条'],
+            ['分组', groups + ' 个'],
+            ['占用', util.formatBytes(bytes)]
+        ]);
+        container.appendChild(status);
+
+        var actions = moduleCard('快捷操作');
+        var bar = util.e('div', { class: 'sp-data-card__actions' });
+        bar.appendChild(button('打开邮件', { small: true, icon: 'mail', onClick: function () { openModule('email'); } }));
+        bar.appendChild(button('导出全部本地数据', {
+            small: true, ghost: true, icon: 'download',
+            onClick: exportEverything
+        }));
+        actions.appendChild(bar);
+        actions.appendChild(util.e('p', {
+            class: 'sp-hint',
+            text: '备份与恢复在邮件页「备份恢复」里，也会包含在「数据 → 导出全部本地数据」中。'
+        }));
+        container.appendChild(actions);
+    }
+
+    function renderQrModule(container) {
+        var prefs = moduleCard('默认尺寸', '新建二维码时预选的尺寸；生成页仍可随时改。');
+        var current = prefGet(PREF_KEYS.qrSize, '256');
+        if (['128', '256', '512'].indexOf(current) < 0) current = '256';
+        modulePrefRow(prefs, '尺寸', [
+            { value: '128', label: '128 px' },
+            { value: '256', label: '256 px' },
+            { value: '512', label: '512 px' }
+        ], current, {
+            key: PREF_KEYS.qrSize,
+            onChange: function () { setStatus('已保存二维码默认尺寸'); }
+        });
+        container.appendChild(prefs);
+
+        var actions = moduleCard('快捷操作');
+        var bar = util.e('div', { class: 'sp-data-card__actions' });
+        bar.appendChild(button('打开二维码工具', { small: true, icon: 'grid', onClick: function () { openModule('qr'); } }));
+        actions.appendChild(bar);
+        container.appendChild(actions);
+    }
+
+    function renderImageModule(container) {
+        var prefs = moduleCard('导出质量', '转换为 Base64 时 JPEG 的编码质量。');
+        var current = prefGet(PREF_KEYS.imageQuality, '0.92');
+        if (['0.8', '0.92', '0.98'].indexOf(current) < 0) current = '0.92';
+        modulePrefRow(prefs, 'JPEG 质量', [
+            { value: '0.8', label: '紧凑 80%' },
+            { value: '0.92', label: '标准 92%' },
+            { value: '0.98', label: '高清 98%' }
+        ], current, {
+            key: PREF_KEYS.imageQuality,
+            onChange: function () { setStatus('已保存 JPEG 质量'); }
+        });
+        container.appendChild(prefs);
+
+        var actions = moduleCard('快捷操作');
+        var bar = util.e('div', { class: 'sp-data-card__actions' });
+        bar.appendChild(button('打开图片工具', { small: true, icon: 'image', onClick: function () { openModule('image'); } }));
+        actions.appendChild(bar);
+        actions.appendChild(util.e('p', {
+            class: 'sp-hint',
+            text: '支持 PNG / JPEG / WebP / GIF / BMP，单张上限 20 MB；压缩比例在页面内调整。'
+        }));
+        container.appendChild(actions);
+    }
+
+    function renderChatModule(container) {
+        var doc = store().getState();
+        var profile = doc.profiles.filter(function (item) { return item.id === doc.currentProfileId; })[0];
+        var status = moduleCard('模块状态', '聊天与 Todo AI 共用同一个当前端点。');
+        moduleRows(status, [
+            ['当前端点', profile ? profile.name : '未配置'],
+            ['模型', profile && profile.modelId ? profile.modelId : '—'],
+            ['图片输入', profile && profile.capabilities && profile.capabilities.vision === false ? '已关闭' : '已开启'],
+            ['会话存储', NC.store.conversation && NC.store.conversation.getStorageInfo
+                ? (NC.store.conversation.getStorageInfo().mode === 'indexedDB' ? 'IndexedDB' : 'localStorage')
+                : '首次进入 nChat 后可用']
+        ]);
+        container.appendChild(status);
+
+        var actions = moduleCard('快捷操作');
+        var bar = util.e('div', { class: 'sp-data-card__actions' });
+        bar.appendChild(button('打开 nChat', { small: true, icon: 'sparkles', onClick: function () { openModule('nchat'); } }));
+        bar.appendChild(button('配置端点', {
+            small: true, ghost: true, icon: 'layers',
+            onClick: function () { editingProfileId = null; renderSection('profiles'); }
+        }));
+        bar.appendChild(button('系统提示词', {
+            small: true, ghost: true, icon: 'edit',
+            onClick: function () {
+                close();
+                if (NC.view && NC.view.chatPrompt && NC.view.chatPrompt.open) {
+                    NC.view.chatPrompt.open(NC.chatEmbed ? NC.chatEmbed.getCurrentProfileId() : null);
+                } else {
+                    toast('先打开一次 nChat，再设置系统提示词', 'info');
+                }
+            }
+        }));
+        actions.appendChild(bar);
+        container.appendChild(actions);
     }
 
     function appendInfoLine(card, text) {
@@ -1502,15 +1696,21 @@
 
         var layout = util.e('div', { class: 'settings-sheet__layout' });
         navEl = util.e('nav', { class: 'settings-sheet__nav', 'aria-label': '设置分区' });
-        sectionMeta().forEach(function (section) {
-            var nav = util.e('button', { type: 'button', class: 'sp-nav', dataset: { section: section.id } });
-            nav.appendChild(icons.el(section.icon, 16));
-            var text = util.e('span', { class: 'sp-nav__text' });
-            text.appendChild(util.e('span', { class: 'sp-nav__title', text: section.title }));
-            text.appendChild(util.e('span', { class: 'sp-nav__desc', text: section.desc }));
-            nav.appendChild(text);
-            nav.addEventListener('click', function () { editingProfileId = null; renderSection(section.id); });
-            navEl.appendChild(nav);
+        var allSections = sectionMeta();
+        NAV_GROUPS.forEach(function (group) {
+            var items = allSections.filter(function (section) { return sectionGroup(section.group) === group.id; });
+            if (!items.length) return;
+            navEl.appendChild(util.e('div', { class: 'sp-nav-group', text: group.title, 'aria-hidden': 'true' }));
+            items.forEach(function (section) {
+                var nav = util.e('button', { type: 'button', class: 'sp-nav', dataset: { section: section.id } });
+                nav.appendChild(icons.el(section.icon, 16));
+                var text = util.e('span', { class: 'sp-nav__text' });
+                text.appendChild(util.e('span', { class: 'sp-nav__title', text: section.title }));
+                text.appendChild(util.e('span', { class: 'sp-nav__desc', text: section.desc }));
+                nav.appendChild(text);
+                nav.addEventListener('click', function () { editingProfileId = null; renderSection(section.id); });
+                navEl.appendChild(nav);
+            });
         });
         layout.appendChild(navEl);
 
