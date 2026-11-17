@@ -87,8 +87,10 @@
         if (stream.active) return;
         var config = settings().getConfig();
         if (!config) return;
-        if (!config.apiKey || !config.apiUrl || !config.modelId) {
-            ui.toast('请先在「设置 → 模型端点」中配置 Base URL / API Key / Model ID', { type: 'warn', duration: 4500 });
+        /* API Key 可选：内网网关常见"免鉴权"部署，Todo AI 与测试连接都允许空 Key，
+         * 聊天这里也保持一致，只要求 Base URL 与 Model ID。 */
+        if (!config.apiUrl || !config.modelId) {
+            ui.toast('请先在「设置 → AI 端点」中配置 Base URL 与 Model ID', { type: 'warn', duration: 4500 });
             openSettings();
             return;
         }

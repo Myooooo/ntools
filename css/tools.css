@@ -887,7 +887,11 @@
 .notes-preview {
     flex: 1;
     min-height: 0;
-    padding: 20px 26px 48px;
+    width: 100%;
+    max-width: calc(var(--nc-reading-width, 896px) + 64px);
+    margin: 0 auto;
+    padding: 20px 32px 48px;
+    box-sizing: border-box;
     overflow-y: auto;
     overscroll-behavior: contain;
     color: var(--nc-text-2);
@@ -4838,15 +4842,6 @@ html[data-lite="true"] .notes-info.is-closing {
     .notes-info.is-opening,
     .notes-info.is-closing {
         animation: none;
-    }
-}
-
-/* ---- 19.6 正文阅读版心：超宽屏下限制行宽（<80ch） ---- */
-@media (min-width: 1440px) {
-    .notes-editor,
-    .notes-preview {
-        padding-left: max(24px, calc((100% - 76ch) / 2));
-        padding-right: max(24px, calc((100% - 76ch) / 2));
     }
 }
 

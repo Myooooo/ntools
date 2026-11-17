@@ -403,14 +403,58 @@
         });
     }
 
+    /* ---- 思考计时：summary 里显示「旋转图标 + 思考中 + Ns」，每秒更新 ---- */
+    function stopThinkTimer(details) {
+        if (!details) return;
+        if (details.__ncThinkTimer) {
+            global.clearInterval(details.__ncThinkTimer);
+            details.__ncThinkTimer = null;
+        }
+    }
+
+    function startThinkTimer(details) {
+        if (!details) return;
+        if (!details.__ncThinkStart) details.__ncThinkStart = Date.now();
+        var startedAt = details.__ncThinkStart;
+        var tick = function () {
+            var timeEl = details.querySelector('.chat-reasoning__time');
+            if (!timeEl) return;
+            var seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+            timeEl.textContent = seconds > 0 ? seconds + 's' : '';
+        };
+        tick();
+        /* 流式时每个 delta 都会走到这里：已在计时就不要重建定时器，
+         * 否则每秒一次的 tick 会被 60ms 一次的渲染不断清掉。 */
+        if (details.__ncThinkTimer) return;
+        details.__ncThinkTimer = global.setInterval(tick, 1000);
+    }
+
+    /** 把思考状态写回 summary（旋转图标 + 思考中 + 计时 / 结束文案） */
+    function applyReasoningSummary(details, message) {
+        if (!details || !message) return;
+        var label = details.querySelector('.chat-reasoning__label');
+        var time = details.querySelector('.chat-reasoning__time');
+        if (message.reasoningStreaming) {
+            details.classList.add('is-thinking');
+            if (label) label.textContent = '思考中';
+            startThinkTimer(details);
+        } else {
+            details.classList.remove('is-thinking');
+            stopThinkTimer(details);
+            if (label) label.textContent = reasoningLabel(message);
+            if (time) time.textContent = '';
+        }
+    }
+
     function ensureReasoning(article) {
         var existing = article.querySelector('.chat-reasoning');
         if (existing) return existing;
         var details = util.e('details', { class: 'chat-reasoning' });
-        details.appendChild(util.e('summary', {
-            class: 'chat-reasoning__summary',
-            text: '思考中…'
-        }));
+        var summary = util.e('summary', { class: 'chat-reasoning__summary' });
+        summary.appendChild(util.e('span', { class: 'chat-reasoning__spinner', 'aria-hidden': 'true' }));
+        summary.appendChild(util.e('span', { class: 'chat-reasoning__label', text: '思考中' }));
+        summary.appendChild(util.e('span', { class: 'chat-reasoning__time' }));
+        details.appendChild(summary);
         var body = util.e('div', { class: 'chat-reasoning__body chat-md' });
         details.appendChild(body);
         bindReasoningToggle(details);
@@ -546,8 +590,7 @@
             var body = details.querySelector('.chat-reasoning__body');
             if (message.reasoningStreaming === true) renderMarkdownStreaming(body, message.reasoning);
             else renderMarkdownInto(body, message.reasoning);
-            var summary = details.querySelector('.chat-reasoning__summary');
-            summary.textContent = reasoningLabel(message);
+            applyReasoningSummary(details, message);
             details.open = false;
         }
         bubble.appendChild(buildFooter(message));
@@ -844,7 +887,11 @@
         if (!container) return;
         var el = ensureTypingEl();
         el.hidden = !on;
-        if (on) scrollToBottom(false);
+        if (on) {
+            /* 每次显示都移到末尾：回复出现在哪，动画就在哪，不会卡在顶部 */
+            listEl.appendChild(el);
+            scrollToBottom(false);
+        }
     }
 
     function addError(text) {
@@ -888,14 +935,8 @@
             var body = details.querySelector('.chat-reasoning__body');
             if (message.reasoningStreaming === true) renderMarkdownStreaming(body, message.reasoning);
             else renderMarkdownInto(body, message.reasoning);
-            var summary = details.querySelector('.chat-reasoning__summary');
-            if (message.reasoningStreaming) {
-                summary.textContent = '思考中…';
-                details.open = true;
-            } else {
-                summary.textContent = reasoningLabel(message);
-                details.open = false;
-            }
+            applyReasoningSummary(details, message);
+            details.open = message.reasoningStreaming === true;
         } else {
             var existing = article.querySelector('.chat-reasoning');
             if (existing) existing.parentNode.removeChild(existing);
@@ -948,14 +989,9 @@
                 var details = ensureReasoning(article);
                 var body = details.querySelector('.chat-reasoning__body');
                 renderMarkdownInto(body, message.reasoning);
-                var summary = details.querySelector('.chat-reasoning__summary');
-                if (message.reasoningStreaming) {
-                    summary.textContent = '思考中…';
-                    details.open = true;
-                } else {
-                    summary.textContent = reasoningLabel(message);
-                    if (message.streaming !== true) details.open = false;
-                }
+                applyReasoningSummary(details, message);
+                if (message.reasoningStreaming) details.open = true;
+                else if (message.streaming !== true) details.open = false;
             } else {
                 var staleReasoning = article.querySelector('.chat-reasoning');
                 if (staleReasoning && staleReasoning.parentNode) {
@@ -975,6 +1011,7 @@
     function remove(id) {
         var article = messageEl(id);
         if (article) {
+            stopThinkTimer(article.querySelector('.chat-reasoning'));
             var finish = function () {
                 if (article.parentNode) article.parentNode.removeChild(article);
                 delete elById[id];

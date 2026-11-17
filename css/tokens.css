@@ -57,6 +57,9 @@
     --nc-radius-2xl: 20px;
     --nc-radius-pill: 999px;
 
+    /* 阅读版心：笔记正文与聊天消息共用的**内容**宽度（左右留白由各自容器控制） */
+    --nc-reading-width: 896px;
+
     /* ---------- 动效（强曲线，来自设计 skill） ---------- */
     --nc-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
     --nc-ease-out: cubic-bezier(0.23, 1, 0.32, 1);

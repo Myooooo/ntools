@@ -390,6 +390,12 @@
             el.send.setAttribute('title', state.busy ? '停止生成' : '发送');
         }
         if (el.inputArea) el.inputArea.classList.toggle('is-busy', state.busy);
+        /* 生成期间禁用输入：只能点「停止」打断（readOnly 保留焦点与选区，不会闪一下灰） */
+        if (el.textarea) {
+            el.textarea.readOnly = state.busy;
+            el.textarea.setAttribute('aria-readonly', state.busy ? 'true' : 'false');
+            el.textarea.classList.toggle('is-readonly', state.busy);
+        }
     }
 
     function handleSendOrStop() {
@@ -412,6 +418,8 @@
 
     function onKeyDown(event) {
         if (event.isComposing || state.composing || event.keyCode === 229) return;
+        /* 生成中不接受回车：发送/停止只走按钮，避免误触把回复打断 */
+        if (state.busy) return;
         if (event.key !== 'Enter' || event.shiftKey) return;
         event.preventDefault();
         if (!state.busy) handleSendOrStop();

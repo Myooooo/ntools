@@ -35,7 +35,7 @@
     var AXIS_H = 54;               // 刻度区高度
     var LANE_H = 46;               // 每条泳道高度
     var CHIP_H = 36;               // 任务 chip 高度
-    var BAR_MIN_W = 48;            // 极短任务的最小可视宽度（右端锚定 due）
+    var BAR_MIN_W = 84;            // 极短任务的最小可视宽度（右端锚定 due，至少能读出标题开头）
     var BAR_GAP = 6;               // 分道时条与条之间的最小间隙
     var REVEAL_MS = 520;
 
@@ -187,6 +187,13 @@
     function formatDateShort(ts) {
         var date = new Date(ts);
         return (date.getMonth() + 1) + '月' + date.getDate() + '日';
+    }
+
+    /** 紧凑日期：MM-DD（条内空间紧张，仍保留完整月日） */
+    function formatDateCompact(ts) {
+        var date = new Date(ts);
+        var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+        return pad(date.getMonth() + 1) + '-' + pad(date.getDate());
     }
 
     function formatDateTimeInput(ts) {
@@ -888,14 +895,18 @@
         chip.appendChild(top);
 
         var meta = node('span', 'tl-bar__meta');
-        var startText = formatTime(interval.start);
-        if (info.clipStart) startText = formatDateShort(interval.start) + ' ' + startText;
-        meta.appendChild(node('span', 'tl-bar__start', startText));
+        /* 完整「创建 日期+时间 → 目标 日期+时间」，不再只给时分 */
+        meta.appendChild(node('span', 'tl-bar__start', formatDateCompact(interval.start) + ' ' + formatTime(interval.start)));
         meta.appendChild(node('span', 'tl-bar__arrow', '→'));
-        var dueText = formatTime(task.due);
-        if (info.clipEnd) dueText = formatDateShort(task.due) + ' ' + dueText;
-        meta.appendChild(node('span', 'tl-bar__due', dueText));
+        meta.appendChild(node('span', 'tl-bar__due', formatDateCompact(task.due) + ' ' + formatTime(task.due)));
         meta.appendChild(node('span', 'tl-bar__dur', formatDuration(interval.end - interval.start)));
+        if (task.tags && task.tags.length) {
+            var tagBox = node('span', 'tl-bar__tags');
+            task.tags.slice(0, 4).forEach(function (tag) {
+                tagBox.appendChild(node('span', 'tl-bar__tag', tag));
+            });
+            meta.appendChild(tagBox);
+        }
         chip.appendChild(meta);
         return chip;
     }

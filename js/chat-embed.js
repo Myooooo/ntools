@@ -279,12 +279,12 @@
             if (!profile) {
                 el.profileDot.classList.add('is-off');
                 el.profileDot.title = '未配置端点';
-            } else if (profile.apiKey && profile.baseUrl && profile.modelId) {
+            } else if (profile.baseUrl && profile.modelId) {
                 el.profileDot.classList.add('is-ready');
                 el.profileDot.title = '端点已就绪';
             } else {
                 el.profileDot.classList.add('is-warn');
-                el.profileDot.title = '端点缺少 API Key 或 Base URL';
+                el.profileDot.title = '端点缺少 Base URL 或 Model ID';
             }
         }
         if (el.profileSelect) {
@@ -341,11 +341,7 @@
             guide.hidden = false;
             return;
         }
-        if (!profile.apiKey) {
-            guide.__text.textContent = '端点「' + (profile.name || '未命名') + '」尚未填写 API Key，发送消息前请先在设置中配置。';
-            guide.hidden = false;
-            return;
-        }
+        /* API Key 可选：内网网关常见免鉴权部署，不再拦着发消息 */
         guide.hidden = true;
     }
 
