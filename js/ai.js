@@ -459,11 +459,33 @@
         return null;
     }
 
+    /**
+     * 轻型 JSON 修复：模型偶尔会输出全角引号/冒号/逗号、结尾多一个逗号，
+     * 或者用单引号包键。只在首次 JSON.parse 失败后尝试一次，属于"尽力而为"。
+     */
+    function repairJsonText(text) {
+        var out = String(text == null ? '' : text)
+            .replace(/^\ufeff/, '')
+            .replace(/[\u201c\u201d]/g, '"')      // “ ”
+            .replace(/[\u300c\u300d]/g, '"')      // 「 」
+            .replace(/[\u2018\u2019]/g, "'")      // ‘ ’
+            .replace(/\uff1a/g, ':')                // ：
+            .replace(/\uff0c/g, ',');               // ，
+        out = out.replace(/,\s*([}\]])/g, '$1');   // 尾逗号
+        return out;
+    }
+
     function tryParse(text) {
         try {
             var value = JSON.parse(text);
             return value == null ? undefined : value;
         } catch (err) {
+            /* 落到修复后再试一次 */
+        }
+        try {
+            var repaired = JSON.parse(repairJsonText(text));
+            return repaired == null ? undefined : repaired;
+        } catch (err2) {
             return undefined;
         }
     }
@@ -492,6 +514,7 @@
         DEFAULT_TIMEOUT: DEFAULT_TIMEOUT,
         complete: complete,
         extractJson: extractJson,
+        repairJsonText: repairJsonText,
         testProfile: testProfile,
         buildEndpoint: buildEndpoint,
         normalizeMessages: normalizeMessages,

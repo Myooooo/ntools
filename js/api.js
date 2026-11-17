@@ -114,7 +114,23 @@
         }
         if (role === 'user') {
             var content = normalizeUserContent(message.content);
-            return content.length ? { role: 'user', content: content } : null;
+            if (!content.length) return null;
+            /* 纯文本一律发字符串：OpenAI 允许 content 为 parts 数组，但很多内网网关
+             * （以及部分国产模型）只接受字符串，收到数组会直接 400。
+             * 只有真的带图片时才用多模态数组，此时网关本就必须支持 parts。 */
+            var hasImage = false;
+            for (var i = 0; i < content.length; i += 1) {
+                if (content[i] && content[i].type === 'image_url') { hasImage = true; break; }
+            }
+            if (!hasImage) {
+                var textParts = [];
+                content.forEach(function (part) {
+                    if (part && part.type === 'text' && part.text) textParts.push(part.text);
+                });
+                var text = textParts.join('\n');
+                return text ? { role: 'user', content: text } : null;
+            }
+            return { role: 'user', content: content };
         }
         var answer = typeof message.content === 'string' ? message.content : '';
         return answer ? { role: 'assistant', content: answer } : null;

@@ -560,6 +560,30 @@
             eq(f(heading, heading.length), null, '标题井号后跟空格不算标签');
         });
 
+        t('ai', 'extractJson：围栏 / 前后说明文字', function () {
+            var f = NC.ai.extractJson;
+            eq(f('```json\n{"title":"甲"}\n```').title, '甲');
+            eq(f('识别结果如下：\n{"title":"乙","tags":["a"]}\n以上。').title, '乙');
+            eq(f('完全没有 JSON'), null);
+            eq(f(''), null);
+            eq(f(null), null);
+        });
+        t('ai', 'repairJsonText：全角引号 / 全角冒号逗号 / 尾逗号', function () {
+            var json = NC.ai.extractJson('{“title”：“丙”，“due”：null，}');
+            assert(!!json, '应能修复并解析');
+            eq(json.title, '丙');
+            eq(json.due, null);
+            var withTrailing = NC.ai.extractJson('{"title":"丁",}');
+            eq(withTrailing.title, '丁');
+        });
+        t('ai', 'extractJson：数组与嵌套对象', function () {
+            var arr = NC.ai.extractJson('[{"title":"甲"},{"title":"乙"}]');
+            eq(Array.isArray(arr), true);
+            eq(arr.length, 2);
+            var nested = NC.ai.extractJson('说明 {"a":{"b":[1,2]}} 尾巴');
+            eq(nested.a.b.length, 2);
+        });
+
         /* ---------------- notes-index（链接与检索） ---------------- */
         function makeNotesIndex(list) {
             return NC.notesIndex.build(NC.schema.notes.normalizeVault({ notes: list }).doc.notes);
@@ -1177,10 +1201,21 @@
             eq(payload.messages.length, 2);
             eq(payload.messages[0].role, 'system');
             eq(payload.messages[1].role, 'user');
-            assert(Array.isArray(payload.messages[1].content), 'user content 归一为 parts 数组');
-            eq(payload.messages[1].content[0].type, 'text');
-            eq(payload.messages[1].content[0].text, 'hello');
+            /* 纯文本必须发字符串：很多内网网关只接受 string，收到 parts 数组会 400 */
+            eq(typeof payload.messages[1].content, 'string', 'user content 纯文本应为字符串');
+            eq(payload.messages[1].content, 'hello');
             deepEq(Object.keys(payload.messages[1]).sort(), ['content', 'role']);
+            /* 带图片时才用多模态 parts 数组 */
+            var withImage = NC.api.buildPayload({
+                config: { modelId: 'm' },
+                messages: [{ role: 'user', content: [
+                    { type: 'text', text: '看图' },
+                    { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } }
+                ] }]
+            });
+            assert(Array.isArray(withImage.messages[0].content), '带图片时仍为 parts 数组');
+            eq(withImage.messages[0].content.length, 2);
+            eq(withImage.messages[0].content[1].type, 'image_url');
             eq(payload.temperature, undefined, '简单模式不发送 temperature');
         }, [API]);
         t('api', 'buildPayload 高级参数与 include_usage', function () {

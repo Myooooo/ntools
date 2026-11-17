@@ -389,9 +389,16 @@
                 ? NC.ai.extractJson(rawText)
                 : null;
             if (!json || typeof json !== 'object' || Array.isArray(json)) {
+                var choice = result.raw && result.raw.choices && result.raw.choices[0];
+                var truncated = !!(choice && choice.finish_reason === 'length');
                 return {
                     ok: false,
-                    error: { type: 'parse', message: '识别结果格式异常，可重试' },
+                    error: {
+                        type: 'parse',
+                        message: truncated
+                            ? '模型输出被截断（finish_reason=length），请缩短文本后重试，或在端点设置里调高最大输出'
+                            : '识别结果格式异常，可重试'
+                    },
                     raw: rawText
                 };
             }
