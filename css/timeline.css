@@ -497,10 +497,17 @@ html:not([data-lite="true"]) .tl-axis {
         box-shadow var(--nc-dur-fast) var(--nc-ease);
 }
 
-.tl-task.is-prio-low { border-left-color: var(--nc-priority-low); }
-.tl-task.is-prio-normal { border-left-color: var(--nc-priority-normal); }
-.tl-task.is-prio-high { border-left-color: var(--nc-priority-high); }
-.tl-task.is-prio-urgent { border-left-color: var(--nc-priority-urgent); }
+/* 整块按优先级染色（浅色底）；左侧竖条留给「所属清单」的颜色 */
+.tl-task {
+    border-left-width: 3px;
+    border-left-color: var(--tl-list-color, var(--nc-border-strong));
+}
+
+.tl-task.is-prio-low { background: var(--nc-priority-low-soft); }
+.tl-task.is-prio-normal { background: var(--nc-priority-normal-soft); }
+.tl-task.is-prio-high { background: var(--nc-priority-high-soft); }
+.tl-task.is-prio-urgent { background: var(--nc-priority-urgent-soft); }
+
 
 /* 时间超出当前范围：边缘标记溢出 */
 .tl-task.is-clip-start {
@@ -806,6 +813,11 @@ html:not([data-lite="true"]) .tl-agenda__head {
     font-size: var(--nc-fs-2xs);
     font-variant-numeric: tabular-nums;
 }
+
+.tl-agenda__row.is-prio-low { background: var(--nc-priority-low-soft); }
+.tl-agenda__row.is-prio-normal { background: var(--nc-priority-normal-soft); }
+.tl-agenda__row.is-prio-high { background: var(--nc-priority-high-soft); }
+.tl-agenda__row.is-prio-urgent { background: var(--nc-priority-urgent-soft); }
 
 .tl-agenda__row {
     display: flex;

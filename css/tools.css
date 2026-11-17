@@ -565,7 +565,7 @@
 /* ---------- 左：笔记栏 ---------- */
 .notes-side {
     display: flex;
-    flex: 0 0 248px;
+    flex: 0 0 260px;
     flex-direction: column;
     min-height: 0;
     min-width: 0;
@@ -678,7 +678,7 @@
     align-items: center;
     gap: 7px;
     width: 100%;
-    min-height: 30px;
+    min-height: 34px;
     padding: 0 8px;
     border: 0;
     border-radius: var(--nc-radius-sm);
@@ -2094,8 +2094,8 @@
     align-items: center;
     gap: 10px;
     min-height: 57px;
-    /* 右侧预留 3 个操作按钮（pin/edit/delete ≈80px）+ 间距，避免标签伸到按钮下方 */
-    padding: 11px 92px 11px 6px;
+    /* 右侧预留 2 个操作按钮（pin/delete ≈53px）+ 8px 间距，避免标签伸到按钮下方 */
+    padding: 11px 63px 11px 6px;
     border-radius: 0;
     border-top: 1px solid var(--nc-border-faint);
     background: transparent;
@@ -2331,6 +2331,27 @@
 .todo-item__prio-text {
     color: inherit;
     font-size: var(--nc-fs-2xs);
+}
+
+/* 高 / 紧急更醒目：文字染色 + 加粗（普通与低保持低调） */
+.todo-item[data-priority="high"] .todo-item__prio-text {
+    color: var(--nc-priority-high);
+    font-weight: 700;
+}
+
+.todo-item[data-priority="urgent"] .todo-item__prio-text {
+    color: var(--nc-priority-urgent);
+    font-weight: 700;
+}
+
+.todo-item[data-priority="high"] .todo-prio-dot,
+.todo-item[data-priority="urgent"] .todo-prio-dot {
+    width: 6px;
+    height: 6px;
+}
+
+.todo-item[data-priority="urgent"] .todo-prio-dot {
+    box-shadow: 0 0 0 3px var(--nc-danger-soft);
 }
 
 .todo-prio-dot {
@@ -3080,6 +3101,7 @@
         color: var(--nc-text);
     }
 
+    .notes-row:hover .notes-row__more,
     .notes-row--folder:hover .notes-row__more {
         display: inline-flex;
         align-items: center;

@@ -51,7 +51,7 @@
     var lastDetailAnimId = null;
 
     var SORT_LABELS = { smart: '智能排序', due: '按截止时间', created: '按创建时间', manual: '手动排序' };
-    var VIEW_LABELS = { all: '全部任务', today: '今天', week: '本周', overdue: '逾期', done: '已完成', trash: '回收站' };
+    var VIEW_LABELS = { all: '全部任务', today: '今天', week: '本周', overdue: '逾期', none: '无截止时间', done: '已完成', trash: '回收站' };
     var BUCKET_LABELS = { overdue: '逾期', today: '今天', tomorrow: '明天', later: '以后', none: '无截止时间' };
     var BUCKET_ORDER = ['overdue', 'today', 'tomorrow', 'later', 'none'];
     var PRIORITY_LABELS = { low: '低', normal: '普通', high: '高', urgent: '紧急' };
@@ -1089,7 +1089,7 @@
      * 视图计数 / 清单
      * ------------------------------------------------------------------ */
     function renderViewState(ui, counts, doc) {
-        var sig = [ui.view, ui.listId, counts.open, counts.today, counts.week, counts.overdue, counts.done, counts.trash].join('|');
+        var sig = [ui.view, ui.listId, counts.open, counts.today, counts.week, counts.overdue, counts.none, counts.done, counts.trash].join('|');
         if (rendered.viewSig === sig) return;
         rendered.viewSig = sig;
         if (!els.views) return;
@@ -1103,6 +1103,7 @@
                 else if (view === 'today') value = counts.today;
                 else if (view === 'week') value = counts.week;
                 else if (view === 'overdue') value = counts.overdue;
+                else if (view === 'none') value = counts.none;
                 else if (view === 'done') value = counts.done;
                 else if (view === 'trash') value = counts.trash;
                 counter.textContent = String(value);
@@ -1257,6 +1258,16 @@
             var expanded = !!visible.showCompleted;
             items.push(makeGroupItem('done', '已完成', done.length, true, false, expanded));
             if (expanded) done.forEach(function (task) { items.push(makeTaskItem(task)); });
+        } else if (!visible.showCompleted && !visible.search && ui.view !== 'done') {
+            /* 折叠状态下 store 会把已完成任务过滤掉，这里补回一个只有计数的分组头，
+             * 否则整组消失、刷新后也无法再展开。 */
+            var doneCount = 0;
+            (doc.tasks || []).forEach(function (task) {
+                if (!task || task.deletedAt || task.status !== 'done') return;
+                if (ui.listId && task.listId !== ui.listId) return;
+                doneCount += 1;
+            });
+            if (doneCount) items.push(makeGroupItem('done', '已完成', doneCount, true, false, false));
         }
         return items;
     }
@@ -1313,6 +1324,8 @@
             variant = { icon: 'calendar', title: '今天没有待办', desc: '今天空闲，可以安排一项新任务。', action: 'new', actionLabel: '新建任务' };
         } else if (ui.view === 'week') {
             variant = { icon: 'calendar', title: '本周没有待办', desc: '本周还没有安排任务，可以从今天开始规划。', action: 'new', actionLabel: '新建任务' };
+        } else if (ui.view === 'none') {
+            variant = { icon: 'inbox', title: '没有无截止时间的任务', desc: '这个视图只显示未设置截止时间的待办。' };
         } else if (ui.view === 'overdue') {
             variant = { icon: 'check-circle', title: '没有逾期任务', desc: '所有任务都按时完成，保持这个节奏。' };
         } else if (ui.view === 'done') {
@@ -1558,6 +1571,7 @@
         dueWrap.appendChild(dueRow);
         var quick = node('div', 'detail-quick');
         quickDueOptionList().forEach(function (option) {
+            if (option.kind === 'clear') return;   // 与日期右侧的 × 重复
             var chip = node('button', 'nc-chip todo-quick-chip', option.label);
             attr(chip, 'type', 'button');
             attr(chip, 'data-act', 'due-quick');
@@ -2173,10 +2187,6 @@
         }
         if (act === 'pin' && actBtn.closest('.todo-item__actions')) {
             togglePinWithFeedback(id);
-            return;
-        }
-        if (act === 'edit' && actBtn.closest('.todo-item__actions')) {
-            beginInlineEdit(id);
             return;
         }
         if (act === 'restore' && actBtn.closest('.todo-item__actions')) {

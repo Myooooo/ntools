@@ -39,7 +39,7 @@
         rawPreview: 400
     };
 
-    var VIEWS = ['all', 'today', 'week', 'overdue', 'done'];
+    var VIEWS = ['all', 'today', 'week', 'overdue', 'none', 'done'];
     var SORTS = ['smart', 'due', 'created', 'manual'];
     var STATUSES = ['open', 'done', 'canceled'];
     var PRIORITIES = ['low', 'normal', 'high', 'urgent'];
@@ -965,7 +965,7 @@
         var todayEnd = util.endOfDay(ts);
         var weekStart = todayStart - ((new Date(todayStart).getDay() + 6) % 7) * 86400000;
         var counts = {
-            open: 0, done: 0, canceled: 0, overdue: 0, today: 0, week: 0, trash: 0,
+            open: 0, done: 0, canceled: 0, overdue: 0, today: 0, week: 0, none: 0, trash: 0,
             completedToday: 0, completedWeek: 0, byList: {}, total: 0
         };
         (doc && doc.tasks || []).forEach(function (task) {
@@ -991,6 +991,8 @@
                 if (task.due < ts) counts.overdue++;
                 if (task.due >= todayStart && task.due <= todayEnd) counts.today++;
                 if (task.due >= weekStart && task.due <= weekStart + 7 * 86400000 - 1) counts.week++;
+            } else {
+                counts.none++;
             }
         });
         return counts;

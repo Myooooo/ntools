@@ -815,10 +815,23 @@
         showNote(note);
     }
 
+    /** 清单颜色（左侧竖条用）；取不到就退回中性色 */
+    function listColorOf(listId) {
+        var storeApi = NC.store && NC.store.todo;
+        var doc = storeApi && typeof storeApi.getDoc === 'function' ? storeApi.getDoc() : null;
+        var lists = (doc && doc.lists) || [];
+        for (var i = 0; i < lists.length; i += 1) {
+            if (lists[i].id === listId) return lists[i].color || '';
+        }
+        return '';
+    }
+
     function buildBar(task, now, info) {
         var interval = taskInterval(task);
         var chip = node('button', 'tl-task tl-bar');
         chip.classList.add('is-prio-' + (task.priority || 'normal'));
+        var chipListColor = listColorOf(task.listId);
+        if (chipListColor) chip.style.setProperty('--tl-list-color', chipListColor);
         if (info.edge) chip.classList.add('is-edge-overdue');
         if (info.clipStart) chip.classList.add('is-clip-start');
         if (info.clipEnd) chip.classList.add('is-clip-end');
@@ -924,6 +937,9 @@
                 var task = item.task;
                 var interval = taskInterval(task);
                 var row = node('button', 'tl-agenda__row');
+                row.classList.add('is-prio-' + (task.priority || 'normal'));
+                var rowListColor = listColorOf(task.listId);
+                if (rowListColor) row.style.setProperty('--tl-list-color', rowListColor);
                 attr(row, 'type', 'button');
                 attr(row, 'data-id', task.id);
                 attr(row, 'data-start', String(interval.start));

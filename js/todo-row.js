@@ -67,7 +67,19 @@
         Object.keys(S.nodeMap).forEach(function (key) {
             if (!seen[key]) delete S.nodeMap[key];
         });
+        syncDraggable(visible && visible.sort === 'manual', list);
         applyRovingTabindex(ui);
+    }
+
+    var lastManual = null;
+    /** 手动排序下才允许拖动行（其它排序拖了也会被 dragstart 拦掉，但不要显示可拖手感） */
+    function syncDraggable(manual, list) {
+        if (lastManual === manual) return;
+        lastManual = manual;
+        Array.prototype.forEach.call(list.querySelectorAll('.todo-item'), function (row) {
+            if (manual) S.attr(row, 'draggable', 'true');
+            else row.removeAttribute('draggable');
+        });
     }
 
     function clearNodeMap() {
@@ -97,6 +109,7 @@
     function createTaskNode(task, ui, doc) {
         var li = S.node('li', 'todo-item');
         S.attr(li, 'data-id', task.id);
+        if (lastManual === true) S.attr(li, 'draggable', 'true');
         li.setAttribute('role', 'listitem');
 
         var check = document.createElement('input');
@@ -145,11 +158,6 @@
         S.attr(pinBtn, 'aria-label', '置顶任务');
         pinBtn.appendChild(S.icon('flag', 14));
         acts.appendChild(pinBtn);
-        var editBtn = S.node('button', 'nc-btn nc-btn--icon nc-btn--sm');
-        S.attr(editBtn, 'type', 'button');
-        S.attr(editBtn, 'data-act', 'edit');
-        S.attr(editBtn, 'aria-label', '编辑标题');
-        editBtn.appendChild(S.icon('edit', 15));
         var delBtn = S.node('button', 'nc-btn nc-btn--icon nc-btn--sm');
         S.attr(delBtn, 'type', 'button');
         S.attr(delBtn, 'data-act', 'delete');
@@ -168,7 +176,6 @@
         S.attr(purgeBtn, 'aria-label', '彻底删除');
         S.attr(purgeBtn, 'title', '彻底删除（不可恢复）');
         purgeBtn.appendChild(S.icon('trash', 15));
-        acts.appendChild(editBtn);
         acts.appendChild(delBtn);
         acts.appendChild(restoreBtn);
         acts.appendChild(purgeBtn);
@@ -188,7 +195,6 @@
             pinMark: pinMark,
             repeatMark: repeatMark,
             pinBtn: pinBtn,
-            editBtn: editBtn,
             delBtn: delBtn,
             restoreBtn: restoreBtn,
             purgeBtn: purgeBtn,
@@ -232,15 +238,14 @@
             check.hidden = trashView;
             S.attr(check, 'aria-label', (done ? '取消完成：' : '完成任务：') + task.title);
         }
-        /* 回收站只保留「恢复 / 彻底删除」，隐藏置顶/编辑/删除与完成 checkbox */
+        /* 回收站只保留「恢复 / 彻底删除」，隐藏置顶/删除与完成 checkbox */
         if (refs) {
             refs.pinBtn.hidden = trashView;
-            refs.editBtn.hidden = trashView;
             refs.delBtn.hidden = trashView;
             refs.restoreBtn.hidden = !trashView;
             refs.purgeBtn.hidden = !trashView;
         } else {
-            ['[data-act="pin"]', '[data-act="edit"]', '[data-act="delete"]'].forEach(function (selector) {
+            ['[data-act="pin"]', '[data-act="delete"]'].forEach(function (selector) {
                 var btn = li.querySelector(selector);
                 if (btn) btn.hidden = trashView;
             });

@@ -623,9 +623,25 @@
             scheduleSave();
         }
 
+        /* 循环任务：打开时把过期的 due 推到下一周期（每天/每周/每月/每年） */
+        if (!state.readOnly) {
+            try { refreshRecurringDue(Date.now()); } catch (err) { /* ignore */ }
+            startRecurRefreshTimer();
+        }
+
         notify('init', { loadInfo: state.loadInfo });
         emitSaveState();
         return state.loadInfo;
+    }
+
+    /* 每 5 分钟检查一次循环任务，跨天时列表里的到期时间会自动前进 */
+    var recurTimer = null;
+    function startRecurRefreshTimer() {
+        if (recurTimer || !global.setInterval) return;
+        recurTimer = global.setInterval(function () {
+            if (state.readOnly || document.hidden) return;
+            refreshRecurringDue(Date.now());
+        }, 5 * 60 * 1000);
     }
 
     function onExternalChange(newValue) {
@@ -861,6 +877,9 @@
             }
             if (ui.view === 'overdue') {
                 return schema.isOverdue(task, ts);
+            }
+            if (ui.view === 'none') {
+                return task.status === 'open' && !util.isFiniteNum(task.due);
             }
             if (ui.view === 'done') {
                 return task.status === 'done';
@@ -1141,6 +1160,38 @@
             /* until 到期/无下一次：退化为普通完成 */
         }
         return updateTask(id, { status: 'done' }, { label: '完成任务' });
+    }
+
+    /**
+     * 循环任务到期时间随周期自动前移。
+     * 规则：只看「未完成 + 有 due + due 已过去」的任务，按周期推到下一个仍 > now 的时间点。
+     * 例：每天循环、11-05 17:30 到期，11-06 打开时应显示 11-06 17:30。
+     * @returns {number} 被更新的任务数
+     */
+    function refreshRecurringDue(now) {
+        var ts = util.isFiniteNum(now) ? now : Date.now();
+        if (!schema || typeof schema.nextRecurrenceDue !== 'function') return 0;
+        var changed = 0;
+        var doc = state.doc;
+        (doc.tasks || []).forEach(function (task, index) {
+            if (!task || task.deletedAt || task.status !== 'open') return;
+            if (!task.recurrence || !util.isFiniteNum(task.due)) return;
+            if (task.due > ts) return;
+            var next = schema.nextRecurrenceDue(task.recurrence, task.due, ts);
+            if (next == null || next <= task.due) return;
+            var copy = schema.clone(task);
+            if (!copy) return;
+            copy.due = next;
+            copy.updatedAt = ts;
+            doc.tasks[index] = copy;
+            changed += 1;
+        });
+        if (changed) {
+            doc.updatedAt = ts;
+            notify('task:refresh-due', { count: changed });
+            scheduleSave();
+        }
+        return changed;
     }
 
     /**
@@ -1545,6 +1596,7 @@
         getUi: getUi,
         getTask: getTask,
         counts: counts,
+        refreshRecurringDue: refreshRecurringDue,
         selectVisible: selectVisible,
         setView: setView,
         setListFilter: setListFilter,

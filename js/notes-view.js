@@ -253,11 +253,89 @@
         meta.className = 'notes-row__meta';
         meta.textContent = note.deletedAt ? fmtTime(note.deletedAt) : fmtTime(note.updatedAt);
         row.appendChild(meta);
+
+        if (!note.deletedAt) {
+            var more = document.createElement('button');
+            more.type = 'button';
+            more.className = 'notes-row__more';
+            more.setAttribute('aria-label', '笔记操作：' + (note.title || '未命名笔记'));
+            more.appendChild(icon('more', 14));
+            more.addEventListener('click', function (event) {
+                event.stopPropagation();
+                openNoteMenu(note, more);
+            });
+            row.appendChild(more);
+        }
+
         row.addEventListener('click', function () {
             selectNote(note.id);
             if (state.sideOpen) toggleSide(false);
         });
         return row;
+    }
+
+    /** 行内重命名：把标题替换成输入框，回车提交、Esc 取消 */
+    function startRowRename(rowEl, note) {
+        var label = rowEl.querySelector('.notes-row__label');
+        if (!label || rowEl.querySelector('.notes-inline-input')) return;
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'notes-inline-input';
+        input.value = note.title || '';
+        input.maxLength = 200;
+        label.textContent = '';
+        label.appendChild(input);
+        var done = false;
+        var finish = function (commit) {
+            if (done) return;
+            done = true;
+            var value = String(input.value || '').trim();
+            if (commit && value && value !== note.title) {
+                state.selfEdit = true;
+                var res = store.renameNote(note.id, value);
+                state.selfEdit = false;
+                if (res && res.relinked) toast('已同步更新 ' + res.relinked + ' 处引用', 'success');
+            }
+            renderTree();
+            renderActive({ syncEditor: false });
+        };
+        input.addEventListener('click', function (event) { event.stopPropagation(); });
+        input.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+            else if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+        });
+        input.addEventListener('blur', function () { finish(true); });
+        input.focus();
+        input.select();
+    }
+
+    function openNoteMenu(note, anchor) {
+        var rowEl = anchor && anchor.closest ? anchor.closest('.notes-row') : null;
+        NC.ui.openMenu(anchor, [
+            {
+                label: '重命名',
+                icon: 'edit',
+                onSelect: function () { if (rowEl) startRowRename(rowEl, note); }
+            },
+            {
+                label: note.starred ? '取消星标' : '加星标',
+                icon: 'flag',
+                onSelect: function () {
+                    store.updateNote(note.id, { starred: !note.starred });
+                    renderTree();
+                }
+            },
+            {
+                label: '删除',
+                icon: 'trash',
+                danger: true,
+                onSelect: function () {
+                    store.deleteNote(note.id);
+                    toast('已移入回收站', 'success');
+                    renderTree();
+                }
+            }
+        ]);
     }
 
     function searchRow(item) {

@@ -118,6 +118,10 @@
     --nc-priority-normal: #828fa0;
     --nc-priority-high: #e8a45a;
     --nc-priority-urgent: #ff7a72;
+    --nc-priority-low-soft: rgba(110, 168, 254, 0.14);
+    --nc-priority-normal-soft: rgba(130, 143, 160, 0.12);
+    --nc-priority-high-soft: rgba(232, 164, 90, 0.16);
+    --nc-priority-urgent-soft: rgba(255, 122, 114, 0.18);
 
     /* ---------- 材质 / 效果（标准模式；Lite 会全部移除） ---------- */
     --nc-glass: rgba(15, 20, 27, 0.72);
@@ -201,6 +205,10 @@ html[data-theme="light"] {
     --nc-priority-normal: #5f6c7b;
     --nc-priority-high: #8a5c12;
     --nc-priority-urgent: #c53b3b;
+    --nc-priority-low-soft: rgba(47, 111, 219, 0.10);
+    --nc-priority-normal-soft: rgba(95, 108, 123, 0.08);
+    --nc-priority-high-soft: rgba(138, 92, 18, 0.12);
+    --nc-priority-urgent-soft: rgba(197, 59, 59, 0.12);
 
     --nc-glass: rgba(255, 255, 255, 0.72);
     --nc-glass-bg: rgba(255, 255, 255, 0.72);

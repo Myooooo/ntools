@@ -261,7 +261,6 @@
         opts = options || {};
         els.list = document.getElementById('chat-sessions-list');
         els.toggle = document.getElementById('chat-sessions-toggle-btn');
-        els.collapse = document.getElementById('chat-sessions-collapse');
         els.scrim = document.getElementById('chat-sessions-scrim');
         els.newBtn = document.getElementById('chat-new-session');
         els.title = document.getElementById('chat-session-title');
@@ -269,10 +268,6 @@
         if (!els.list || !els.toggle || !app()) return false;
 
         els.toggle.addEventListener('click', toggle);
-        if (els.collapse) els.collapse.addEventListener('click', function () {
-            if (isMobile()) closeMobile();
-            else applyDesktop(true);
-        });
         if (els.scrim) els.scrim.addEventListener('click', closeMobile);
         if (els.newBtn) els.newBtn.addEventListener('click', newSession);
         if (els.renameBtn) {

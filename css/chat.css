@@ -125,6 +125,9 @@
 }
 
 #chat-profile-select {
+    /* 关掉原生下拉箭头：否则会和下面自绘的箭头叠成两个 */
+    appearance: none;
+    -webkit-appearance: none;
     width: auto;
     max-width: 208px;
     height: 28px;

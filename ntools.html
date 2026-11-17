@@ -111,7 +111,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" id="rail-version" title="版本">v6.0</span>
+            <span class="tools-rail__version" id="rail-version" title="版本">v6.1</span>
         </div>
     </aside>
 
@@ -163,6 +163,11 @@
                                     <span class="todo-view-item__icon" data-icon="clock" data-icon-size="16"></span>
                                     <span class="todo-view-item__name">逾期</span>
                                     <span class="todo-view-item__count todo-view-item__count--danger" data-count="overdue">0</span>
+                                </button>
+                                <button type="button" class="todo-view-item" data-view="none">
+                                    <span class="todo-view-item__icon" data-icon="inbox" data-icon-size="16"></span>
+                                    <span class="todo-view-item__name">无截止时间</span>
+                                    <span class="todo-view-item__count" data-count="none">0</span>
                                 </button>
                                 <button type="button" class="todo-view-item" data-view="done">
                                     <span class="todo-view-item__icon" data-icon="check-circle" data-icon-size="16"></span>
@@ -522,9 +527,6 @@
                     <aside class="chat-sessions" id="chat-sessions" aria-label="会话列表">
                         <div class="chat-sessions__top">
                             <span class="chat-sessions__label">会话</span>
-                            <button id="chat-sessions-collapse" class="nc-btn nc-btn--icon nc-btn--sm" type="button" title="收起会话列表" aria-label="收起会话列表">
-                                <span data-icon="chevron-left" data-icon-size="16"></span>
-                            </button>
                         </div>
                         <button class="chat-new-session" id="chat-new-session" type="button">
                             <span data-icon="plus" data-icon-size="15"></span>
