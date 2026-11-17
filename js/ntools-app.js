@@ -14,10 +14,10 @@
     var TABS = ['todo', 'email', 'qr', 'md', 'image', 'nchat'];
     var PAGE_TITLES = {
         todo: '待办事项',
-        email: '邮件管理',
+        email: '邮箱维护',
         qr: '二维码生成',
-        md: '笔记',
-        image: '图片与 Base64',
+        md: '笔记本',
+        image: '图片处理',
         nchat: 'nChat'
     };
     var currentTab = 'todo';
@@ -58,6 +58,11 @@
 
         routeFromHash(true);
         maybeAutoLite();
+
+        /* 全量自动备份调度（默认 24h；到点写一份本机快照） */
+        try {
+            if (NC.backup && typeof NC.backup.startScheduler === 'function') NC.backup.startScheduler();
+        } catch (err) { /* ignore */ }
         NC.ready = true;
         return true;
     }

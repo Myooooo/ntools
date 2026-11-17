@@ -42,6 +42,7 @@
     <script defer src="js/schema-chat.js"></script>
     <script defer src="js/llm-store.js"></script>
     <script defer src="js/ai.js"></script>
+    <script defer src="js/backup.js"></script>
     <script defer src="js/settings-panel.js"></script>
     <!-- 页面模块：原生聊天 → 首屏不加载，首次进入 nChat 时动态注入（约 250KB） -->
     <script defer src="js/markdown-enhance.js"></script>
@@ -111,7 +112,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" id="rail-version" title="版本">v6.2</span>
+            <span class="tools-rail__version" id="rail-version" title="版本">v6.3</span>
         </div>
     </aside>
 
@@ -371,6 +372,9 @@
                                 <span data-icon="plus" data-icon-size="15"></span>
                                 <span>新建</span>
                             </button>
+                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-open-file-btn" aria-label="打开本地文本文件" title="打开本地 .md / .txt，另存为新笔记">
+                                <span data-icon="upload" data-icon-size="15"></span>
+                            </button>
                             <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="notes-db-btn" aria-label="笔记库操作" title="笔记库操作" aria-haspopup="menu">
                                 <span data-icon="more" data-icon-size="15"></span>
                             </button>
@@ -455,6 +459,7 @@
                     </div>
                 </div>
                 <input type="file" id="notes-import-file" accept=".json,application/json" hidden>
+                <input type="file" id="notes-open-file" accept=".md,.markdown,.txt,text/plain,text/markdown" hidden>
                 <div class="tool-module-note" id="notes-module-note" hidden></div>
             </section>
 

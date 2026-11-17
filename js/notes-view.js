@@ -1222,6 +1222,31 @@
         reader.readAsText(file);
     }
 
+    /** 打开本地 .md/.txt：以文件名建一篇新笔记，正文照搬 */
+    function openLocalTextFile(file) {
+        if (!file) return;
+        if (store.isReadOnly()) { toast('当前为只读镜像，无法新建', 'warning'); return; }
+        if (file.size > 8 * 1024 * 1024) { toast('文件超过 8MB，请拆分后再导入', 'error'); return; }
+        var reader = new FileReader();
+        reader.onload = function () {
+            var text = String(reader.result || '');
+            var rawName = file.name || '未命名';
+            var title = rawName.replace(/\.[^.]+$/, '') || rawName;
+            var note = store.createNote({ title: title });
+            if (!note) { toast('新建笔记失败（可能已达数量上限）', 'error'); return; }
+            store.updateNote(note.id, { content: text });
+            state.mode = 'edit';
+            state.trashView = false;
+            state.filter = '';
+            if (els.filter) els.filter.value = '';
+            selectNote(note.id);
+            renderTree();
+            toast('已从「' + rawName + '」新建笔记', 'success');
+        };
+        reader.onerror = function () { toast('读取文件失败', 'error'); };
+        reader.readAsText(file, 'utf-8');
+    }
+
     function openLibraryMenu() {
         var items = [
             { label: '导入笔记（JSON）…', icon: 'upload', onSelect: function () { if (els.importFile) els.importFile.click(); } },
@@ -1784,6 +1809,14 @@
 
         if (els.newBtn) els.newBtn.addEventListener('click', newNote);
         if (els.dbBtn) els.dbBtn.addEventListener('click', openLibraryMenu);
+        if (els.openFileBtn && els.openFile) {
+            els.openFileBtn.addEventListener('click', function () { els.openFile.click(); });
+            els.openFile.addEventListener('change', function () {
+                var file = els.openFile.files && els.openFile.files[0];
+                els.openFile.value = '';
+                openLocalTextFile(file);
+            });
+        }
         if (els.importFile) {
             els.importFile.addEventListener('change', function () {
                 var file = els.importFile.files && els.importFile.files[0];
@@ -2008,6 +2041,8 @@
         els.moduleNote = $('notes-module-note');
         els.dbBtn = $('notes-db-btn');
         els.importFile = $('notes-import-file');
+        els.openFileBtn = $('notes-open-file-btn');
+        els.openFile = $('notes-open-file');
         els.palette = $('notes-palette');
         els.paletteInput = $('notes-palette-input');
         els.paletteList = $('notes-palette-list');

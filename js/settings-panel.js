@@ -55,11 +55,11 @@
         return [
             { id: 'general', title: '通用', desc: '主题、Light 性能模式、上下班时间', icon: 'settings', group: 'core' },
             { id: 'profiles', title: 'AI 端点', desc: '聊天与 Todo AI 共用的 OpenAI 兼容端点', icon: 'layers', group: 'core' },
-            { id: 'todo', title: '待办', desc: 'Todo AI 识别与列表行为', icon: 'check-circle', group: 'modules' },
-            { id: 'notes', title: '笔记', desc: '笔记库状态、默认视图与导出', icon: 'file', group: 'modules' },
-            { id: 'email', title: '邮件', desc: '邮箱数据用量与备份入口', icon: 'mail', group: 'modules' },
-            { id: 'qr', title: '二维码', desc: '默认生成尺寸', icon: 'grid', group: 'modules' },
-            { id: 'image', title: '图片', desc: 'Base64 导出的 JPEG 质量', icon: 'image', group: 'modules' },
+            { id: 'todo', title: '待办事项', desc: 'Todo AI 识别与列表行为', icon: 'check-circle', group: 'modules' },
+            { id: 'notes', title: '笔记本', desc: '笔记库状态、默认视图与导出', icon: 'file', group: 'modules' },
+            { id: 'email', title: '邮箱维护', desc: '邮箱数据用量与备份入口', icon: 'mail', group: 'modules' },
+            { id: 'qr', title: '二维码生成', desc: '默认生成尺寸', icon: 'grid', group: 'modules' },
+            { id: 'image', title: '图片处理', desc: 'Base64 导出的 JPEG 质量', icon: 'image', group: 'modules' },
             { id: 'nchat', title: 'nChat', desc: '当前端点与聊天入口', icon: 'command', group: 'modules' },
             { id: 'data', title: '数据', desc: '导入导出与本地数据清理', icon: 'download', group: 'system' },
             { id: 'about', title: '关于', desc: '版本、兼容性与快捷键', icon: 'info', group: 'system' }
@@ -662,9 +662,10 @@
         actions.appendChild(bar);
         actions.appendChild(util.e('p', {
             class: 'sp-hint',
-            text: '备份与恢复在邮件页「备份恢复」里，也会包含在「数据 → 导出全部本地数据」中。'
+            text: '备份与恢复在邮件页「备份恢复」里，也会包含在「数据 → 一键备份全部数据」中。'
         }));
         container.appendChild(actions);
+        container.appendChild(renderEmailTransferCard());
     }
 
     function renderQrModule(container) {
@@ -1072,6 +1073,265 @@
         return box;
     }
 
+    /* ------------------------------------------------------------------ *
+     * 一键备份（数据页顶部）
+     * ------------------------------------------------------------------ */
+    function backupStatusText(status) {
+        var parts = [];
+        if (status.lastAt) parts.push('上次 ' + util.formatDateTime(status.lastAt) + '（' + (status.lastKind === 'zip' ? '下载 ZIP' : '本机自动') + '）');
+        else parts.push('还没有备份过');
+        if (status.enabled && status.nextAt) {
+            parts.push(status.due ? '已到备份时间' : '下次约 ' + util.formatDateTime(status.nextAt));
+        } else if (!status.enabled) {
+            parts.push('自动备份已关闭');
+        }
+        return parts.join(' · ');
+    }
+
+    function renderBackupCard() {
+        var backup = NC.backup;
+        var card = moduleCard('一键备份全部数据',
+            '把待办、笔记（含图片）、聊天、邮箱、AI 端点与全部偏好打包成一个 ZIP；换一台机器解压后用 JSON 恢复即可完全重建。');
+        if (!backup) {
+            card.appendChild(util.e('p', { class: 'sp-hint', text: '备份模块未加载（js/backup.js）' }));
+            return card;
+        }
+        var status = backup.status();
+
+        var bar = util.e('div', { class: 'sp-data-card__actions' });
+        var includeKeys = util.e('input', { type: 'checkbox' });
+        includeKeys.checked = backup.readCfg().includeKeys === true;
+        includeKeys.addEventListener('change', function () {
+            backup.writeCfg({ includeKeys: includeKeys.checked });
+        });
+        var keyLabel = util.e('label', { class: 'sp-check' });
+        keyLabel.appendChild(includeKeys);
+        keyLabel.appendChild(util.e('span', { text: '包含 API Key（会明文写入 ZIP）' }));
+
+        bar.appendChild(button('立即备份并下载 ZIP', {
+            primary: true, small: true, icon: 'download',
+            onClick: function (event) {
+                var btn = event.currentTarget;
+                ui.setBusy(btn, true);
+                backup.downloadZip({ includeKeys: includeKeys.checked }).then(function (res) {
+                    ui.setBusy(btn, false);
+                    toast('已生成备份 ' + Math.round(res.bytes / 1024) + ' KB', 'success');
+                    renderSection('data');
+                }, function (err) {
+                    ui.setBusy(btn, false);
+                    toast('备份失败：' + (err && err.message ? err.message : err), 'error');
+                });
+            }
+        }));
+        bar.appendChild(keyLabel);
+        card.appendChild(bar);
+
+        /* 自动备份 */
+        var autoRow = util.e('div', { class: 'sp-row' });
+        autoRow.appendChild(util.e('span', { class: 'sp-row__label', text: '自动备份' }));
+        var interval = util.e('select', { class: 'nc-select sp-select--auto' });
+        [
+            { value: '0', label: '关闭' },
+            { value: '6', label: '每 6 小时' },
+            { value: '12', label: '每 12 小时' },
+            { value: '24', label: '每 24 小时（默认）' },
+            { value: '72', label: '每 3 天' }
+        ].forEach(function (item) {
+            var option = util.e('option', { value: item.value, text: item.label });
+            if (String(status.intervalHours) === item.value) option.selected = true;
+            interval.appendChild(option);
+        });
+        interval.addEventListener('change', function () {
+            var next = backup.setIntervalHours(Number(interval.value));
+            toast(next.enabled ? '自动备份已设为每 ' + next.intervalHours + ' 小时' : '已关闭自动备份', 'success');
+            renderSection('data');
+        });
+        autoRow.appendChild(interval);
+        card.appendChild(autoRow);
+        card.appendChild(util.e('p', { class: 'sp-hint', text: backupStatusText(status) }));
+
+        var autoBar = util.e('div', { class: 'sp-data-card__actions' });
+        autoBar.appendChild(button('立即执行一次自动备份', {
+            small: true, ghost: true, icon: 'refresh',
+            onClick: function (event) {
+                var btn = event.currentTarget;
+                ui.setBusy(btn, true);
+                backup.runAuto('manual').then(function (res) {
+                    ui.setBusy(btn, false);
+                    if (res && res.ok) { toast('已保存到本机自动备份', 'success'); renderSection('data'); }
+                    else toast('自动备份失败：' + ((res && res.error && res.error.message) || '未知原因'), 'error');
+                });
+            }
+        }));
+        autoBar.appendChild(button('从备份 JSON 恢复', {
+            small: true, ghost: true, icon: 'upload',
+            onClick: restoreFromBackupFile
+        }));
+        card.appendChild(autoBar);
+        card.appendChild(util.e('p', {
+            class: 'sp-hint',
+            text: '自动备份保存在本机 IndexedDB（保留最近 3 份），浏览器数据被清空时也会一起丢；重要数据请同时下载 ZIP 存到磁盘。'
+        }));
+
+        var list = util.e('div', { class: 'sp-snap-list' });
+        list.appendChild(util.e('div', { class: 'sp-data-card__desc', text: '最近的自动备份' }));
+        card.appendChild(list);
+        backup.listAuto().then(function (items) {
+            if (!items.length) {
+                list.appendChild(util.e('div', { class: 'sp-hint', text: '还没有自动备份' }));
+                return;
+            }
+            items.forEach(function (item) {
+                var row = util.e('div', { class: 'sp-snap-row' });
+                row.appendChild(util.e('span', { class: 'sp-snap-row__time', text: util.formatDateTime(item.at) }));
+                row.appendChild(util.e('span', {
+                    class: 'sp-snap-row__meta',
+                    text: '笔记 ' + (item.notes || 0) + ' · 聊天 ' + (item.chats || 0)
+                }));
+                row.appendChild(button('恢复', {
+                    small: true, ghost: true,
+                    onClick: function () {
+                        ui.confirm('用 ' + util.formatDateTime(item.at) + ' 的自动备份覆盖当前全部数据？恢复后页面会自动刷新。', {
+                            title: '恢复自动备份', confirmText: '恢复并刷新', danger: true
+                        }).then(function (ok) {
+                            if (!ok) return;
+                            backup.restoreAuto(item.id).then(function (res) {
+                                toast('恢复完成：' + (res.done || []).join('、') + '，即将刷新…', 'success');
+                                global.setTimeout(function () { global.location.reload(); }, 1200);
+                            }, function (err) {
+                                toast('恢复失败：' + (err && err.message ? err.message : err), 'error');
+                            });
+                        });
+                    }
+                }));
+                row.appendChild(button('删除', {
+                    small: true, ghost: true,
+                    onClick: function () {
+                        backup.deleteAuto(item.id).then(function () { renderSection('data'); });
+                    }
+                }));
+                list.appendChild(row);
+            });
+        });
+        return card;
+    }
+
+    function restoreFromBackupFile() {
+        var inputEl = document.createElement('input');
+        inputEl.type = 'file';
+        inputEl.accept = '.json,application/json';
+        inputEl.addEventListener('change', function () {
+            var file = inputEl.files && inputEl.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function (event) {
+                var raw = String(event.target.result || '');
+                var data = util.parseJSON(raw, null);
+                if (!data) { toast('不是有效的 JSON', 'error'); return; }
+                var summary = describeBackupPayload(data);
+                ui.confirm((summary || '备份内容未识别。') + '\n\n恢复会覆盖当前数据（端点/偏好一并还原），完成后页面会刷新。继续？', {
+                    title: '从备份恢复', confirmText: '恢复并刷新', danger: true
+                }).then(function (ok) {
+                    if (!ok) return;
+                    if (!NC.backup) { toast('备份模块未加载', 'error'); return; }
+                    NC.backup.restoreFromJson(raw).then(function (res) {
+                        toast('恢复完成：' + (res.done || []).join('、') + '，即将刷新…', 'success');
+                        global.setTimeout(function () { global.location.reload(); }, 1200);
+                    }, function (err) {
+                        toast('恢复失败：' + (err && err.message ? err.message : err), 'error');
+                    });
+                });
+            };
+            reader.onerror = function () { toast('读取文件失败', 'error'); };
+            reader.readAsText(file);
+        });
+        inputEl.click();
+    }
+
+    function describeBackupPayload(data) {
+        var parts = [];
+        if (data.todo && Array.isArray(data.todo.tasks)) parts.push('待办 ' + data.todo.tasks.length + ' 条');
+        if (data.notes && Array.isArray(data.notes.notes)) parts.push('笔记 ' + data.notes.notes.length + ' 篇');
+        if (data.chats && Array.isArray(data.chats.sessions)) parts.push('会话 ' + data.chats.sessions.length + ' 个');
+        if (data.email && (data.email.groups || data.email.emails)) parts.push('邮箱 ' + ((data.email.emails || []).length) + ' 条');
+        if (data.llm) parts.push('AI 端点');
+        if (data.prefs && Object.keys(data.prefs).length) parts.push('偏好 ' + Object.keys(data.prefs).length + ' 项');
+        return parts.length ? '备份包含：' + parts.join('；') + '。' : '';
+    }
+
+    /* ------------------------------------------------------------------ *
+     * 邮箱 JSON 导出 / 导入（邮箱维护 tab 与数据 tab 共用）
+     * ------------------------------------------------------------------ */
+    function exportEmailJson() {
+        var doc = readEmailData();
+        if (!doc) { toast('还没有邮件数据可导出', 'warn'); return; }
+        var payload = {
+            app: 'nTools',
+            kind: 'email-backup',
+            exportedAt: new Date().toISOString(),
+            groups: doc.groups || [],
+            emails: doc.emails || []
+        };
+        var name = 'ntools-email-' + new Date().toISOString().slice(0, 10) + '.json';
+        var ok = util.downloadBlob(name, JSON.stringify(payload, null, 2), 'application/json');
+        toast(ok ? '已导出 ' + (payload.emails.length) + ' 个邮箱地址' : '导出失败：浏览器阻止了下载', ok ? 'success' : 'error');
+    }
+
+    function importEmailJson() {
+        var inputEl = document.createElement('input');
+        inputEl.type = 'file';
+        inputEl.accept = '.json,application/json';
+        inputEl.addEventListener('change', function () {
+            var file = inputEl.files && inputEl.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function (event) {
+                var data = util.parseJSON(String(event.target.result || ''), null);
+                if (!data || !Array.isArray(data.groups) || !Array.isArray(data.emails)) {
+                    toast('不是有效的邮箱备份（需要 groups / emails 两个数组）', 'error');
+                    return;
+                }
+                var current = readEmailData();
+                var currentCount = current && Array.isArray(current.emails) ? current.emails.length : 0;
+                ui.confirm('导入 ' + data.emails.length + ' 个邮箱地址、' + data.groups.length + ' 个分组（当前 ' + currentCount + ' 个）。将覆盖现有邮箱数据，覆盖前会留一份 .preimport 备份。', {
+                    title: '导入邮箱数据', confirmText: '覆盖导入', danger: true
+                }).then(function (ok) {
+                    if (!ok) return;
+                    try {
+                        var prev = global.localStorage.getItem(EMAIL_DOC_KEY);
+                        if (prev) global.localStorage.setItem(EMAIL_DOC_KEY + '.preimport', prev);
+                        var rev = 0;
+                        try { var parsed = util.parseJSON(prev, null); rev = parsed && util.isFiniteNum(parsed.revision) ? parsed.revision : 0; } catch (err) { rev = 0; }
+                        global.localStorage.setItem(EMAIL_DOC_KEY, JSON.stringify({
+                            schemaVersion: 1,
+                            revision: rev + 1,
+                            updatedAt: Date.now(),
+                            groups: data.groups,
+                            emails: data.emails
+                        }));
+                        events.emit('email:imported');
+                        toast('已导入 ' + data.emails.length + ' 个邮箱地址', 'success');
+                        renderSection('email');
+                    } catch (err) {
+                        toast('导入失败：本地存储写入失败', 'error');
+                    }
+                });
+            };
+            reader.onerror = function () { toast('读取文件失败', 'error'); };
+            reader.readAsText(file);
+        });
+        inputEl.click();
+    }
+
+    function renderEmailTransferCard() {
+        var card = moduleCard('邮箱数据（JSON）', '导出的 JSON 只包含分组与地址，可单独迁移到另一台机器。');
+        var bar = util.e('div', { class: 'sp-data-card__actions' });
+        bar.appendChild(button('导出邮箱 JSON', { small: true, icon: 'download', onClick: exportEmailJson }));
+        bar.appendChild(button('导入邮箱 JSON', { small: true, ghost: true, icon: 'upload', onClick: importEmailJson }));
+        card.appendChild(bar);
+        return card;
+    }
+
     function renderData(container) {
         var head = util.e('div', { class: 'sp-section-head' });
         var info = util.e('div', {});
@@ -1079,6 +1339,8 @@
         info.appendChild(util.e('p', { class: 'sp-section-desc', text: '所有数据仅保存在本机浏览器；导出时请注意密钥与隐私。' }));
         head.appendChild(info);
         container.appendChild(head);
+
+        container.appendChild(renderBackupCard());
 
         var canExport = NC.store.todo && typeof NC.store.todo.exportData === 'function';
         var card = util.e('div', { class: 'sp-data-card' });
@@ -1157,6 +1419,8 @@
         notesCard.appendChild(notesActions);
         notesCard.appendChild(renderNotesSnapshotList());
         container.appendChild(notesCard);
+
+        container.appendChild(renderEmailTransferCard());
 
         var chatCard = util.e('div', { class: 'sp-data-card' });
         chatCard.appendChild(util.e('div', { class: 'sp-data-card__title', text: '聊天记录' }));
