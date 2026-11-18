@@ -94,6 +94,16 @@
         }, function () { return false; });
     }
 
+    function ensureWorkshop() {
+        if (NC.store && NC.store.workshop && NC.store.workshop.isReady && NC.store.workshop.isReady()) {
+            return Promise.resolve(true);
+        }
+        if (typeof NC.loadWorkshopBundle !== 'function') return Promise.resolve(false);
+        return NC.loadWorkshopBundle().then(function () {
+            return NC.store.workshop.init();
+        }).then(function () { return true; }, function () { return false; });
+    }
+
     function collectPrefs() {
         var out = {};
         try {
@@ -168,13 +178,18 @@
                 }
             } catch (err) { payload.llm = null; }
             payload.email = readEmailDoc();
-            return ensureNotes();
+            return ensureWorkshop();
         }).then(function () {
             try {
                 if (NC.store && NC.store.notes && typeof NC.store.notes.exportBundle === 'function') {
                     payload.notes = NC.store.notes.exportBundle();
                 }
             } catch (err) { payload.notes = null; }
+            try {
+                if (NC.store && NC.store.workshop && typeof NC.store.workshop.exportData === 'function') {
+                    payload.workshop = NC.store.workshop.exportData();
+                }
+            } catch (err) { payload.workshop = null; }
             if (!NC.notesDb || typeof NC.notesDb.getAllFiles !== 'function') return [];
             return NC.notesDb.getAllFiles();
         }).then(function (records) {
@@ -455,8 +470,28 @@
             return opts.files && opts.files.length ? restoreFiles(opts.files) : null;
         }).then(function (fileCount) {
             if (fileCount) done.push('图片 ' + fileCount + ' 张');
+            return restoreWorkshop(payload.workshop, done, failed);
+        }).then(function () {
             return { ok: failed.length === 0, done: done, failed: failed };
         });
+    }
+
+    function restoreWorkshop(workshop, done, failed) {
+        if (!workshop || (!workshop.apps && !workshop.versions)) return Promise.resolve(null);
+        var store = NC.store && NC.store.workshop;
+        if (!store || !store.importData) {
+            return ensureWorkshop().then(function (ok) {
+                if (!ok || !NC.store.workshop.importData) { failed.push('创意工坊'); return null; }
+                return NC.store.workshop.importData(workshop).then(function (res) {
+                    if (res && res.ok) done.push('创意工坊 ' + res.apps + ' 个应用');
+                    else failed.push('创意工坊');
+                }, function () { failed.push('创意工坊'); });
+            });
+        }
+        return store.importData(workshop).then(function (res) {
+            if (res && res.ok) done.push('创意工坊 ' + res.apps + ' 个应用');
+            else failed.push('创意工坊');
+        }, function () { failed.push('创意工坊'); });
     }
 
     function restoreFiles(files) {

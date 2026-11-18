@@ -212,6 +212,39 @@
         return tx(STORES.meta, true, function (store) { store.put({ key: key, value: value }); });
     }
 
+    /** 全量替换（备份恢复用） */
+    function replaceAll(doc) {
+        var data = doc || {};
+        var apps = Array.isArray(data.apps) ? data.apps : [];
+        var versions = Array.isArray(data.versions) ? data.versions : [];
+        var turns = Array.isArray(data.turns) ? data.turns : [];
+        var view = data.view || { order: {}, pinned: {} };
+        var params = data.params || {};
+        if (mode === 'local') {
+            return writeFallback({ apps: apps, versions: versions, turns: turns, meta: { view: view, params: params } });
+        }
+        return openIdb().then(function (db) {
+            return new Promise(function (resolve, reject) {
+                var transaction = db.transaction(['apps', 'versions', 'turns', 'meta'], 'readwrite');
+                var appStore = transaction.objectStore('apps');
+                var verStore = transaction.objectStore('versions');
+                var turnStore = transaction.objectStore('turns');
+                var metaStore = transaction.objectStore('meta');
+                appStore.clear();
+                verStore.clear();
+                turnStore.clear();
+                apps.forEach(function (app) { appStore.put(app); });
+                versions.forEach(function (ver) { verStore.put(ver); });
+                turns.forEach(function (turn) { turnStore.put(turn); });
+                metaStore.put({ key: 'view', value: view });
+                metaStore.put({ key: 'params', value: params });
+                transaction.oncomplete = function () { resolve(true); };
+                transaction.onerror = function () { reject(transaction.error || new Error('replace failed')); };
+                transaction.onabort = function () { reject(transaction.error || new Error('replace aborted')); };
+            });
+        });
+    }
+
     NC.workshopDb = {
         DB_NAME: DB_NAME,
         FALLBACK_KEY: FALLBACK_KEY,
@@ -227,6 +260,7 @@
         putTurn: putTurn,
         deleteTurns: deleteTurns,
         getMeta: getMeta,
-        setMeta: setMeta
+        setMeta: setMeta,
+        replaceAll: replaceAll
     };
 })(window);

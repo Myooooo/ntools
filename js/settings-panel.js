@@ -1302,6 +1302,7 @@
         if (data.notes && Array.isArray(data.notes.notes)) parts.push('笔记 ' + data.notes.notes.length + ' 篇');
         if (data.chats && Array.isArray(data.chats.sessions)) parts.push('会话 ' + data.chats.sessions.length + ' 个');
         if (data.email && (data.email.groups || data.email.emails)) parts.push('邮箱 ' + ((data.email.emails || []).length) + ' 条');
+        if (data.workshop && Array.isArray(data.workshop.apps)) parts.push('工坊应用 ' + data.workshop.apps.length + ' 个');
         if (data.llm) parts.push('AI 端点');
         if (data.prefs && Object.keys(data.prefs).length) parts.push('偏好 ' + Object.keys(data.prefs).length + ' 项');
         return parts.length ? '备份包含：' + parts.join('；') + '。' : '';

@@ -330,6 +330,43 @@
         return { apps: state.apps.size, bytes: bytes, versions: versions };
     }
 
+    /** 从备份恢复：整体替换（apps / versions / turns / 参数 / 排序） */
+    function importData(data) {
+        var s = schema();
+        var incoming = data && typeof data === 'object' ? data : {};
+        var apps = (Array.isArray(incoming.apps) ? incoming.apps : []).map(function (app) {
+            return s.normalizeApp(app);
+        });
+        var versions = (Array.isArray(incoming.versions) ? incoming.versions : []).map(function (ver) {
+            return s.normalizeVersion(ver);
+        });
+        var turns = (Array.isArray(incoming.turns) ? incoming.turns : []).filter(function (turn) {
+            return turn && typeof turn === 'object' && turn.appId;
+        });
+        var view = incoming.view && typeof incoming.view === 'object' ? incoming.view : {};
+        var params = s.normalizeParams(incoming.params || {});
+
+        state.apps = new Map();
+        apps.forEach(function (app) { state.apps.set(app.id, app); });
+        state.versions = groupBy(versions, 'appId');
+        state.versions.forEach(function (list) { list.sort(function (a, b) { return b.at - a.at; }); });
+        state.turns = groupBy(turns, 'appId');
+        state.turns.forEach(function (list) { list.sort(function (a, b) { return a.at - b.at; }); });
+        state.meta = {
+            order: view.order && typeof view.order === 'object' ? view.order : {},
+            pinned: view.pinned && typeof view.pinned === 'object' ? view.pinned : {}
+        };
+        state.params = params;
+        return db().replaceAll({
+            apps: apps, versions: versions, turns: turns, view: state.meta, params: params
+        }).then(function () {
+            emit('import');
+            return { ok: true, apps: apps.length };
+        }, function (err) {
+            return { ok: false, error: err };
+        });
+    }
+
     function exportData() {
         return {
             apps: Array.from(state.apps.values()),
@@ -366,6 +403,7 @@
         resetParams: resetParams,
         stats: stats,
         exportData: exportData,
+        importData: importData,
         getMode: function () { return state.mode; },
         isReady: function () { return state.ready; }
     };
