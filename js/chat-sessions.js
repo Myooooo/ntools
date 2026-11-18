@@ -248,7 +248,6 @@
         var active = store().getActiveSession();
         if (els.title) els.title.textContent = active ? active.title : '新对话';
         if (els.renameBtn) els.renameBtn.hidden = !active;
-        if (els.title) els.title.title = active ? active.title : '';
     }
 
     function refresh() {

@@ -808,7 +808,7 @@
         var inner = util.e('div', { class: 'chat-welcome__inner' });
 
         var head = util.e('div', { class: 'chat-welcome__head' });
-        head.appendChild(util.e('span', { class: 'chat-welcome__mark', 'aria-hidden': 'true' }, [icons.el('sparkles', 15)]));
+        head.appendChild(util.e('span', { class: 'chat-welcome__mark', 'aria-hidden': 'true' }, [icons.el('sparkles', 22)]));
         head.appendChild(util.e('p', { class: 'chat-welcome__title' }));
         inner.appendChild(head);
 

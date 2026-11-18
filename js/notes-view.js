@@ -242,7 +242,7 @@
         if (note.starred) {
             var star = document.createElement('span');
             star.className = 'notes-row__star';
-            star.appendChild(icon('flag', 12));
+            star.appendChild(icon('star', 14));
             row.appendChild(star);
         }
         var label = document.createElement('span');
@@ -319,7 +319,7 @@
             },
             {
                 label: note.starred ? '取消星标' : '加星标',
-                icon: 'flag',
+                icon: 'star',
                 onSelect: function () {
                     store.updateNote(note.id, { starred: !note.starred });
                     renderTree();
@@ -1052,7 +1052,7 @@
         var items = [];
         items.push({
             label: note.starred ? '取消星标' : '加星标',
-            icon: 'flag',
+            icon: 'star',
             onSelect: function () { store.updateNote(note.id, { starred: !note.starred }); }
         });
         items.push({
@@ -1089,7 +1089,7 @@
             }
         }
         if (note.deletedAt) {
-            items.push({ label: '恢复', icon: 'refresh', onSelect: function () { store.restoreNote(note.id); toast('已恢复', 'success'); } });
+            items.push({ label: '恢复', icon: 'rotate-ccw', onSelect: function () { store.restoreNote(note.id); toast('已恢复', 'success'); } });
             items.push({ label: '彻底删除', icon: 'trash', danger: true, onSelect: removeActive });
         } else {
             items.push({ label: '删除', icon: 'trash', danger: true, onSelect: removeActive });

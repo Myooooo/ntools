@@ -819,8 +819,8 @@
     flex: 0 0 auto;
     align-items: center;
     gap: 8px;
-    height: 46px;
-    padding: 0 10px 0 14px;
+    height: 52px;
+    padding: 0 12px 0 16px;
     border-bottom: 1px solid var(--nc-border-faint);
 }
 
@@ -831,13 +831,13 @@
 .notes-title {
     flex: 1;
     min-width: 0;
-    height: 30px;
-    padding: 0 6px;
+    height: 34px;
+    padding: 0 8px;
     border: 0;
     border-radius: var(--nc-radius-sm);
     background: transparent;
     color: var(--nc-text);
-    font-size: var(--nc-fs-lg);
+    font-size: var(--nc-fs-xl);
     font-weight: 600;
     letter-spacing: var(--nc-track-title, -0.01em);
     outline: none;
@@ -898,6 +898,10 @@
     font-size: var(--nc-fs-base);
     line-height: 1.72;
     overflow-wrap: anywhere;
+}
+
+.notes-preview h1 {
+    font-size: 24px;
 }
 
 .notes-preview[hidden],
@@ -1042,6 +1046,18 @@
     border-radius: var(--nc-radius-sm);
     background: var(--nc-elevated);
     box-shadow: var(--nc-shadow-3);
+    transform-origin: top left;
+    animation: nc-pop-in 120ms var(--nc-ease-out) both;
+}
+
+html[data-lite="true"] .notes-ac {
+    animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .notes-ac {
+        animation: none;
+    }
 }
 
 .notes-ac__item {
@@ -1306,7 +1322,7 @@
     letter-spacing: -0.01em;
 }
 
-.md-preview h1 { font-size: var(--nc-fs-2xl); }
+.md-preview h1 { font-size: 24px; }
 .md-preview h2 { font-size: var(--nc-fs-xl); padding-bottom: 6px; border-bottom: 1px solid var(--nc-border-faint); }
 .md-preview h3 { font-size: var(--nc-fs-lg); }
 .md-preview h4 { font-size: var(--nc-fs-base); }
@@ -1808,11 +1824,19 @@
 
 .todo-search__kbd {
     position: absolute;
-    right: 9px;
+    right: 12px;
     top: 50%;
-    opacity: 0.75;
+    height: 20px;
+    min-width: 20px;
+    font-size: 10px;
+    opacity: 0.8;
     pointer-events: none;
     transform: translateY(-50%);
+}
+
+/* 输入有内容时让位给清除按钮，避免叠在一起 */
+.todo-search__input:not(:placeholder-shown) ~ .todo-search__kbd {
+    display: none;
 }
 
 .todo-search:focus-within .todo-search__kbd {
@@ -1821,7 +1845,7 @@
 
 .todo-search__clear {
     position: absolute;
-    right: 7px;
+    right: 10px;
     top: 50%;
     display: inline-flex;
     align-items: center;
@@ -1942,7 +1966,7 @@
     padding: 8px 10px;
     font-size: var(--nc-fs-sm);
     line-height: 1.55;
-    resize: vertical;
+    resize: none;
 }
 
 .todo-composer__tagchips {
@@ -2099,7 +2123,7 @@
     gap: 10px;
     min-height: 57px;
     /* 右侧预留 2 个操作按钮（pin/delete ≈53px）+ 8px 间距，避免标签伸到按钮下方 */
-    padding: 11px 63px 11px 6px;
+    padding: 11px 63px 11px 16px;
     border-radius: 0;
     border-top: 1px solid var(--nc-border-faint);
     background: transparent;
@@ -2230,10 +2254,10 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 4px;
+    gap: 6px;
     flex: 0 1 auto;
     min-width: 0;
-    max-width: 46%;
+    max-width: 40%;
     overflow: hidden;
 }
 
@@ -2246,17 +2270,24 @@
 }
 
 .todo-item__tag {
-    max-width: 88px;
-    height: 16px;
-    padding: 0 5px;
+    max-width: 96px;
+    height: 20px;
+    padding: 0 7px;
     overflow: hidden;
-    border: 1px solid var(--nc-border-faint);
+    border: 0;
     border-radius: var(--nc-radius-xs);
-    color: var(--nc-text-3);
+    background: var(--nc-surface-2);
+    color: var(--nc-text-2);
     font-size: var(--nc-fs-2xs);
-    line-height: 15px;
+    line-height: 20px;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* “+N” 溢出标记：强调色淡底，与真实标签区分 */
+.todo-item__tag--more {
+    background: var(--nc-accent-faint);
+    color: var(--nc-accent);
 }
 
 .todo-item__meta {
@@ -2272,7 +2303,7 @@
 /* 左侧时间槽：bucket + clock（铜色语义） */
 .todo-item__due {
     position: absolute;
-    left: 31px;
+    left: 37px;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
@@ -2706,17 +2737,18 @@
     min-width: 0;
 }
 
+/* 清除截止时间：保留危险色语义，但去掉常驻红底/红边（悬停才出现底色） */
 .detail-due-clear {
     color: var(--nc-danger);
-    border-color: var(--nc-danger-ring);
-    background: var(--nc-danger-soft);
+    border-color: transparent;
+    background: transparent;
 }
 
 @media (hover: hover) and (pointer: fine) {
     .detail-due-clear:hover {
         color: var(--nc-danger);
-        border-color: var(--nc-danger);
-        background: var(--nc-danger-ring);
+        border-color: transparent;
+        background: var(--nc-danger-soft);
     }
 }
 
@@ -2891,7 +2923,7 @@
     padding: 12px 13px;
     font-size: var(--nc-fs-md);
     line-height: 1.65;
-    resize: vertical;
+    resize: none;
 }
 
 .todo-ai-dialog__meta {
@@ -3289,65 +3321,19 @@ html[data-theme="light"] .tools-app .nc-select {
 /* ==========================================================================
  * 12.2 仪器化复选框（不依赖 color-scheme 原生绘制，light/dark 一致）
  * ========================================================================== */
-.tools-app input.nc-check {
-    -webkit-appearance: none;
-    appearance: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    width: 15px;
-    height: 15px;
-    margin: 0;
-    flex: 0 0 auto;
-    border: 1px solid var(--nc-border-strong);
-    border-radius: 3px;
-    background: transparent;
-    cursor: pointer;
-    transition:
-        background-color var(--nc-dur-fast) var(--nc-ease),
-        border-color var(--nc-dur-fast) var(--nc-ease);
-}
-@media (hover: hover) and (pointer: fine) {
-
-
-.tools-app input.nc-check:hover {
-    border-color: var(--nc-text-3);
-}
-}
-
-
-.tools-app input.nc-check:checked {
-    border-color: var(--nc-accent);
-    background: var(--nc-accent);
-}
-
-.tools-app input.nc-check:checked::after {
-    content: "";
-    width: 7px;
-    height: 4px;
-    margin-top: -2px;
-    border-left: 1.5px solid var(--nc-text-invert);
-    border-bottom: 1.5px solid var(--nc-text-invert);
-    transform: rotate(-45deg);
-}
-
-.tools-app input.nc-check:focus-visible {
-    outline: 2px solid var(--nc-accent);
-    outline-offset: 2px;
-}
 
 .tools-app input.todo-item__check {
-    width: 15px;
-    height: 15px;
+    width: 18px;
+    height: 18px;
     margin: 0;
 }
 
 .tools-app input.detail-check {
-    width: 17px;
-    height: 17px;
+    width: 18px;
+    height: 18px;
     margin-top: 6px;
 }
+
 
 /* 完成 / 取消：时间槽降级为中性色 */
 .todo-item__due.tone-done .todo-item__due-bucket,
@@ -3370,7 +3356,6 @@ html:not([data-lite="true"]) .todo-scroll {
 html[data-lite="true"] .todo-scroll {
     -webkit-mask-image: none;
     mask-image: none;
-    padding-bottom: 16px;
 }
 
 /* ==========================================================================
@@ -4253,6 +4238,19 @@ html[data-theme="light"] .todo-item {
     --heat-overdue-color: #9e2b2b;
 }
 
+/* 热区：左侧 3px 语义轨道 + 极淡的行底洗色（不再整行大色块） */
+.todo-item.heat-1 { --heat-color: var(--heat-1-color); }
+.todo-item.heat-2 { --heat-color: var(--heat-2-color); }
+.todo-item.heat-3 { --heat-color: var(--heat-3-color); }
+.todo-item.heat-overdue { --heat-color: var(--heat-overdue-color); }
+
+.todo-item.heat-1,
+.todo-item.heat-2,
+.todo-item.heat-3,
+.todo-item.heat-overdue {
+    box-shadow: inset 3px 0 0 var(--heat-color);
+}
+
 .todo-item.heat-1::before,
 .todo-item.heat-2::before,
 .todo-item.heat-3::before,
@@ -4262,38 +4260,18 @@ html[data-theme="light"] .todo-item {
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    transition: opacity var(--nc-dur) var(--nc-ease), background var(--nc-dur) var(--nc-ease);
+    background: linear-gradient(90deg, var(--heat-color) 0%, transparent 42%);
+    opacity: 0.06;
+    transition: opacity var(--nc-dur) var(--nc-ease);
 }
 
-/* 后天 → 黄/琥珀 */
-.todo-item.heat-1::before {
-    background: linear-gradient(90deg, var(--heat-1-color) 0%, transparent 80%);
-    opacity: 0.2;
-}
-
-/* 明天 → 橙 */
-.todo-item.heat-2::before {
-    background: linear-gradient(90deg, var(--heat-2-color) 0%, transparent 82%);
-    opacity: 0.26;
-}
-
-/* 今天（同一日历日、未逾期）→ 明显红 */
 .todo-item.heat-3::before {
-    background: linear-gradient(90deg, var(--heat-3-color) 0%, transparent 86%);
-    opacity: 0.34;
+    opacity: 0.07;
 }
 
-/* 逾期 → 更深红 */
 .todo-item.heat-overdue::before {
-    background: linear-gradient(90deg, var(--heat-overdue-color) 0%, transparent 94%);
-    opacity: 0.54;
+    opacity: 0.09;
 }
-
-/* Lite：保留信息，降低热区不透明度 */
-html[data-lite="true"] .todo-item.heat-1::before { opacity: 0.1; }
-html[data-lite="true"] .todo-item.heat-2::before { opacity: 0.12; }
-html[data-lite="true"] .todo-item.heat-3::before { opacity: 0.17; }
-html[data-lite="true"] .todo-item.heat-overdue::before { opacity: 0.27; }
 
 /* ---- 15.5 列表动效（只做 transform / opacity，Lite 自动关闭） ---- */
 @keyframes todo-complete-flash {
@@ -4644,7 +4622,7 @@ html[data-lite="true"] .todo-detail.is-detail-closing .todo-detail__inner {
 }
 
 .notes-filter {
-    padding-right: 54px;
+    padding-right: 68px;
 }
 
 .notes-filter::-webkit-search-cancel-button {
@@ -4656,7 +4634,7 @@ html[data-lite="true"] .todo-detail.is-detail-closing .todo-detail__inner {
 .notes-search__clear {
     position: absolute;
     top: 6px;
-    right: 10px;
+    right: 18px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -4672,13 +4650,13 @@ html[data-lite="true"] .todo-detail.is-detail-closing .todo-detail__inner {
 
 .notes-side__kbd {
     position: absolute;
-    top: 7px;
-    right: 10px;
-    height: 18px;
-    min-width: 18px;
-    padding: 0 5px;
-    font-size: 9.5px;
-    opacity: 0.75;
+    top: 6px;
+    right: 20px;
+    height: 20px;
+    min-width: 20px;
+    padding: 0 6px;
+    font-size: 10px;
+    opacity: 0.8;
     pointer-events: none;
 }
 
@@ -4903,5 +4881,54 @@ html[data-lite="true"] .notes-info.is-closing {
 
     html:not([data-lite="true"]) .notes-palette:not([hidden]) .notes-palette__panel {
         animation: nc-pop-in 120ms var(--nc-ease-out) both;
+    }
+}
+
+
+/* ==========================================================================
+ * v6.4.1 详情收起：覆盖层滑出
+ * 栅格列在关闭瞬间收起（列表在面板下方展开），面板保持原位滑出淡出。
+ * ========================================================================== */
+@keyframes todo-detail-leave {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(18px);
+    }
+}
+
+@media (min-width: 1101px) {
+    .todo-shell {
+        position: relative;
+    }
+
+    /* 覆盖 .is-detail-hidden 的 display:none：离场期间仍然可见 */
+    .todo-shell.is-detail-hidden .todo-detail.is-detail-leaving {
+        display: flex;
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: var(--nc-detail-leave-w, 320px);
+        padding-left: 22px;
+        border-left: 1px solid var(--nc-border-faint);
+        background: var(--nc-bg);
+        z-index: 6;
+        pointer-events: none;
+        animation: todo-detail-leave 170ms var(--nc-ease-out) both;
+    }
+}
+
+html[data-lite="true"] .todo-detail.is-detail-leaving {
+    animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .todo-detail.is-detail-leaving {
+        animation: none;
     }
 }

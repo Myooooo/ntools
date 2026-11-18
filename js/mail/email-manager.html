@@ -10,7 +10,10 @@
   <div class="app-shell" id="app-shell">
     <header class="app-bar">
       <div class="bar-inner">
-        <span class="bar-title"><i data-icon="mail" data-w="20" data-h="20"></i> 邮箱维护工具</span>
+        <div class="bar-head">
+          <span class="bar-title"><i data-icon="mail" data-w="22" data-h="22"></i> 邮箱维护</span>
+          <span class="bar-sub">本地维护分组与收件人列表，数据只保存在本机</span>
+        </div>
 
         <div class="bar-actions">
           <button class="btn btn-primary" onclick="openAddEditModal()"><i data-icon="plus-circle" data-w="14" data-h="14"></i>添加邮箱</button>
@@ -421,6 +424,7 @@
   <script defer src="mail-icons.js"></script>
 
   <!-- ==================== 核心业务逻辑 ==================== -->
+  <script defer src="mail-select.js"></script>
   <script defer src="mail-app.js"></script>
 </body>
 </html>

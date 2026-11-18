@@ -502,14 +502,38 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
 /* --------------------------------------------------------------------------
  * 4. 消息操作：默认常显（focus / 触屏直接可用），不再依赖 hover 才出现
  * -------------------------------------------------------------------------- */
+/* 默认收起，悬停/聚焦/最后一条时出现：减少长对话的视觉噪音 */
 .chat-msg__actions {
     display: flex;
     align-items: center;
     gap: 2px;
     min-height: 24px;
     margin-top: 6px;
-    opacity: 1;
+    opacity: 0;
     transform: none;
+    transition: opacity var(--nc-dur-fast) var(--nc-ease);
+}
+
+.chat-msg:focus-within .chat-msg__actions,
+.chat-msg:last-of-type .chat-msg__actions,
+.chat-msg.is-streaming .chat-msg__actions {
+    opacity: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .chat-msg:hover .chat-msg__actions {
+        opacity: 1;
+    }
+}
+
+@media (hover: none) {
+    .chat-msg__actions {
+        opacity: 1;
+    }
+}
+
+html[data-lite="true"] .chat-msg__actions {
+    transition: none;
 }
 
 .chat-msg__action {
@@ -899,14 +923,14 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
 /* --------------------------------------------------------------------------
  * 8. 欢迎 / 空状态：工作台式引导，不做“居中图标 + 大标题”模板
  * -------------------------------------------------------------------------- */
+/* 欢迎态：居中 hero —— 大标题、居中说明、居中建议与快捷键 */
 .chat-welcome {
-    margin-top: clamp(18px, 7vh, 64px);
-    animation: chat-msg-enter var(--nc-dur) var(--nc-ease-out) both;
+    margin-top: clamp(28px, 10vh, 96px);
 }
 
 .chat-welcome__inner {
     width: 100%;
-    max-width: 640px;
+    max-width: 560px;
     margin: 0 auto;
     text-align: center;
 }
@@ -917,36 +941,40 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
 
 .chat-welcome__head {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: var(--nc-space-2);
-    margin-bottom: 6px;
+    gap: 14px;
+    margin-bottom: 12px;
 }
 
 .chat-welcome__mark {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 44px;
+    height: 44px;
     flex: 0 0 auto;
     border: 1px solid var(--nc-border);
-    border-radius: var(--nc-radius-sm);
+    border-radius: var(--nc-radius-lg);
     background: var(--nc-surface-2);
     color: var(--nc-accent);
+    box-shadow: var(--nc-shadow-1);
 }
 
 .chat-welcome__title {
     margin: 0;
-    font-size: var(--nc-fs-lg);
+    font-size: clamp(26px, 2.2vw, 32px);
     font-weight: 600;
-    letter-spacing: var(--nc-track-title);
+    letter-spacing: -0.022em;
+    line-height: 1.2;
     color: var(--nc-text);
 }
 
 .chat-welcome__hint {
-    margin: 0 0 var(--nc-space-4);
-    color: var(--nc-text-3);
-    font-size: var(--nc-fs-sm);
+    max-width: 44ch;
+    margin: 0 auto var(--nc-space-5);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-base);
     line-height: var(--nc-lh-normal);
 }
 
@@ -965,8 +993,8 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
     justify-content: space-between;
     gap: var(--nc-space-3);
     width: 100%;
-    min-height: 40px;
-    padding: 9px 12px;
+    min-height: 44px;
+    padding: 10px 14px;
     border-bottom: 1px solid var(--nc-border);
     color: var(--nc-text-2);
     font-size: var(--nc-fs-md);
@@ -996,8 +1024,9 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
 .chat-welcome__foot {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
-    margin-top: var(--nc-space-3);
+    margin-top: var(--nc-space-4);
     color: var(--nc-text-3);
     font-size: var(--nc-fs-xs);
 }
@@ -1338,7 +1367,7 @@ html[data-theme="light"] .chat-msg--user .chat-msg__action {
     flex: 1 1 auto;
     min-height: 168px;
     max-height: 46vh;
-    resize: vertical;
+    resize: none;
 }
 
 .chat-prompt-sheet__foot {
@@ -2379,4 +2408,16 @@ html[data-lite="true"] #chat-profile-select + .nc-select__trigger {
 
 .chat-boot[hidden] {
     display: none;
+}
+
+/* ==========================================================================
+ * v6.4.1 端点下拉：原生 select 仅作值容器
+ * chat.css 里 #chat-profile-select 的 ID 规则优先级高于增强器的基础规则，
+ * 会把自带的箭头背景重新加回来（0.001 透明度下仍可能与自绘箭头叠影）。
+ * ========================================================================== */
+#chat-profile-select {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: none;
+    color: transparent;
 }

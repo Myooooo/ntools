@@ -53,16 +53,16 @@
 
 .nc-btn--primary {
     border-color: transparent;
-    background: var(--nc-gradient-accent);
-    color: #fff;
-    box-shadow: var(--nc-shadow-accent);
+    background: var(--nc-accent);
+    color: var(--nc-text-invert);
+    box-shadow: none;
 }
 @media (hover: hover) and (pointer: fine) {
 
 
 .nc-btn--primary:hover {
-    background: var(--nc-gradient-accent);
-    filter: brightness(1.06);
+    background: var(--nc-accent-hover);
+    filter: none;
     border-color: transparent;
 }
 }
@@ -271,7 +271,7 @@
     min-height: 84px;
     padding: 10px 12px;
     line-height: 1.6;
-    resize: vertical;
+    resize: none;
 }
 
 .nc-select {
@@ -298,14 +298,125 @@ html[data-theme="light"] .nc-select {
     color: var(--nc-danger);
 }
 
-/* 原生复选框（走 accent-color，保证可访问性） */
-.nc-check {
+/* --------------------------------------------------------------------------
+ * 复选框（v6.4 自绘）：18×18，勾选描边动画，支持 indeterminate / 只读
+ * 同时覆盖 Markdown 任务列表里 disabled 的原生 checkbox。
+ * -------------------------------------------------------------------------- */
+.nc-check,
+.chat-md input[type="checkbox"],
+.md-preview input[type="checkbox"] {
+    -webkit-appearance: none;
+    appearance: none;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    border: 1.5px solid var(--nc-border-strong);
+    border-radius: 5px;
+    background: var(--nc-surface-2);
+    cursor: pointer;
+    transition:
+        background-color var(--nc-dur-fast) var(--nc-ease),
+        border-color var(--nc-dur-fast) var(--nc-ease),
+        box-shadow var(--nc-dur-fast) var(--nc-ease);
+}
+
+/* 勾：用 clip-path 自下而上“画”出来（140ms，合成层） */
+.nc-check::after,
+.chat-md input[type="checkbox"]::after,
+.md-preview input[type="checkbox"]::after {
+    content: "";
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    width: 5px;
+    height: 9px;
+    border-right: 1.8px solid var(--nc-text-invert);
+    border-bottom: 1.8px solid var(--nc-text-invert);
+    transform: rotate(42deg) scale(0.94);
+    transform-origin: 50% 60%;
+    clip-path: inset(0 0 100% 0);
+    transition:
+        clip-path var(--nc-dur-fast) var(--nc-ease-out),
+        transform var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+/* 半选：横杠 */
+.nc-check::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    top: 50%;
+    height: 1.8px;
+    margin-top: -0.9px;
+    border-radius: 1px;
+    background: var(--nc-text-invert);
+    transform: scaleX(0);
+    transition: transform var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nc-check:hover:not(:disabled) {
+        border-color: var(--nc-text-3);
+    }
+}
+
+.nc-check:checked,
+.nc-check:indeterminate,
+.chat-md input[type="checkbox"]:checked,
+.md-preview input[type="checkbox"]:checked {
+    border-color: var(--nc-accent);
+    background: var(--nc-accent);
+}
+
+.nc-check:checked::after,
+.chat-md input[type="checkbox"]:checked::after,
+.md-preview input[type="checkbox"]:checked::after {
+    clip-path: inset(0 0 0 0);
+    transform: rotate(42deg) scale(1);
+}
+
+.nc-check:indeterminate::after {
+    clip-path: inset(0 0 100% 0);
+}
+
+.nc-check:indeterminate::before {
+    transform: scaleX(1);
+}
+
+.nc-check:focus-visible,
+.chat-md input[type="checkbox"]:focus-visible,
+.md-preview input[type="checkbox"]:focus-visible {
+    outline: none;
+    box-shadow: var(--nc-focus-ring);
+}
+
+.nc-check:disabled {
+    cursor: default;
+    opacity: 0.72;
+}
+
+/* Markdown 只读任务项：不可点，但保持与正文同一视觉语言 */
+.chat-md input[type="checkbox"],
+.md-preview input[type="checkbox"] {
     width: 16px;
     height: 16px;
-    margin: 0;
-    accent-color: var(--nc-accent);
-    cursor: pointer;
-    flex: 0 0 auto;
+    margin: 0 6px 0 0;
+    vertical-align: -3px;
+    cursor: default;
+}
+
+.chat-md input[type="checkbox"]::after,
+.md-preview input[type="checkbox"]::after {
+    left: 4px;
+    top: 1px;
+    width: 4px;
+    height: 8px;
 }
 
 /* 开关 */
@@ -328,39 +439,59 @@ html[data-theme="light"] .nc-select {
 
 .nc-switch__track {
     position: relative;
-    width: 36px;
-    height: 20px;
+    width: 40px;
+    height: 22px;
     border-radius: var(--nc-radius-pill);
     background: var(--nc-surface-3);
     border: 1px solid var(--nc-border);
-    transition: background-color var(--nc-dur) var(--nc-ease);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+    transition: background-color var(--nc-dur) var(--nc-ease), border-color var(--nc-dur) var(--nc-ease);
     flex: 0 0 auto;
 }
 
 .nc-switch__track::after {
     content: "";
     position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
+    top: 1px;
+    left: 1px;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--nc-radius-pill);
     background: var(--nc-text-2);
-    transition: transform var(--nc-dur) var(--nc-ease-spring), background-color var(--nc-dur) var(--nc-ease);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+    transition:
+        transform var(--nc-dur) var(--nc-ease-spring),
+        width var(--nc-dur-fast) var(--nc-ease-out),
+        background-color var(--nc-dur) var(--nc-ease);
 }
 
 .nc-switch input:checked + .nc-switch__track {
     background: var(--nc-accent);
     border-color: var(--nc-accent);
+    box-shadow: none;
 }
 
 .nc-switch input:checked + .nc-switch__track::after {
-    transform: translateX(16px);
+    transform: translateX(18px);
     background: #fff;
+}
+
+/* 按下时 knob 拉长（真实开关被按住的物理感），松开回弹 */
+.nc-switch:active .nc-switch__track::after {
+    width: 22px;
+}
+
+.nc-switch:active input:checked + .nc-switch__track::after {
+    transform: translateX(14px);
 }
 
 .nc-switch input:focus-visible + .nc-switch__track {
     box-shadow: var(--nc-focus-ring);
+}
+
+html[data-lite="true"] .nc-switch__track,
+html[data-lite="true"] .nc-switch__track::after {
+    transition: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -494,7 +625,7 @@ html[data-theme="light"] .nc-select {
     border-bottom-width: 2px;
     border-radius: var(--nc-radius-xs);
     background: var(--nc-surface-2);
-    color: var(--nc-text-3);
+    color: var(--nc-text-2);
     font-family: var(--nc-font-mono);
     font-size: var(--nc-fs-2xs);
     line-height: 1;
@@ -536,9 +667,9 @@ html[data-theme="light"] .nc-select {
 
 
 .nc-seg__btn.is-active {
-    background: var(--nc-surface);
+    background: transparent;
     color: var(--nc-text);
-    box-shadow: var(--nc-shadow-1);
+    box-shadow: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -885,7 +1016,7 @@ html[data-theme="light"] .nc-select {
 .nc-progress__bar {
     height: 100%;
     border-radius: var(--nc-radius-pill);
-    background: var(--nc-gradient-accent);
+    background: var(--nc-accent);
     transition: width var(--nc-dur-slow) var(--nc-ease);
 }
 
@@ -933,16 +1064,16 @@ html[data-theme="light"] .nc-select {
 
 .nc-btn--primary {
     border-color: transparent;
-    background: var(--nc-brand-bg);
-    color: var(--nc-brand-fg);
-    box-shadow: var(--nc-brand-shadow);
+    background: var(--nc-accent);
+    color: var(--nc-text-invert);
+    box-shadow: none;
 }
 @media (hover: hover) and (pointer: fine) {
 
 
 .nc-btn--primary:hover {
     filter: none;
-    background: var(--nc-brand-bg);
+    background: var(--nc-accent-hover);
     border-color: transparent;
 }
 }
@@ -1214,8 +1345,8 @@ html[data-theme="light"] .nc-select {
 }
 
 .nc-seg__btn.is-active {
-    background: var(--nc-surface);
-    box-shadow: var(--nc-shadow-1);
+    background: transparent;
+    box-shadow: none;
 }
 
 /* ---------- 空状态：工作台式说明，不强制居中大留白 ---------- */
@@ -1259,8 +1390,8 @@ html[data-theme="light"] .nc-select {
 /* ---------- 模态 / Toast / 菜单：材质化、来源明确的动效 ---------- */
 .nc-modal-overlay {
     background: var(--nc-overlay);
-    backdrop-filter: var(--nc-glass-blur);
-    -webkit-backdrop-filter: var(--nc-glass-blur);
+    backdrop-filter: var(--nc-scrim-blur);
+    -webkit-backdrop-filter: var(--nc-scrim-blur);
     transition: opacity var(--nc-dur-panel) var(--nc-ease-out);
 }
 
@@ -1319,7 +1450,10 @@ html[data-theme="light"] .nc-select {
     box-shadow: var(--nc-shadow-3);
     padding: 5px;
     transform-origin: var(--nc-menu-origin, top right);
-    animation: nc-pop-in var(--nc-dur-fast) var(--nc-ease-out) both;
+    /* 菜单属于“偶发”浮层：160ms + 0.96 缩放，比原来的 0.985 更容易被感知 */
+    --nc-enter-scale: 0.96;
+    --nc-enter-y: 8px;
+    animation: nc-pop-in 160ms var(--nc-ease-out) both;
 }
 
 .nc-menu__item {
@@ -1408,6 +1542,11 @@ html[data-theme="light"] .nc-select {
     opacity: 0.001;
     z-index: 2;
     cursor: pointer;
+    /* 关掉系统箭头与自带背景：否则会与 .nc-select__chevron 叠成两个下箭头 */
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: none;
+    color: transparent;
 }
 
 .nc-select-wrap > .nc-select__trigger.nc-select {
@@ -1747,6 +1886,603 @@ html[data-lite="true"] .sp-range__input::-webkit-slider-thumb {
 @media (prefers-reduced-motion: reduce) {
     .nc-range::-webkit-slider-thumb,
     .sp-range__input::-webkit-slider-thumb {
+        transition: none;
+    }
+}
+
+/* ==========================================================================
+ * v6.4 控件总成（二）：数字步进 / 原生痕迹清除 / 进度条
+ * ========================================================================== */
+
+/* ---------- 数字输入：去掉系统 spinner，提供自绘步进 ---------- */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+.nc-number {
+    display: inline-flex;
+    align-items: stretch;
+    height: 34px;
+    min-width: 0;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-input-bg);
+    overflow: hidden;
+    transition: border-color var(--nc-dur-fast) var(--nc-ease), box-shadow var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-number:focus-within {
+    border-color: var(--nc-accent);
+    box-shadow: var(--nc-focus-ring);
+}
+
+.nc-number__input {
+    width: 54px;
+    min-width: 0;
+    height: 100%;
+    padding: 0 4px;
+    border: 0;
+    background: transparent;
+    color: var(--nc-text);
+    font-size: var(--nc-fs-md);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    outline: none;
+}
+
+.nc-number__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: var(--nc-text-2);
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease), transform var(--nc-dur-press) var(--nc-ease-out);
+}
+
+.nc-number__btn + .nc-number__input,
+.nc-number__input + .nc-number__btn {
+    border-left: 1px solid var(--nc-border-faint);
+}
+
+.nc-number__btn:active {
+    transform: scale(0.94);
+    transition-duration: 0s;
+}
+
+.nc-number__btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nc-number__btn:hover:not(:disabled) {
+        background: var(--nc-surface-2);
+        color: var(--nc-text);
+    }
+}
+
+/* ---------- 原生日期/时间选择器指示器：一律隐藏（改用 .nc-dt 自绘） ---------- */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+}
+
+/* ---------- 文本域：不要浏览器自带的右下拖拽角 ---------- */
+.nc-textarea {
+    resize: none;
+}
+
+/* ---------- 进度条：determinate / indeterminate ---------- */
+.nc-progress {
+    position: relative;
+    height: 6px;
+    border-radius: var(--nc-radius-pill);
+    background: var(--nc-surface-3);
+    overflow: hidden;
+}
+
+.nc-progress__bar {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: var(--nc-radius-pill);
+    background: var(--nc-accent);
+    transition: width var(--nc-dur-slow) var(--nc-ease-out);
+}
+
+.nc-progress {
+    box-shadow: inset 0 0 0 1px var(--nc-border-faint);
+}
+
+.nc-progress--warn .nc-progress__bar {
+    background: var(--nc-warning);
+}
+
+.nc-progress--danger .nc-progress__bar {
+    background: var(--nc-danger);
+}
+
+.nc-progress--indeterminate .nc-progress__bar {
+    width: 38%;
+    animation: nc-progress-slide 1.4s var(--nc-ease-in-out) infinite;
+}
+
+@keyframes nc-progress-slide {
+    0% {
+        transform: translateX(-110%);
+    }
+
+    100% {
+        transform: translateX(300%);
+    }
+}
+
+html[data-lite="true"] .nc-progress--indeterminate .nc-progress__bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.55;
+    transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nc-progress--indeterminate .nc-progress__bar {
+        animation: none;
+        width: 100%;
+        opacity: 0.55;
+        transform: none;
+    }
+}
+
+/* 滑杆按下：thumb 放大 + 光环（Lite 关闭位移，仅保留颜色） */
+.nc-range:active::-webkit-slider-thumb,
+.sp-range__input:active::-webkit-slider-thumb {
+    transform: scale(1.14);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28), 0 0 0 5px var(--nc-accent-soft);
+}
+
+html[data-lite="true"] .nc-range:active::-webkit-slider-thumb,
+html[data-lite="true"] .sp-range__input:active::-webkit-slider-thumb {
+    transform: none;
+}
+
+/* ==========================================================================
+ * v6.4 自绘日期 / 时间字段（js/datetime-field.js）
+ * 原生 input 只作为值容器（透明、不可点）；视觉与交互全由 .nc-dt 承担。
+ * ========================================================================== */
+.nc-dt {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+}
+
+.nc-dt__native {
+    position: absolute !important;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.nc-dt__trigger {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 0 11px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-input-bg);
+    color: var(--nc-text);
+    font-size: var(--nc-fs-md);
+    text-align: left;
+    transition:
+        border-color var(--nc-dur-fast) var(--nc-ease),
+        box-shadow var(--nc-dur-fast) var(--nc-ease),
+        background-color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-dt__icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    color: var(--nc-text-3);
+}
+
+.nc-dt__text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.nc-dt.is-empty .nc-dt__text {
+    color: var(--nc-text-3);
+}
+
+.nc-dt.is-open .nc-dt__icon {
+    color: var(--nc-accent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nc-dt__trigger:hover {
+        border-color: var(--nc-border-strong);
+    }
+}
+
+.nc-dt__trigger:focus-visible {
+    outline: none;
+    border-color: var(--nc-accent);
+    box-shadow: var(--nc-focus-ring);
+}
+
+.nc-dt.is-open .nc-dt__trigger {
+    border-color: var(--nc-accent-ring);
+    background: var(--nc-surface-2);
+}
+
+/* ---------- 弹层 ---------- */
+.nc-dt__pop {
+    position: fixed;
+    z-index: 1090;
+    width: 296px;
+    padding: 10px;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-lg);
+    background: var(--nc-elevated);
+    box-shadow: var(--nc-shadow-3);
+    opacity: 0;
+    transform: translateY(4px) scale(0.985);
+    transition:
+        opacity var(--nc-dur-fast) var(--nc-ease-out),
+        transform var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+.nc-dt__pop.is-open {
+    opacity: 1;
+    transform: none;
+}
+
+.nc-dt__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 2px 8px;
+}
+
+.nc-dt__label {
+    font-size: var(--nc-fs-md);
+    font-weight: 600;
+    color: var(--nc-text);
+}
+
+.nc-dt__nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-2);
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-dt__nav:active {
+    transform: scale(0.94);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nc-dt__nav:hover {
+        background: var(--nc-surface-2);
+        color: var(--nc-text);
+    }
+}
+
+.nc-dt__week {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    padding: 0 2px 4px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    text-align: center;
+}
+
+.nc-dt__grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.nc-dt__day {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px;
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    font-variant-numeric: tabular-nums;
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-dt__day.is-blank {
+    pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nc-dt__day:not(.is-selected):not(.is-blank):hover {
+        background: var(--nc-surface-2);
+        color: var(--nc-text);
+    }
+}
+
+.nc-dt__day.is-today {
+    color: var(--nc-accent);
+    font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--nc-accent-ring);
+}
+
+.nc-dt__day.is-selected {
+    background: var(--nc-accent);
+    color: var(--nc-text-invert);
+    font-weight: 600;
+    box-shadow: none;
+}
+
+.nc-dt__day:focus-visible {
+    outline: 2px solid var(--nc-accent);
+    outline-offset: 1px;
+}
+
+.nc-dt__time {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--nc-border-faint);
+}
+
+.nc-dt__stepper {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 64px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-input-bg);
+    overflow: hidden;
+}
+
+.nc-dt__step {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 20px;
+    color: var(--nc-text-3);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nc-dt__step:hover {
+        background: var(--nc-surface-2);
+        color: var(--nc-text);
+    }
+}
+
+.nc-dt__num {
+    width: 100%;
+    height: 30px;
+    border: 0;
+    border-top: 1px solid var(--nc-border-faint);
+    border-bottom: 1px solid var(--nc-border-faint);
+    background: transparent;
+    color: var(--nc-text);
+    font-size: var(--nc-fs-lg);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    outline: none;
+}
+
+.nc-dt__colon {
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-lg);
+}
+
+.nc-dt__presets {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.nc-dt__chip {
+    flex: 1;
+    height: 26px;
+    border: 1px solid var(--nc-border-faint);
+    border-radius: var(--nc-radius-sm);
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-xs);
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease), border-color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.nc-dt__chip:active {
+    transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .nc-dt__chip:hover {
+        background: var(--nc-surface-2);
+        color: var(--nc-text-2);
+        border-color: var(--nc-border);
+    }
+}
+
+.nc-dt__foot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--nc-border-faint);
+}
+
+.nc-dt__foot-gap {
+    flex: 1;
+}
+
+/* 上下文尺寸：跟随原输入框在各页面里的高度 */
+.todo-composer__field .nc-dt,
+.detail-field .nc-dt {
+    height: 31px;
+}
+
+.todo-composer__field .nc-dt__trigger,
+.detail-field .nc-dt__trigger {
+    padding: 0 8px;
+    font-size: var(--nc-fs-sm);
+}
+
+.detail-due-row .nc-dt {
+    flex: 1;
+}
+
+.tl-field .nc-dt {
+    width: 180px;
+    height: 32px;
+}
+
+.tl-field .nc-dt__trigger {
+    font-size: var(--nc-fs-sm);
+}
+
+.tl--vertical .tl-field .nc-dt {
+    width: 100%;
+    height: 36px;
+}
+
+.sp-row .nc-dt {
+    width: 130px;
+    height: 34px;
+}
+
+/* Lite / reduced-motion：弹层与控件瞬时，几何不变 */
+html[data-lite="true"] .nc-dt__pop,
+html[data-lite="true"] .nc-dt__pop.is-open {
+    transform: none;
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nc-dt__pop,
+    .nc-dt__pop.is-open {
+        transform: none;
+        transition: none;
+    }
+}
+
+
+/* ==========================================================================
+ * v6.4 分段控制器：滑动指示器
+ * 指示器由 NC.ui.syncSeg() 定位；按钮自身不再画底，只负责文字与命中区。
+ * ========================================================================== */
+.nc-seg {
+    position: relative;
+    isolation: isolate;
+}
+
+.nc-seg__indicator {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 0;
+    width: 0;
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface);
+    box-shadow: var(--nc-shadow-1);
+    transform: translateX(0);
+    transition:
+        transform var(--nc-dur) var(--nc-ease-out),
+        width var(--nc-dur) var(--nc-ease-out),
+        opacity var(--nc-dur-fast) var(--nc-ease);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.nc-seg__btn {
+    position: relative;
+    z-index: 1;
+    background: transparent;
+}
+
+html[data-lite="true"] .nc-seg__indicator {
+    box-shadow: none;
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nc-seg__indicator {
+        transition: none;
+    }
+}
+
+
+/* v6.4.1 编辑消息弹窗：默认给足高度，长消息不用先拖拽 */
+.nc-textarea--editor {
+    min-height: 200px;
+    max-height: min(52vh, 460px);
+    line-height: var(--nc-lh-reading);
+}
+
+
+/* v6.4.1 模态遮罩：同样让 blur 与暗度一起渐入 */
+.nc-modal-overlay {
+    background: rgba(4, 6, 10, 0);
+    -webkit-backdrop-filter: saturate(100%) blur(0px);
+    backdrop-filter: saturate(100%) blur(0px);
+    transition:
+        opacity var(--nc-dur-panel) var(--nc-ease-out),
+        background-color var(--nc-dur-panel) var(--nc-ease-out),
+        -webkit-backdrop-filter var(--nc-dur-panel) var(--nc-ease-out),
+        backdrop-filter var(--nc-dur-panel) var(--nc-ease-out);
+}
+
+.nc-modal-overlay.show {
+    background: var(--nc-overlay);
+    -webkit-backdrop-filter: var(--nc-scrim-blur);
+    backdrop-filter: var(--nc-scrim-blur);
+}
+
+html[data-lite="true"] .nc-modal-overlay {
+    transition-duration: 0.01ms;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nc-modal-overlay {
         transition: none;
     }
 }

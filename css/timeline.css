@@ -455,7 +455,7 @@ html:not([data-lite="true"]) .tl-axis {
 .tl-now::after {
     content: attr(data-time);
     position: absolute;
-    top: -18px;
+    bottom: 2px;
     left: 6px;
     padding: 1px 5px;
     border-radius: var(--nc-radius-xs);

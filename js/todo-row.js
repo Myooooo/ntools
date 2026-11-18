@@ -124,12 +124,12 @@
 
         var titleline = S.node('span', 'todo-item__titleline');
         var pinMark = S.node('span', 'todo-item__pin');
-        pinMark.appendChild(S.icon('flag', 12));
+        pinMark.appendChild(S.icon('pin', 14));
         S.attr(pinMark, 'aria-hidden', 'true');
         titleline.appendChild(pinMark);
         /* 循环图标在标题左侧（置顶图标之后）；无循环时 hidden 不占位 */
         var repeatMark = S.node('span', 'todo-item__repeat');
-        repeatMark.appendChild(S.icon('refresh', 12));
+        repeatMark.appendChild(S.icon('repeat', 14));
         titleline.appendChild(repeatMark);
         var title = S.node('span', 'todo-item__title');
         titleline.appendChild(title);
@@ -156,7 +156,7 @@
         S.attr(pinBtn, 'type', 'button');
         S.attr(pinBtn, 'data-act', 'pin');
         S.attr(pinBtn, 'aria-label', '置顶任务');
-        pinBtn.appendChild(S.icon('flag', 14));
+        pinBtn.appendChild(S.icon('pin', 14));
         acts.appendChild(pinBtn);
         var delBtn = S.node('button', 'nc-btn nc-btn--icon nc-btn--sm');
         S.attr(delBtn, 'type', 'button');
@@ -169,7 +169,7 @@
         S.attr(restoreBtn, 'data-act', 'restore');
         S.attr(restoreBtn, 'aria-label', '恢复任务');
         S.attr(restoreBtn, 'title', '恢复任务');
-        restoreBtn.appendChild(S.icon('refresh', 15));
+        restoreBtn.appendChild(S.icon('rotate-ccw', 16));
         var purgeBtn = S.node('button', 'nc-btn nc-btn--icon nc-btn--sm');
         S.attr(purgeBtn, 'type', 'button');
         S.attr(purgeBtn, 'data-act', 'purge');
@@ -269,7 +269,11 @@
             task.tags.slice(0, 3).forEach(function (tag) {
                 tagsWrap.appendChild(S.node('span', 'todo-item__tag', tag));
             });
-            if (task.tags.length > 3) tagsWrap.appendChild(S.node('span', 'todo-item__tag', '+' + (task.tags.length - 3)));
+            if (task.tags.length > 3) {
+                var more = S.node('span', 'todo-item__tag todo-item__tag--more', '+' + (task.tags.length - 3));
+                S.attr(more, 'title', '还有 ' + (task.tags.length - 3) + ' 个标签');
+                tagsWrap.appendChild(more);
+            }
         }
 
         /* 置顶 / 循环标识 */
@@ -377,7 +381,7 @@
             tone = 'none';
             bucket = '取消';
             clock = meta.timeLabel || '';
-            titleLabel = '已取消 · 原截止 ' + meta.label;
+            titleLabel = '已取消，原截止 ' + meta.label;
         } else if (tone === 'overdue') bucket = '逾期';
         else if (tone === 'today') bucket = '今天';
         else if (tone === 'tomorrow') bucket = '明天';

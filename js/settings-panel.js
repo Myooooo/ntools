@@ -56,11 +56,11 @@
             { id: 'general', title: '通用', desc: '主题、Light 性能模式、上下班时间', icon: 'settings', group: 'core' },
             { id: 'profiles', title: 'AI 端点', desc: '聊天与 Todo AI 共用的 OpenAI 兼容端点', icon: 'layers', group: 'core' },
             { id: 'todo', title: '待办事项', desc: 'Todo AI 识别与列表行为', icon: 'check-circle', group: 'modules' },
-            { id: 'notes', title: '笔记本', desc: '笔记库状态、默认视图与导出', icon: 'file', group: 'modules' },
+            { id: 'notes', title: '笔记本', desc: '笔记库状态、默认视图与导出', icon: 'notebook-text', group: 'modules' },
             { id: 'email', title: '邮箱维护', desc: '邮箱数据用量与备份入口', icon: 'mail', group: 'modules' },
-            { id: 'qr', title: '二维码生成', desc: '默认生成尺寸', icon: 'grid', group: 'modules' },
+            { id: 'qr', title: '二维码生成', desc: '默认生成尺寸', icon: 'qr-code', group: 'modules' },
             { id: 'image', title: '图片处理', desc: 'Base64 导出的 JPEG 质量', icon: 'image', group: 'modules' },
-            { id: 'nchat', title: 'nChat', desc: '当前端点与聊天入口', icon: 'command', group: 'modules' },
+            { id: 'nchat', title: 'nChat', desc: '当前端点与聊天入口', icon: 'messages-square', group: 'modules' },
             { id: 'data', title: '数据', desc: '导入导出与本地数据清理', icon: 'download', group: 'system' },
             { id: 'about', title: '关于', desc: '版本、兼容性与快捷键', icon: 'info', group: 'system' }
         ].concat(sections.map(function (section) {
@@ -172,10 +172,25 @@
             type: 'range', min: '0', max: '2', step: step,
             value: String(value), class: 'sp-range__input'
         });
+        var numberBox = util.e('div', { class: 'nc-number sp-range__number' });
+        var minus = util.e('button', {
+            type: 'button', class: 'nc-number__btn',
+            'aria-label': labelText + '减小', title: '减小'
+        });
+        minus.appendChild(icons.el('minus', 14));
         var number = util.e('input', {
             type: 'number', min: '0', max: '2', step: step,
-            value: String(value), class: 'nc-input sp-range__number'
+            value: String(value), class: 'nc-number__input',
+            'aria-label': labelText
         });
+        var plus = util.e('button', {
+            type: 'button', class: 'nc-number__btn',
+            'aria-label': labelText + '增大', title: '增大'
+        });
+        plus.appendChild(icons.el('plus', 14));
+        numberBox.appendChild(minus);
+        numberBox.appendChild(number);
+        numberBox.appendChild(plus);
         function paintProgress() {
             var min = Number(range.min) || 0;
             var max = Number(range.max) || 100;
@@ -192,10 +207,17 @@
         }
         range.addEventListener('input', function () { sync(range); });
         number.addEventListener('change', function () { sync(number); });
+        function nudge(delta) {
+            var next = Math.min(2, Math.max(0, Math.round((Number(number.value) || 0) + delta) * 100) / 100);
+            number.value = String(next);
+            sync(number);
+        }
+        minus.addEventListener('click', function () { nudge(-Number(step) || -0.01); });
+        plus.addEventListener('click', function () { nudge(Number(step) || 0.01); });
         paintProgress();
         wrap.appendChild(label);
         wrap.appendChild(range);
-        wrap.appendChild(number);
+        wrap.appendChild(numberBox);
         return wrap;
     }
 
@@ -327,7 +349,7 @@
         }));
         if (typeof store().importLegacy === 'function') {
             footer.appendChild(button('从旧 nChat 导入', {
-                ghost: true, small: true, icon: 'refresh',
+                ghost: true, small: true, icon: 'upload',
                 onClick: function () {
                     var result = store().importLegacy();
                     toast((result && result.message) || '没有可导入的旧 nChat 配置',
@@ -621,7 +643,7 @@
 
         var actions = moduleCard('快捷操作');
         var bar = util.e('div', { class: 'sp-data-card__actions' });
-        bar.appendChild(button('打开笔记', { small: true, icon: 'file', onClick: function () { openModule('md'); } }));
+        bar.appendChild(button('打开笔记', { small: true, icon: 'notebook-text', onClick: function () { openModule('md'); } }));
         bar.appendChild(button('导出 JSON', {
             small: true, ghost: true, icon: 'download',
             onClick: function () { exportNotes('json'); }
@@ -684,7 +706,7 @@
 
         var actions = moduleCard('快捷操作');
         var bar = util.e('div', { class: 'sp-data-card__actions' });
-        bar.appendChild(button('打开二维码工具', { small: true, icon: 'grid', onClick: function () { openModule('qr'); } }));
+        bar.appendChild(button('打开二维码工具', { small: true, icon: 'qr-code', onClick: function () { openModule('qr'); } }));
         actions.appendChild(bar);
         container.appendChild(actions);
     }
@@ -1085,7 +1107,7 @@
         } else if (!status.enabled) {
             parts.push('自动备份已关闭');
         }
-        return parts.join(' · ');
+        return parts.join('　');
     }
 
     function renderBackupCard() {
@@ -1099,7 +1121,7 @@
         var status = backup.status();
 
         var bar = util.e('div', { class: 'sp-data-card__actions' });
-        var includeKeys = util.e('input', { type: 'checkbox' });
+        var includeKeys = util.e('input', { type: 'checkbox', class: 'nc-check' });
         includeKeys.checked = backup.readCfg().includeKeys === true;
         includeKeys.addEventListener('change', function () {
             backup.writeCfg({ includeKeys: includeKeys.checked });
@@ -1186,7 +1208,7 @@
                 row.appendChild(util.e('span', { class: 'sp-snap-row__time', text: util.formatDateTime(item.at) }));
                 row.appendChild(util.e('span', {
                     class: 'sp-snap-row__meta',
-                    text: '笔记 ' + (item.notes || 0) + ' · 聊天 ' + (item.chats || 0)
+                    text: '笔记 ' + (item.notes || 0) + '　聊天 ' + (item.chats || 0)
                 }));
                 row.appendChild(button('恢复', {
                     small: true, ghost: true,
@@ -1332,6 +1354,50 @@
         return card;
     }
 
+    /** 本地存储用量（所有 NC.storage 键的近似字节数） */
+    function storageUsedBytes() {
+        var total = 0;
+        try {
+            var keys = NC.storage && NC.storage.keys ? NC.storage.keys() : [];
+            keys.forEach(function (key) {
+                var raw = NC.storage.getRaw(key);
+                if (raw) total += NC.storage.estimateBytes(raw);
+            });
+        } catch (err) { total = 0; }
+        return total;
+    }
+
+    function renderStorageCard() {
+        var card = moduleCard('本地存储', '浏览器配额约 3.5 MB；接近上限时请先导出备份，再清理历史版本。');
+        var used = storageUsedBytes();
+        var limit = (NC.storage && NC.storage.maxBytes) || 3.5 * 1024 * 1024;
+        var pct = Math.min(100, Math.max(used > 0 ? 1 : 0, Math.round((used / limit) * 100)));
+
+        var row = util.e('div', { class: 'sp-usage' });
+        row.appendChild(util.e('span', {
+            class: 'sp-usage__label',
+            text: '已用 ' + util.formatBytes(used) + ' / ' + util.formatBytes(limit)
+        }));
+        row.appendChild(util.e('span', { class: 'sp-usage__value', text: pct + '%' }));
+        card.appendChild(row);
+
+        var bar = util.e('div', {
+            class: 'nc-progress',
+            role: 'progressbar',
+            'aria-label': '本地存储占用',
+            'aria-valuemin': '0',
+            'aria-valuemax': '100',
+            'aria-valuenow': String(pct)
+        });
+        if (pct >= 85) bar.classList.add('nc-progress--danger');
+        else if (pct >= 60) bar.classList.add('nc-progress--warn');
+        var fill = util.e('span', { class: 'nc-progress__bar' });
+        fill.style.width = pct + '%';
+        bar.appendChild(fill);
+        card.appendChild(bar);
+        return card;
+    }
+
     function renderData(container) {
         var head = util.e('div', { class: 'sp-section-head' });
         var info = util.e('div', {});
@@ -1341,6 +1407,7 @@
         container.appendChild(head);
 
         container.appendChild(renderBackupCard());
+        container.appendChild(renderStorageCard());
 
         var canExport = NC.store.todo && typeof NC.store.todo.exportData === 'function';
         var card = util.e('div', { class: 'sp-data-card' });

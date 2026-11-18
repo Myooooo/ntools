@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
+    <title>图标对照 · nTools</title>
+    <link rel="stylesheet" href="../css/tokens.css">
+    <link rel="stylesheet" href="../css/base.css">
+    <style>
+        body { overflow: auto; padding: 24px 28px 60px; }
+        h1 { font-size: 26px; letter-spacing: -0.022em; }
+        h2 { margin: 24px 0 10px; font-size: 15px; color: var(--nc-text-2); }
+        .sub { margin-top: 4px; color: var(--nc-text-3); font-size: 13px; }
+        .bar { display: flex; gap: 8px; margin: 18px 0 4px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+        .cell {
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+            padding: 10px 6px; border: 1px solid var(--nc-border); border-radius: 8px;
+            background: var(--nc-surface);
+        }
+        .cell .sizes { display: flex; align-items: center; gap: 8px; color: var(--nc-text); }
+        .name { color: var(--nc-text-3); font-size: 10.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cell.is-bad { border-color: var(--nc-danger); background: var(--nc-danger-soft); }
+        .legend { margin-top: 12px; color: var(--nc-text-3); font-size: 12px; line-height: 1.7; }
+        .box { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px dashed var(--nc-accent-ring); }
+    </style>
+</head>
+<body>
+    <h1>图标对照</h1>
+    <p class="sub">24×24 画布、描边风格；描边随尺寸：14→2.0 / 16–20→1.8 / 24–28→1.6。浅色/深色/Lite 应完全一致（Lite 只去掉阴影与动效）。</p>
+    <div class="bar">
+        <button class="nc-btn nc-btn--sm" id="toggle-theme" type="button">切换深浅</button>
+        <button class="nc-btn nc-btn--sm" id="toggle-lite" type="button">切换 Lite</button>
+        <button class="nc-btn nc-btn--sm" id="toggle-box" type="button">显示 24px 画框</button>
+    </div>
+    <h2>全量（16 / 20 / 24 / 32）</h2>
+    <div class="grid" id="grid"></div>
+    <div class="legend">
+        判定：同一行图标的光学大小应接近（实心类 bbox 面积 45–65%）；小尺寸不得塌陷成 1–2px 的点；
+        任何图标都不应出现折角、缺口或被裁切。
+    </div>
+
+    <script src="../js/core.js"></script>
+    <script src="../js/icons.js"></script>
+    <script>
+        (function () {
+            var grid = document.getElementById('grid');
+            var showBox = false;
+            function render() {
+                grid.textContent = '';
+                Object.keys(NC.icons.paths).sort().forEach(function (name) {
+                    var cell = document.createElement('div');
+                    cell.className = 'cell';
+                    var sizes = document.createElement('div');
+                    sizes.className = 'sizes';
+                    [16, 20, 24, 32].forEach(function (size) {
+                        var icon = NC.icons.el(name, size);
+                        if (showBox) {
+                            var box = document.createElement('span');
+                            box.className = 'box';
+                            box.style.width = size + 'px';
+                            box.style.height = size + 'px';
+                            box.appendChild(icon);
+                            sizes.appendChild(box);
+                        } else {
+                            sizes.appendChild(icon);
+                        }
+                    });
+                    var label = document.createElement('span');
+                    label.className = 'name';
+                    label.textContent = name;
+                    label.title = name;
+                    cell.appendChild(sizes);
+                    cell.appendChild(label);
+                    grid.appendChild(cell);
+                });
+            }
+            document.getElementById('toggle-theme').addEventListener('click', function () {
+                var html = document.documentElement;
+                var next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+                html.setAttribute('data-theme', next);
+                html.style.colorScheme = next;
+            });
+            document.getElementById('toggle-lite').addEventListener('click', function () {
+                var html = document.documentElement;
+                html.setAttribute('data-lite', html.getAttribute('data-lite') === 'true' ? 'false' : 'true');
+            });
+            document.getElementById('toggle-box').addEventListener('click', function () {
+                showBox = !showBox;
+                render();
+            });
+            render();
+        })();
+    </script>
+</body>
+</html>

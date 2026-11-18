@@ -127,10 +127,13 @@
     --nc-priority-urgent-soft: rgba(255, 122, 114, 0.18);
 
     /* ---------- 材质 / 效果（标准模式；Lite 会全部移除） ---------- */
-    --nc-glass: rgba(15, 20, 27, 0.72);
-    --nc-glass-bg: rgba(15, 20, 27, 0.72);
-    --nc-glass-blur: saturate(140%) blur(14px);
-    --nc-glass-highlight: rgba(255, 255, 255, 0.06);
+    --nc-glass: rgba(15, 20, 27, 0.66);
+    --nc-glass-bg: rgba(15, 20, 27, 0.66);
+    --nc-glass-blur: saturate(160%) blur(18px);
+    --nc-glass-panel: rgba(22, 29, 40, 0.9);
+    --nc-glass-panel-blur: saturate(150%) blur(22px);
+    --nc-scrim-blur: saturate(120%) blur(8px);
+    --nc-glass-highlight: rgba(255, 255, 255, 0.07);
     --nc-overlay: rgba(4, 6, 10, 0.62);
     --nc-ambient:
         repeating-linear-gradient(0deg, transparent 0 31px, rgba(255, 255, 255, 0.016) 31px 32px),
@@ -213,10 +216,13 @@ html[data-theme="light"] {
     --nc-priority-high-soft: rgba(138, 92, 18, 0.12);
     --nc-priority-urgent-soft: rgba(197, 59, 59, 0.12);
 
-    --nc-glass: rgba(255, 255, 255, 0.72);
-    --nc-glass-bg: rgba(255, 255, 255, 0.72);
-    --nc-glass-blur: saturate(150%) blur(14px);
-    --nc-glass-highlight: rgba(255, 255, 255, 0.8);
+    --nc-glass: rgba(255, 255, 255, 0.74);
+    --nc-glass-bg: rgba(255, 255, 255, 0.74);
+    --nc-glass-blur: saturate(170%) blur(18px);
+    --nc-glass-panel: rgba(255, 255, 255, 0.92);
+    --nc-glass-panel-blur: saturate(150%) blur(22px);
+    --nc-scrim-blur: saturate(110%) blur(8px);
+    --nc-glass-highlight: rgba(255, 255, 255, 0.85);
     --nc-overlay: rgba(15, 18, 24, 0.3);
     --nc-ambient:
         repeating-linear-gradient(0deg, transparent 0 31px, rgba(20, 24, 32, 0.022) 31px 32px),
@@ -247,6 +253,9 @@ html[data-theme="light"] {
  * 进入位移/缩放、以及非必要的动画时长；布局、字阶、颜色语义、即时反馈全部保留。
  * ------------------------------------------------------------------------- */
 html[data-lite="true"] {
+    /* 无模糊时加深遮罩，补偿“推后一层”的层次感（几何与色相不变） */
+    --nc-overlay: rgba(4, 6, 10, 0.72);
+
     --nc-dur-press: 0ms;
     --nc-dur-fast: 0ms;
     --nc-dur: 0ms;
@@ -258,6 +267,9 @@ html[data-lite="true"] {
     --nc-glass: var(--nc-surface);
     --nc-glass-bg: var(--nc-surface);
     --nc-glass-blur: none;
+    --nc-glass-panel: var(--nc-elevated);
+    --nc-glass-panel-blur: none;
+    --nc-scrim-blur: none;
     --nc-glass-highlight: transparent;
     --nc-ambient: none;
     --nc-grid: none;
@@ -315,6 +327,10 @@ html[data-lite="true"] .nc-skeleton {
     html[data-lite="true"] .nc-btn--primary:hover {
         filter: none;
     }
+}
+
+html[data-theme="light"][data-lite="true"] {
+    --nc-overlay: rgba(15, 18, 24, 0.42);
 }
 
 /* ---------- 系统级减少动效：保留可读的淡入，去掉位移 ---------- */

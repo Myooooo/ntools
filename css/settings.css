@@ -339,7 +339,7 @@
     min-height: 76px;
     font-family: var(--nc-font-sans);
     line-height: 1.6;
-    resize: vertical;
+    resize: none;
 }
 
 .sp-prompt--tall {
@@ -376,10 +376,9 @@
 }
 
 .sp-range__number {
-    width: 72px;
-    height: 32px;
+    width: 108px;
+    height: 30px;
     flex: 0 0 auto;
-    text-align: center;
 }
 
 .sp-editor-actions {
@@ -648,8 +647,8 @@
 
 .settings-sheet__backdrop {
     background: var(--nc-overlay);
-    backdrop-filter: var(--nc-glass-blur);
-    -webkit-backdrop-filter: var(--nc-glass-blur);
+    backdrop-filter: var(--nc-scrim-blur);
+    -webkit-backdrop-filter: var(--nc-scrim-blur);
 }
 
 .settings-sheet__panel {
@@ -950,7 +949,7 @@
 
 .sp-range__number {
     height: 30px;
-    width: 68px;
+    width: 108px;
     border-radius: var(--nc-radius-sm);
 }
 
@@ -1139,8 +1138,8 @@
 
 .settings-sheet__backdrop {
     background: var(--nc-overlay);
-    backdrop-filter: var(--nc-glass-blur);
-    -webkit-backdrop-filter: var(--nc-glass-blur);
+    backdrop-filter: var(--nc-scrim-blur);
+    -webkit-backdrop-filter: var(--nc-scrim-blur);
 }
 
 .settings-sheet__panel {
@@ -1465,5 +1464,71 @@
 @media (max-width: 900px) {
     .sp-nav-group {
         display: none;
+    }
+}
+
+/* v6.4：设置 → 数据：存储用量进度 */
+.sp-usage {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 0 6px;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-xs);
+    font-variant-numeric: tabular-nums;
+}
+
+.sp-usage__value {
+    flex: 0 0 auto;
+    color: var(--nc-text-3);
+}
+
+.sp-data-card .nc-progress {
+    margin-bottom: 4px;
+}
+
+/* v6.4：设置内的勾选项（与 .nc-check 同一视觉语言） */
+.sp-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+
+/* ==========================================================================
+ * v6.4.1 设置遮罩：背景与模糊一起渐入（原来 blur 瞬间出现，很突兀）
+ * 只过渡一次（偶发打开），Lite/reduced-motion 下即时。
+ * ========================================================================== */
+.settings-sheet__backdrop {
+    background: rgba(4, 6, 10, 0);
+    -webkit-backdrop-filter: saturate(100%) blur(0px);
+    backdrop-filter: saturate(100%) blur(0px);
+    transition:
+        background-color var(--nc-dur-panel) var(--nc-ease-out),
+        -webkit-backdrop-filter var(--nc-dur-panel) var(--nc-ease-out),
+        backdrop-filter var(--nc-dur-panel) var(--nc-ease-out);
+}
+
+.settings-sheet.is-open .settings-sheet__backdrop {
+    background: var(--nc-overlay);
+    -webkit-backdrop-filter: var(--nc-scrim-blur);
+    backdrop-filter: var(--nc-scrim-blur);
+}
+
+html[data-lite="true"] .settings-sheet__backdrop {
+    transition: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .settings-sheet__backdrop {
+        transition: none;
     }
 }

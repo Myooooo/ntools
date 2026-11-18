@@ -424,7 +424,10 @@
 
     function promptText(title, value, rows) {
         return new Promise(function (resolve) {
-            var textarea = util.e('textarea', { class: 'nc-textarea', rows: rows || 6 });
+            var textarea = util.e('textarea', {
+                class: 'nc-textarea nc-textarea--editor',
+                rows: rows || 10
+            });
             textarea.value = value;
             ui.openModal({
                 title: title,
@@ -448,7 +451,7 @@
         var message = list[index];
         var isUser = message.role === 'user';
         var original = isUser ? textOfUserMessage(message) : message.content;
-        promptText('编辑消息', original, isUser ? 5 : 8).then(function (value) {
+        promptText('编辑消息', original, isUser ? 8 : 12).then(function (value) {
             if (value == null || value === original) return;
             if (isUser && !value.trim()) {
                 ui.toast('消息内容不能为空', { type: 'warn' });

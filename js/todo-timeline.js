@@ -529,7 +529,7 @@
         body.appendChild(empty);
         root.appendChild(body);
 
-        var foot = node('div', 'tl-foot', '拖动刻度区框选时间范围 · 双击刻度区重置 · 点击任务查看详情');
+        var foot = node('div', 'tl-foot', '拖动刻度区框选时间范围　双击刻度区重置　点击任务查看详情');
         root.appendChild(foot);
 
         refs.root = root;
@@ -577,8 +577,8 @@
         if (refs.legend) {
             clear(refs.legend);
             var items = [
-                { cls: 'is-pinned', text: '置顶', icon: 'flag' },
-                { cls: 'is-recurring', text: '循环', icon: 'refresh' },
+                { cls: 'is-pinned', text: '置顶', icon: 'pin' },
+                { cls: 'is-recurring', text: '循环', icon: 'repeat' },
                 { cls: 'is-overdue', text: '逾期', icon: 'alert' },
                 { cls: 'is-down', text: '已完成（默认隐藏）', icon: 'check' }
             ];
@@ -878,12 +878,12 @@
         var flags = node('span', 'tl-bar__flags');
         if (task.pinned === true || task.pin === true) {
             var pin = node('span', 'tl-task__flag is-pin');
-            pin.appendChild(icon('flag', 12));
+            pin.appendChild(icon('pin', 14));
             flags.appendChild(pin);
         }
         if (task.recurrence) {
             var repeat = node('span', 'tl-task__flag is-repeat');
-            repeat.appendChild(icon('refresh', 12));
+            repeat.appendChild(icon('repeat', 14));
             flags.appendChild(repeat);
         }
         if (task.status === 'open' && task.due < now) {
@@ -969,8 +969,8 @@
 
                 row.appendChild(node('span', 'tl-agenda__time', formatTime(task.due)));
                 var flags = node('span', 'tl-agenda__flags');
-                if (task.pinned === true || task.pin === true) flags.appendChild(icon('flag', 12));
-                if (task.recurrence) flags.appendChild(icon('refresh', 12));
+                if (task.pinned === true || task.pin === true) flags.appendChild(icon('pin', 14));
+                if (task.recurrence) flags.appendChild(icon('repeat', 14));
                 if (task.priority === 'urgent' || task.priority === 'high') {
                     var dot = node('span', 'tl-agenda__prio');
                     dot.setAttribute('data-priority', task.priority);
@@ -981,7 +981,7 @@
                 var body = node('span', 'tl-agenda__body');
                 body.appendChild(node('span', 'tl-agenda__title', task.title));
                 var rangeText = formatDateShort(interval.start) + ' ' + formatTime(interval.start) + ' → ' +
-                    formatDateShort(interval.end) + ' ' + formatTime(interval.end) + ' · ' + formatDuration(interval.end - interval.start);
+                    formatDateShort(interval.end) + ' ' + formatTime(interval.end) + '　' + formatDuration(interval.end - interval.start);
                 body.appendChild(node('span', 'tl-agenda__range', rangeText));
                 row.appendChild(body);
 

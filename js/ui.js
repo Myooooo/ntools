@@ -1201,6 +1201,105 @@
     }
 
     /* ------------------------------------------------------------------ *
+     * 分段控制器：滑动指示器（v6.4）
+     * 通过 class 变化 + rAF 批量同步；Lite 下过渡被全局规则压到 0ms。
+     * ------------------------------------------------------------------ */
+    var segPending = [];
+    var segRaf = 0;
+    var segObserver = null;
+
+    function syncSeg(seg) {
+        if (!seg || !seg.classList || !seg.classList.contains('nc-seg')) return;
+        var btn = seg.querySelector('.nc-seg__btn.is-active');
+        var indicator = null;
+        var children = seg.children;
+        for (var i = 0; i < children.length; i += 1) {
+            if (children[i].classList && children[i].classList.contains('nc-seg__indicator')) {
+                indicator = children[i];
+                break;
+            }
+        }
+        if (!indicator) {
+            indicator = document.createElement('span');
+            indicator.className = 'nc-seg__indicator';
+            indicator.setAttribute('aria-hidden', 'true');
+            seg.insertBefore(indicator, seg.firstChild);
+        }
+        if (!btn) {
+            indicator.style.opacity = '0';
+            return;
+        }
+        indicator.style.opacity = '1';
+        indicator.style.width = btn.offsetWidth + 'px';
+        indicator.style.transform = 'translateX(' + btn.offsetLeft + 'px)';
+    }
+
+    function flushSegs() {
+        segRaf = 0;
+        var list = segPending;
+        segPending = [];
+        list.forEach(function (seg) {
+            try { syncSeg(seg); } catch (err) { /* 单个失败不阻断 */ }
+        });
+    }
+
+    function scheduleSeg(seg) {
+        if (!seg) return;
+        if (segPending.indexOf(seg) === -1) segPending.push(seg);
+        if (segRaf) return;
+        segRaf = (global.requestAnimationFrame || function (fn) { return setTimeout(fn, 16); })(flushSegs);
+    }
+
+    function enhanceSegs(root) {
+        var scope = root || document;
+        var segs = scope.querySelectorAll ? scope.querySelectorAll('.nc-seg') : [];
+        Array.prototype.forEach.call(segs, function (seg) { syncSeg(seg); });
+    }
+
+    function startSegObserver() {
+        if (segObserver || !global.MutationObserver || !document.body) return;
+        segObserver = new global.MutationObserver(function (mutations) {
+            for (var i = 0; i < mutations.length; i += 1) {
+                var target = mutations[i].target;
+                if (!target || !target.classList) continue;
+                if (target.classList.contains('nc-seg__btn') && target.parentNode) {
+                    scheduleSeg(target.parentNode);
+                } else if (target.classList.contains('nc-seg')) {
+                    scheduleSeg(target);
+                }
+            }
+        });
+        segObserver.observe(document.body, {
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class', 'hidden']
+        });
+    }
+
+    function initSegEnhancer() {
+        enhanceSegs(document);
+        startSegObserver();
+        document.addEventListener('click', function (event) {
+            var target = event.target;
+            if (!target || !target.closest) return;
+            var btn = target.closest('.nc-seg__btn');
+            if (!btn) return;
+            var seg = btn.parentNode;
+            /* 让业务代码先更新 is-active，再同步 */
+            (global.requestAnimationFrame || function (fn) { return setTimeout(fn, 16); })(function () { syncSeg(seg); });
+        }, true);
+        global.addEventListener('resize', function () {
+            Array.prototype.forEach.call(document.querySelectorAll('.nc-seg'), syncSeg);
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initSegEnhancer, { once: true });
+    } else {
+        initSegEnhancer();
+    }
+
+    /* ------------------------------------------------------------------ *
      * 全局错误兜底
      * ------------------------------------------------------------------ */
     function installGlobalErrorHandlers() {
@@ -1243,6 +1342,8 @@
         openMenu: openMenu,
         enhanceSelect: enhanceSelect,
         enhanceSelects: enhanceSelects,
+        enhanceSegs: enhanceSegs,
+        syncSeg: syncSeg,
         closeSelect: closeActiveSelect,
         trapFocus: trapFocus,
         getFocusable: getFocusable,

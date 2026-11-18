@@ -1683,7 +1683,7 @@
         var pinBtn = node('button', 'nc-btn nc-btn--sm');
         attr(pinBtn, 'type', 'button');
         attr(pinBtn, 'data-act', 'detail-pin');
-        pinBtn.appendChild(icon('flag', 14));
+        pinBtn.appendChild(icon('pin', 14));
         pinBtn.appendChild(node('span', null, '置顶'));
         foot.appendChild(pinBtn);
         var deleteBtn = node('button', 'nc-btn nc-btn--sm nc-btn--danger');
@@ -1695,7 +1695,7 @@
         var restoreBtn = node('button', 'nc-btn nc-btn--sm nc-btn--primary');
         attr(restoreBtn, 'type', 'button');
         attr(restoreBtn, 'data-act', 'detail-restore');
-        restoreBtn.appendChild(icon('refresh', 14));
+        restoreBtn.appendChild(icon('rotate-ccw', 16));
         restoreBtn.appendChild(node('span', null, '恢复'));
         foot.appendChild(restoreBtn);
         var purgeBtn = node('button', 'nc-btn nc-btn--sm nc-btn--danger');
@@ -2048,7 +2048,10 @@
         }
         detailClosing = false;
         detailClosingId = null;
-        if (els.detail) els.detail.classList.remove('is-detail-closing');
+        if (els.detail) {
+            els.detail.classList.remove('is-detail-closing', 'is-detail-leaving');
+            els.detail.style.removeProperty('--nc-detail-leave-w');
+        }
     }
 
     /** 关闭详情：桌面内容先 140ms 退出动画再 clearSelection（列收起）；移动端等抽屉 220ms 滑出后再隐藏 scrim/清空。 */
@@ -2083,15 +2086,25 @@
                 if (after) after();
             }, 230);
         } else {
+            /* 桌面：先把面板转成覆盖层（视觉位置不变），立刻收起栅格列，
+               列表在面板下方展开、被面板遮住；面板再滑出淡出。
+               这样宽度变化发生在遮罩之下，避免“内容刚淡出、宽度突然一跳”。 */
+            var leaveWidth = els.detail.offsetWidth;
+            els.detail.style.setProperty('--nc-detail-leave-w', leaveWidth + 'px');
+            els.detail.classList.add('is-detail-leaving');
             els.detail.classList.add('is-detail-closing');
+            if (els.shell) els.shell.classList.add('is-detail-hidden');
             detailAnimTimer = global.setTimeout(function () {
                 detailAnimTimer = null;
-                if (els.detail) els.detail.classList.remove('is-detail-closing');
+                if (els.detail) {
+                    els.detail.classList.remove('is-detail-closing', 'is-detail-leaving');
+                    els.detail.style.removeProperty('--nc-detail-leave-w');
+                }
                 detailClosing = false;
                 detailClosingId = null;
                 store.clearSelection();
                 if (after) after();
-            }, 150);
+            }, 170);
         }
     }
 
@@ -2418,7 +2431,7 @@
             { type: 'divider' },
             { label: '导出 JSON', icon: 'download', onSelect: function () { actions.exportJson && actions.exportJson(); } },
             { label: '导入 JSON', icon: 'upload', onSelect: function () { actions.importJson && actions.importJson(); } },
-            { label: '恢复上次备份', icon: 'refresh', disabled: !store.hasBackup(), onSelect: function () { actions.restoreBackup && actions.restoreBackup(); } },
+            { label: '恢复上次备份', icon: 'rotate-ccw', disabled: !store.hasBackup(), onSelect: function () { actions.restoreBackup && actions.restoreBackup(); } },
             { type: 'divider' },
             { label: doc.settings.showCompleted ? '隐藏已完成' : '显示已完成', icon: 'eye', onSelect: function () { store.toggleShowCompleted(); } },
             { label: '清空回收站', icon: 'trash', disabled: !store.counts(true).trash, onSelect: function () { actions.clearTrash && actions.clearTrash(); } },

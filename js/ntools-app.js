@@ -101,7 +101,7 @@
         Array.prototype.forEach.call((root || document).querySelectorAll('[data-icon]'), function (el) {
             var name = el.getAttribute('data-icon');
             if (!name) return;
-            var size = parseInt(el.getAttribute('data-icon-size'), 10) || 18;
+            var size = parseInt(el.getAttribute('data-icon-size'), 10) || 16;
             try {
                 var svg = icons.el(name, size);
                 if (svg) {
