@@ -199,6 +199,9 @@
         if (opts.stream !== false && opts.includeUsage) {
             payload.stream_options = { include_usage: true };
         }
+        /* 创意工坊等场景需要限制输出长度；部分网关不认识该字段，外层会按 400 重试 */
+        var maxTokens = Number(opts.maxTokens);
+        if (isFinite(maxTokens) && maxTokens > 0) payload.max_tokens = Math.round(maxTokens);
         // bocai：在标准 OpenAI body 上追加稳定会话键（参考实现用服务端 sessionId
         // 维持多轮身份）。openai 格式保持字段完全不变。
         if (isBocai(config)) {
@@ -801,7 +804,8 @@
                         config: config,
                         messages: opts.messages,
                         stream: true,
-                        includeUsage: includeUsage
+                        includeUsage: includeUsage,
+                        maxTokens: opts.maxTokens
                     })),
                     signal: controller ? controller.signal : undefined
                 });
@@ -998,7 +1002,8 @@
                 signal: signal,
                 onDelta: function (text) { call(opts.onDelta, text); },
                 onReasoning: function (text) { call(opts.onReasoning, text); },
-                onUsage: function (usage) { call(opts.onUsage, usage); }
+                onUsage: function (usage) { call(opts.onUsage, usage); },
+                maxTokens: opts.maxTokens
             };
             var includeUsage = true;
             var result = await streamOnce(runOpts, includeUsage);

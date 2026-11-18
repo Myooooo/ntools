@@ -27,6 +27,18 @@
         lastError: ''
     };
 
+    /* 草稿：未保存前只在内存里，点「保存」才落库 */
+    var draft = {
+        active: false,
+        title: '',
+        code: '',
+        turns: [],
+        streaming: false,
+        controller: null,
+        startedAt: 0,
+        timer: null
+    };
+
     function $(id) { return document.getElementById(id); }
     function icon(name, size) {
         if (NC.icons && NC.icons.el) return NC.icons.el(name, size || 15);
@@ -197,6 +209,7 @@
     }
 
     function renderActive() {
+        if (draft.active) return;
         var item = currentItem();
         if (els.title) els.title.textContent = item ? item.title : '创意工坊';
         if (els.kind) {
@@ -219,6 +232,11 @@
 
     function selectItem(id) {
         if (!id) return;
+        if (draft.streaming) stopGeneration();
+        draft.active = false;
+        showChat(false);
+        if (els.save) els.save.hidden = true;
+        if (els.pin) els.pin.disabled = false;
         state.activeId = id;
         writeActive(id);
         renderList();
@@ -234,6 +252,7 @@
     }
 
     function togglePin() {
+        if (draft.active) return;
         var item = currentItem();
         if (!item) return;
         store.togglePinned(item.id);
@@ -322,10 +341,292 @@
         });
     }
 
+    /* ------------------------------------------------------------------ *
+     * 生成草稿
+     * ------------------------------------------------------------------ */
+    function showChat(show) {
+        if (!els.chat) return;
+        if (show) els.chat.removeAttribute('hidden');
+        else els.chat.setAttribute('hidden', '');
+    }
+
+    function clearChatLog() {
+        if (els.chatLog) els.chatLog.textContent = '';
+    }
+
+    function appendChat(role, text, meta) {
+        if (!els.chatLog) return;
+        var item = document.createElement('div');
+        item.className = 'ws-msg ws-msg--' + role;
+        item.textContent = text;
+        if (meta) {
+            var span = document.createElement('span');
+            span.className = 'ws-msg__meta';
+            span.textContent = meta;
+            item.appendChild(span);
+        }
+        els.chatLog.appendChild(item);
+        els.chatLog.scrollTop = els.chatLog.scrollHeight;
+    }
+
+    function setChatHint(text) {
+        if (els.chatHint) els.chatHint.textContent = text;
+    }
+
+    function deriveTitle(prompt) {
+        var text = String(prompt || '').replace(/\s+/g, ' ').trim();
+        if (!text) return '未命名应用';
+        return text.length > 16 ? text.slice(0, 16) + '…' : text;
+    }
+
+    function enterDraft() {
+        if (draft.streaming) stopGeneration();
+        draft.active = true;
+        draft.title = '新应用';
+        draft.code = '';
+        draft.turns = [];
+        state.activeId = null;
+        writeActive('');
+        renderList();
+        showChat(true);
+        clearFrame();
+        setHidden(els.empty, false);
+        if (els.empty) {
+            var title = els.empty.querySelector('.ws-empty__title');
+            var hint = els.empty.querySelector('.ws-empty__hint');
+            if (title) title.textContent = '描述你想要的工具';
+            if (hint) hint.textContent = '在右侧写一句话，例如「做一个番茄钟，25 分钟专注、结束提示音」。';
+        }
+        if (els.title) els.title.textContent = '新应用';
+        if (els.kind) { els.kind.hidden = false; els.kind.textContent = '草稿'; }
+        if (els.pin) { els.pin.disabled = true; els.pin.setAttribute('aria-pressed', 'false'); }
+        if (els.save) els.save.hidden = true;
+        if (els.loading) els.loading.hidden = true;
+        if (els.prompt) {
+            els.prompt.value = '';
+            els.prompt.readOnly = false;
+            els.prompt.focus();
+        }
+        clearChatLog();
+        setChatHint('Ctrl+Enter 生成');
+        if (els.generateBtn) { els.generateBtn.disabled = false; els.generateBtn.textContent = '生成'; }
+        appendChat('bot', '说说你想要的小工具：用来做什么、大概长什么样。我会直接生成一个可运行的单页应用。');
+    }
+
+    function setLoading(show, text) {
+        if (!els.loading) return;
+        if (show) {
+            els.loading.hidden = false;
+            if (text && els.loadingText) els.loadingText.textContent = text;
+        } else {
+            els.loading.hidden = true;
+        }
+    }
+
+    function elapsedText() {
+        var seconds = Math.max(0, Math.round((Date.now() - draft.startedAt) / 1000));
+        return seconds + 's';
+    }
+
+    function stopTimer() {
+        if (draft.timer) { global.clearInterval(draft.timer); draft.timer = null; }
+    }
+
+    function setStreaming(on) {
+        draft.streaming = on;
+        if (els.prompt) els.prompt.readOnly = on;
+        if (els.generateBtn) {
+            els.generateBtn.disabled = on;
+            els.generateBtn.textContent = on ? '生成中…' : '生成';
+        }
+        if (els.save) els.save.hidden = on || !draft.code;
+        setChatHint(on ? '正在生成，可随时停止' : 'Ctrl+Enter 生成');
+    }
+
+    function stopGeneration() {
+        if (draft.controller) {
+            try { draft.controller.abort(); } catch (err) { /* ignore */ }
+        }
+    }
+
+    function finishWithError(message) {
+        stopTimer();
+        setStreaming(false);
+        setLoading(false);
+        var text = String(message || '生成失败');
+        appendChat('error', text);
+        toast(text, 'error');
+    }
+
+    function finishWithCode(raw, seconds, prompt) {
+        stopTimer();
+        setStreaming(false);
+        setLoading(false);
+        var parsed = schema.extractHtml(raw);
+        if (!parsed || !parsed.code) {
+            appendChat('error', '模型没有返回可用的 HTML，请换个说法再试一次。');
+            toast('模型没有返回可用的 HTML', 'error');
+            return;
+        }
+        if (parsed.code.length > schema.LIMITS.appBytes) {
+            appendChat('error', '生成的页面超过 ' + Math.round(schema.LIMITS.appBytes / 1024) + 'KB 上限，请缩小需求范围。');
+            toast('生成内容超过体积上限', 'error');
+            return;
+        }
+        draft.code = parsed.code;
+        draft.title = deriveTitle(prompt || draft.title);
+        /* 标题优先用页面 <title> */
+        var titleMatch = /<title[^>]*>([^<]{1,40})<\/title>/i.exec(parsed.code);
+        if (titleMatch && titleMatch[1].trim()) draft.title = titleMatch[1].trim();
+        if (els.title) els.title.textContent = draft.title;
+        if (els.save) els.save.hidden = false;
+        renderDraft();
+        appendChat('bot', '已生成「' + draft.title + '」，可以直接在左侧使用；想改哪里，继续告诉我。', '耗时 ' + seconds + 's');
+        toast('已生成「' + draft.title + '」，可继续调整或保存', 'success');
+    }
+
+    function renderDraft() {
+        if (!draft.code || !els.frame) return;
+        els.frame.removeAttribute('src');
+        els.frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
+        els.frame.srcdoc = schema.wrapHtml(draft.code, {
+            theme: currentTheme(),
+            allowNetwork: true,
+            title: draft.title
+        });
+        setHidden(els.frame, false);
+        setHidden(els.empty, true);
+    }
+
+    function buildMessages(prompt) {
+        var messages = [{
+            role: 'system',
+            content: schema.buildSystemPrompt({ allowNetwork: true })
+        }];
+        draft.turns.forEach(function (turn) {
+            messages.push({ role: turn.role, content: turn.content });
+        });
+        messages.push({ role: 'user', content: prompt });
+        return messages;
+    }
+
+    function generate() {
+        if (draft.streaming) return;
+        if (!draft.active) enterDraft();
+        var prompt = els.prompt ? String(els.prompt.value || '').trim() : '';
+        if (!prompt) {
+            toast('先写一句你想要什么', 'warn');
+            if (els.prompt) els.prompt.focus();
+            return;
+        }
+        if (!NC.api || typeof NC.api.chat !== 'function') {
+            finishWithError('对话 API 未加载，请刷新页面后重试');
+            return;
+        }
+        var params = store.getParams();
+        var config = null;
+        try {
+            config = NC.store.llm && NC.store.llm.getChatConfig
+                ? NC.store.llm.getChatConfig(params.endpointId || undefined)
+                : null;
+        } catch (err) { config = null; }
+        if (!config || !config.apiUrl || !config.modelId) {
+            finishWithError('还没有可用的模型端点：请到「设置 → AI 端点」配置 Base URL 与 Model ID');
+            return;
+        }
+        var runtime = Object.assign({}, config, {
+            temperature: params.temperature,
+            top_p: params.topP,
+            enableAdvanced: true
+        });
+
+        appendChat('user', prompt);
+        if (els.prompt) els.prompt.value = '';
+        draft.startedAt = Date.now();
+        setStreaming(true);
+        setLoading(true, '正在理解需求… · 0s');
+        var buffer = '';
+        var lastText = '';
+        draft.timer = global.setInterval(function () {
+            var seconds = elapsedText();
+            var size = buffer.length ? ' · ' + (buffer.length / 1024).toFixed(1) + 'KB' : '';
+            var text = (buffer.length ? '正在编写页面…' : '正在理解需求…') + ' · ' + seconds + size;
+            if (text !== lastText && els.loadingText) { els.loadingText.textContent = text; lastText = text; }
+        }, 500);
+
+        draft.controller = global.AbortController ? new global.AbortController() : null;
+        var messages = buildMessages(prompt);
+        draft.turns.push({ role: 'user', content: prompt });
+        NC.api.chat({
+            config: runtime,
+            messages: messages,
+            maxTokens: params.outputLimit,
+            signal: draft.controller ? draft.controller.signal : undefined,
+            onDelta: function (text) { buffer += text; },
+            onDone: function (result) {
+                draft.controller = null;
+                var seconds = Math.max(1, Math.round((Date.now() - draft.startedAt) / 1000));
+                if (result && result.aborted) {
+                    stopTimer();
+                    setStreaming(false);
+                    setLoading(false);
+                    if (buffer.trim()) {
+                        var partial = schema.extractHtml(buffer);
+                        if (partial && partial.code) {
+                            draft.code = partial.code;
+                            renderDraft();
+                            if (els.save) els.save.hidden = false;
+                            appendChat('bot', '已停止，保留了已生成的部分，可以继续调整。', '耗时 ' + seconds + 's');
+                            toast('已停止，保留已生成的部分', 'info');
+                            return;
+                        }
+                    }
+                    appendChat('error', '已停止生成。');
+                    toast('已停止生成', 'info');
+                    return;
+                }
+                finishWithCode(buffer, seconds, prompt);
+            },
+            onError: function (error) {
+                draft.controller = null;
+                var message = error && error.message ? error.message : '生成失败，请检查网络或端点配置';
+                if (error && error.type === 'abort') message = '已停止生成';
+                finishWithError(message);
+            }
+        });
+    }
+
+    function saveDraft() {
+        if (!draft.code) { toast('还没有生成内容', 'warn'); return; }
+        var created = store.createApp({ title: draft.title || '未命名应用', code: draft.code });
+        if (!created || !created.ok) {
+            toast(created && created.message ? created.message : '保存失败', 'error');
+            return;
+        }
+        var appId = created.app.id;
+        draft.active = false;
+        showChat(false);
+        selectItem(appId);
+        toast('已保存到创意工坊', 'success');
+    }
+
     function bind() {
-        if (els.newBtn) {
-            els.newBtn.addEventListener('click', function () {
-                toast('自然语言生成将在下一阶段接入', 'info');
+        if (els.newBtn) els.newBtn.addEventListener('click', enterDraft);
+        if (els.generateBtn) els.generateBtn.addEventListener('click', generate);
+        if (els.stopBtn) els.stopBtn.addEventListener('click', function () { stopGeneration(); });
+        if (els.save) els.save.addEventListener('click', saveDraft);
+        if (els.chatClose) {
+            els.chatClose.addEventListener('click', function () {
+                if (draft.streaming) stopGeneration();
+                showChat(false);
+            });
+        }
+        if (els.prompt) {
+            els.prompt.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                    event.preventDefault();
+                    generate();
+                }
             });
         }
         if (els.filter) {
@@ -381,7 +682,11 @@
             sideOpen: $('ws-side-open'), sideClose: $('ws-side-close'),
             title: $('ws-title'), kind: $('ws-kind'),
             reloadBtn: $('ws-reload-btn'), pin: $('ws-pin-btn'), focusBtn: $('ws-focus-btn'),
-            frame: $('ws-frame'), empty: $('ws-empty'), moduleNote: $('ws-module-note')
+            frame: $('ws-frame'), empty: $('ws-empty'), moduleNote: $('ws-module-note'),
+            save: $('ws-save-btn'), loading: $('ws-loading'), loadingText: $('ws-loading-text'),
+            stopBtn: $('ws-stop-btn'), chat: $('ws-chat'), chatLog: $('ws-chat-log'),
+            prompt: $('ws-prompt'), generateBtn: $('ws-generate-btn'), chatHint: $('ws-chat-hint'),
+            chatClose: $('ws-chat-close')
         };
         store = NC.store && NC.store.workshop;
         schema = NC.schema && NC.schema.workshop;

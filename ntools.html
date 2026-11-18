@@ -118,7 +118,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" id="rail-version" title="版本">v6.8</span>
+            <span class="tools-rail__version" id="rail-version" title="版本">v6.9</span>
         </div>
     </aside>
 
@@ -679,6 +679,9 @@
                                 <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-reload-btn" aria-label="重新加载" title="重新加载">
                                     <span data-icon="refresh" data-icon-size="16"></span>
                                 </button>
+                                <button type="button" class="nc-btn nc-btn--sm nc-btn--primary" id="ws-save-btn" hidden>
+                                    <span data-icon="check" data-icon-size="15"></span><span>保存</span>
+                                </button>
                                 <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-pin-btn" aria-label="置顶" title="置顶" aria-pressed="false">
                                     <span data-icon="pin" data-icon-size="16"></span>
                                 </button>
@@ -689,6 +692,11 @@
                         </header>
                         <div class="ws-stage" id="ws-stage">
                             <iframe class="ws-frame" id="ws-frame" title="创意工坊预览" sandbox="allow-scripts allow-forms allow-modals allow-same-origin" referrerpolicy="no-referrer" hidden></iframe>
+                            <div class="ws-loading" id="ws-loading" hidden>
+                                <span class="ws-spinner" aria-hidden="true"></span>
+                                <span class="ws-loading__text" id="ws-loading-text">正在生成…</span>
+                                <button type="button" class="nc-btn nc-btn--sm" id="ws-stop-btn">停止</button>
+                            </div>
                             <div class="ws-empty" id="ws-empty">
                                 <span class="ws-empty__icon" data-icon="wand" data-icon-size="22" aria-hidden="true"></span>
                                 <p class="ws-empty__title">从左侧选一个工具开始</p>
@@ -696,6 +704,22 @@
                             </div>
                         </div>
                     </div>
+                    <aside class="ws-chat" id="ws-chat" aria-label="生成对话" hidden>
+                        <div class="ws-chat__head">
+                            <span>用一句话描述</span>
+                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-chat-close" aria-label="收起对话" title="收起对话">
+                                <span data-icon="x" data-icon-size="15"></span>
+                            </button>
+                        </div>
+                        <div class="ws-chat__log nc-scroll" id="ws-chat-log" role="log" aria-live="polite"></div>
+                        <div class="ws-chat__compose">
+                            <textarea id="ws-prompt" class="ws-prompt" rows="3" placeholder="例如：做一个番茄钟，25 分钟专注、5 分钟休息，结束提示音" spellcheck="false"></textarea>
+                            <div class="ws-chat__actions">
+                                <span class="ws-chat__hint" id="ws-chat-hint">Ctrl+Enter 生成</span>
+                                <button type="button" class="nc-btn nc-btn--primary nc-btn--sm" id="ws-generate-btn">生成</button>
+                            </div>
+                        </div>
+                    </aside>
                 </div>
                 <div class="tool-module-note" id="ws-module-note" hidden></div>
             </section>

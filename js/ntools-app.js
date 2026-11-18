@@ -398,6 +398,8 @@
 
     /* 创意工坊栈（约 90KB）同样按需加载 */
     var WORKSHOP_SCRIPTS = [
+        'js/sse.js',
+        'js/api.js',
         'js/schema-workshop.js',
         'js/workshop-builtin.js',
         'js/workshop-db.js',
