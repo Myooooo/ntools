@@ -49,6 +49,8 @@
 <script defer src="../js/theme.js"></script>
 <script defer src="../js/schema-todo.js"></script>
 <script defer src="../js/schema-chat.js"></script>
+<script defer src="../js/schema-workshop.js"></script>
+<script defer src="../js/workshop-builtin.js"></script>
 <script defer src="../js/schema-notes.js"></script>
 <script defer src="../js/notes-index.js"></script>
 <script defer src="../js/markdown-enhance.js"></script>
@@ -667,6 +669,113 @@
             eq(NC.notesIndex.tagList(idx).length, 0);
             eq(NC.notesIndex.backlinks(idx, 'no-such').length, 0);
             eq(typeof NC.notesIndex.brokenLinks(idx), 'object');
+        });
+
+        /* ---------------- schema.workshop（创意工坊契约） ---------------- */
+        t('workshop', 'parseCount：k / m / 小数 / 逗号 / 非法', function () {
+            var f = NC.schema.workshop.parseCount;
+            eq(f('256k'), 256000);
+            eq(f('25.6k'), 25600);
+            eq(f('1m'), 1000000);
+            eq(f('1.5M'), 1500000);
+            eq(f('256,000'), 256000);
+            eq(f('abc'), null);
+            eq(f(''), null);
+            eq(f('', { fallback: 7 }), 7);
+            eq(f('10', { min: 100 }), null);
+        });
+        t('workshop', 'formatCount 与默认参数', function () {
+            var s = NC.schema.workshop;
+            eq(s.formatCount(256000), '256k');
+            eq(s.formatCount(1000000), '1m');
+            eq(s.formatCount(500), '500');
+            var d = s.defaultParams();
+            eq(d.temperature, 1);
+            eq(d.topP, 0.95);
+            eq(d.reasoning, true);
+            eq(d.effort, 'high');
+            eq(d.contextLimit, 256000);
+            eq(d.outputLimit, 25600);
+        });
+        t('workshop', 'normalizeParams：越界收敛与单位解析', function () {
+            var p = NC.schema.workshop.normalizeParams({
+                temperature: 9, topP: -1, reasoning: false, effort: 'x',
+                contextLimit: '128k', outputLimit: '8k'
+            });
+            eq(p.temperature, 2);
+            eq(p.topP, 0);
+            eq(p.reasoning, false);
+            eq(p.effort, 'high');
+            eq(p.contextLimit, 128000);
+            eq(p.outputLimit, 8000);
+        });
+        t('workshop', 'extractHtml：围栏 / 说明文字 / 片段', function () {
+            var f = NC.schema.workshop.extractHtml;
+            var a = f('说明\n```html\n<!DOCTYPE html><html><body>hi</body></html>\n```\n尾巴');
+            eq(a.fenced, true);
+            assert(a.code.indexOf('<body>hi</body>') > -1, '围栏内容应完整');
+            var b = f('前言 <!DOCTYPE html><html><body>x</body></html> 后记');
+            assert(b.code.indexOf('<!DOCTYPE html>') === 0, '应从句首文档开始');
+            assert(b.code.indexOf('后记') === -1, '应截断到 </html>');
+            var c = f('<div class="a">片段</div>');
+            eq(c.fenced, false);
+            assert(c.code.indexOf('<div') === 0);
+            eq(f('没有任何标签'), null);
+            eq(f(''), null);
+        });
+        t('workshop', 'wrapHtml：CSP / 主题 / 高度桥', function () {
+            var w = NC.schema.workshop.wrapHtml('<div>hi</div>', { theme: 'dark' });
+            assert(w.indexOf("Content-Security-Policy") > -1, '应注入 CSP');
+            assert(w.indexOf('connect-src http: https:') > -1, '联网放开时 connect-src 为 http/https');
+            assert(w.indexOf('--ws-bg:#0b0e13') > -1, '深色主题变量');
+            assert(w.indexOf('nc-ws-height') > -1, '应注入高度回传');
+            var w2 = NC.schema.workshop.wrapHtml('<div>hi</div>', { theme: 'light', allowNetwork: false });
+            assert(w2.indexOf("connect-src 'none'") > -1, '禁网时 connect-src 为 none');
+            assert(w2.indexOf('--ws-bg:#f4f5f7') > -1, '浅色主题变量');
+        });
+        t('workshop', 'buildSystemPrompt：网络策略随开关变化', function () {
+            var on = NC.schema.workshop.buildSystemPrompt({ allowNetwork: true });
+            var off = NC.schema.workshop.buildSystemPrompt({ allowNetwork: false });
+            assert(on.indexOf('单页 HTML') > -1 || on.indexOf('单页') > -1);
+            assert(on.indexOf('http/https') > -1);
+            assert(off.indexOf('不得发起任何网络请求') > -1);
+        });
+        t('workshop', 'normalizeApp / normalizeVersion 形状', function () {
+            var s = NC.schema.workshop;
+            var app = s.normalizeApp({ title: '  测试  ', code: 'x' }, { now: 1000 });
+            eq(app.title, '测试');
+            eq(app.createdAt, 1000);
+            eq(app.pinned, false);
+            assert(app.id.length > 0);
+            var ver = s.normalizeVersion({ appId: app.id, code: 'c' });
+            eq(ver.appId, app.id);
+            eq(ver.code, 'c');
+            assert(ver.id.length > 0);
+        });
+        t('workshop', 'mergeList：置顶优先、自定义归入 custom、顺序可覆盖', function () {
+            var builtins = [
+                { id: 'b1', category: 'office', title: 'B1', order: 10 },
+                { id: 'b2', category: 'fun', title: 'B2', order: 20 }
+            ];
+            var apps = [{ id: 'a1', title: 'A1', code: '', updatedAt: 1 }];
+            var list = NC.schema.workshop.mergeList(builtins, apps, { order: { b2: 5 }, pinned: { a1: true } });
+            eq(list.length, 3);
+            eq(list[0].id, 'a1', '置顶排第一');
+            eq(list[0].category, 'custom');
+            eq(list[1].id, 'b2', 'b2 顺序被覆盖为 5');
+            eq(list[2].id, 'b1');
+        });
+        t('workshop', '内置工具注册表：8 个、两类', function () {
+            var items = NC.workshopBuiltin.ITEMS;
+            eq(items.length, 8);
+            var office = items.filter(function (i) { return i.category === 'office'; });
+            var fun = items.filter(function (i) { return i.category === 'fun'; });
+            eq(office.length, 4);
+            eq(fun.length, 4);
+            items.forEach(function (item) {
+                assert(item.file.indexOf('js/workshop/builtin/') === 0, item.id + ' 路径');
+                assert(!!NC.workshopBuiltin.byId(item.id), item.id + ' 可按 id 查');
+            });
         });
 
         /* ---------------- storage ---------------- */
