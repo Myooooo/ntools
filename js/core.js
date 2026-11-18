@@ -7,7 +7,7 @@
     'use strict';
 
     var NC = global.NC = global.NC || {};
-    NC.version = '6.4.2';
+    NC.version = '6.4.4';
     NC.env = {
         page: 'unknown',
         chrome: 0,
@@ -413,7 +413,8 @@
         var current = now || Date.now();
         var diff = dayDiff(current, ts);
         var time = formatTime(ts);
-        var dateLabel = formatDate(ts, new Date(ts).getFullYear() !== new Date(current).getFullYear());
+        var sameYear = new Date(ts).getFullYear() === new Date(current).getFullYear();
+        var dateLabel = formatDate(ts, !sameYear);
         if (ts < current) {
             var overdueDays = dayDiff(ts, current);
             var overdueLabel = overdueDays <= 0 ? '已逾期' : '逾期 ' + overdueDays + ' 天';
@@ -421,7 +422,11 @@
         }
         if (diff === 0) return { tone: 'today', label: '今天 ' + time, dateLabel: dateLabel, timeLabel: time };
         if (diff === 1) return { tone: 'tomorrow', label: '明天 ' + time, dateLabel: dateLabel, timeLabel: time };
-        if (diff <= 7) return { tone: 'soon', label: diff + ' 天后 ' + time, dateLabel: dateLabel, timeLabel: time };
+        if (diff <= 7) {
+            /* 跨年时不再用「周五」这类省略年份的写法，直接给出完整日期 */
+            if (!sameYear) return { tone: 'later', label: dateLabel + ' ' + time, dateLabel: dateLabel, timeLabel: time };
+            return { tone: 'soon', label: diff + ' 天后 ' + time, dateLabel: dateLabel, timeLabel: time };
+        }
         return { tone: 'later', label: dateLabel + ' ' + time, dateLabel: dateLabel, timeLabel: time };
     }
 

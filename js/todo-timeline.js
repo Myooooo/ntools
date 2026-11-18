@@ -184,16 +184,22 @@
         return pad2(date.getHours()) + ':' + pad2(date.getMinutes());
     }
 
-    function formatDateShort(ts) {
-        var date = new Date(ts);
-        return (date.getMonth() + 1) + '月' + date.getDate() + '日';
+    function isOtherYear(ts, now) {
+        return new Date(ts).getFullYear() !== new Date(now == null ? Date.now() : now).getFullYear();
     }
 
-    /** 紧凑日期：MM-DD（条内空间紧张，仍保留完整月日） */
-    function formatDateCompact(ts) {
+    function formatDateShort(ts, now) {
+        var date = new Date(ts);
+        var year = isOtherYear(ts, now) ? date.getFullYear() + '年' : '';
+        return year + (date.getMonth() + 1) + '月' + date.getDate() + '日';
+    }
+
+    /** 紧凑日期：MM-DD；跨年补全年份，避免「01-03」被误读成今年 */
+    function formatDateCompact(ts, now) {
         var date = new Date(ts);
         var pad = function (n) { return n < 10 ? '0' + n : String(n); };
-        return pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+        var year = isOtherYear(ts, now) ? date.getFullYear() + '-' : '';
+        return year + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
     }
 
     function formatDateTimeInput(ts) {
@@ -217,7 +223,8 @@
         var target = startOfDay(ts);
         var diff = Math.round((target - today) / DAY);
         var date = new Date(ts);
-        var label = (date.getMonth() + 1) + '月' + date.getDate() + '日';
+        var label = (isOtherYear(ts, now) ? date.getFullYear() + '年' : '') +
+            (date.getMonth() + 1) + '月' + date.getDate() + '日';
         if (diff === 0) return '今天 · ' + label;
         if (diff === 1) return '明天 · ' + label;
         if (diff === 2) return '后天 · ' + label;
@@ -695,7 +702,8 @@
             if (showLabel) {
                 var dayDate = new Date(dayStart);
                 var labelText = (labelStep > 1 && !isToday)
-                    ? (dayDate.getMonth() + 1) + '/' + dayDate.getDate()
+                    ? (isOtherYear(dayStart, now) ? dayDate.getFullYear() + '/' : '') +
+                        (dayDate.getMonth() + 1) + '/' + dayDate.getDate()
                     : dayTitle(dayStart, now);
                 head.appendChild(node('span', 'tl-daycell__title', labelText));
             }
@@ -896,9 +904,9 @@
 
         var meta = node('span', 'tl-bar__meta');
         /* 完整「创建 日期+时间 → 目标 日期+时间」，不再只给时分 */
-        meta.appendChild(node('span', 'tl-bar__start', formatDateCompact(interval.start) + ' ' + formatTime(interval.start)));
+        meta.appendChild(node('span', 'tl-bar__start', formatDateCompact(interval.start, now) + ' ' + formatTime(interval.start)));
         meta.appendChild(node('span', 'tl-bar__arrow', '→'));
-        meta.appendChild(node('span', 'tl-bar__due', formatDateCompact(task.due) + ' ' + formatTime(task.due)));
+        meta.appendChild(node('span', 'tl-bar__due', formatDateCompact(task.due, now) + ' ' + formatTime(task.due)));
         meta.appendChild(node('span', 'tl-bar__dur', formatDuration(interval.end - interval.start)));
         if (task.tags && task.tags.length) {
             var tagBox = node('span', 'tl-bar__tags');

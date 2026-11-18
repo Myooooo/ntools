@@ -386,7 +386,15 @@
         else if (tone === 'today') bucket = '今天';
         else if (tone === 'tomorrow') bucket = '明天';
         else if (tone === 'soon') bucket = WEEK_SHORT[new Date(task.due).getDay()];
-        else bucket = meta.dateLabel;
+        else {
+            /* 超过 7 天：时间槽宽度有限，用 1/3 或 2027/1/3（跨年补年份） */
+            var bucketDate = new Date(task.due);
+            var bucketNow = new Date(now == null ? Date.now() : now);
+            var bucketYear = bucketDate.getFullYear() === bucketNow.getFullYear()
+                ? ''
+                : bucketDate.getFullYear() + '/';
+            bucket = bucketYear + (bucketDate.getMonth() + 1) + '/' + bucketDate.getDate();
+        }
 
         if (!bucket || !clock) {
             dueEl.hidden = true;

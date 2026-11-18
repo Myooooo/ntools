@@ -822,6 +822,31 @@
         }
     }
 
+    /** 用 canvas 量最长选项的像素宽度：下拉至少能完整显示最长的端点/选项名 */
+    function measureOptionsWidth(state) {
+        var list = state && state.list;
+        if (!list) return 0;
+        var labels = list.querySelectorAll('.nc-select-pop__label');
+        if (!labels.length) return 0;
+        var sample = labels[0];
+        var style = global.getComputedStyle(sample);
+        var canvas = measureOptionsWidth._canvas;
+        if (!canvas) {
+            canvas = document.createElement('canvas');
+            measureOptionsWidth._canvas = canvas;
+        }
+        var ctx = canvas.getContext && canvas.getContext('2d');
+        if (!ctx) return 0;
+        ctx.font = [style.fontStyle, style.fontWeight, style.fontSize, style.fontFamily].join(' ');
+        var max = 0;
+        for (var i = 0; i < labels.length; i += 1) {
+            var w = ctx.measureText(labels[i].textContent || '').width;
+            if (w > max) max = w;
+        }
+        /* 39：左右 padding + check 图标 + gap；12：列表 padding 与滚动条余量 */
+        return Math.ceil(max) + 39 + 12;
+    }
+
     function positionSelectList(state) {
         if (!state || !state.list) return;
         var list = state.list;
@@ -832,7 +857,9 @@
             closeSelect(state, false);
             return;
         }
-        var width = Math.max(140, Math.min(rect.width, vw - 16));
+        var maxWidth = Math.max(160, Math.min(vw - 16, 640));
+        var desired = Math.max(rect.width, measureOptionsWidth(state));
+        var width = Math.max(140, Math.min(desired, maxWidth));
         list.style.width = width + 'px';
         list.style.maxHeight = Math.min(320, vh - 16) + 'px';
         var listHeight = list.offsetHeight;

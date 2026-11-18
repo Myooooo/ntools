@@ -2199,7 +2199,8 @@ html[data-lite="true"] .notes-ac {
     display: flex;
     flex-direction: column;
     gap: 3px;
-    padding: 0 0 0 84px;
+    /* 84 → 96：给跨年日期（2027/12/31）留出完整显示宽度 */
+    padding: 0 0 0 96px;
     text-align: left;
 }
 
