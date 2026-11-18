@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>倒数日 / 纪念日</title>
+<style>
+  :root{--bg:#0b0e13;--panel:#131922;--text:#edf1f7;--text2:#9aa7b8;--line:rgba(255,255,255,.1);
+    --accent:#6ea8fe;--warn:#e8b45a;--soft:rgba(110,168,254,.14);--hero:linear-gradient(135deg,#5b8cff,#8b5cf6)}
+  html[data-theme="light"]{--bg:#f4f5f7;--panel:#fff;--text:#15181d;--text2:#56616f;--line:rgba(0,0,0,.1);
+    --accent:#2a63c8;--warn:#8a5c12;--soft:rgba(47,111,219,.1);--hero:linear-gradient(135deg,#2a63c8,#7c5cf5)}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  body{padding:20px 22px 26px;max-width:760px;margin:0 auto}
+  .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:16px;font-weight:650}
+  .form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  input{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit;font-size:12.5px}
+  input:focus{outline:none;border-color:var(--accent)}
+  button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;padding:8px 14px;font:inherit;font-size:12.5px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
+  .list{display:flex;flex-direction:column;gap:10px}
+  .item{position:relative;display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;background:var(--panel);border:1px solid var(--line)}
+  .item.today{background:var(--hero);border-color:transparent;color:#fff}
+  .days{font-size:32px;font-weight:750;min-width:86px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .days small{font-size:12px;font-weight:500;margin-left:3px;opacity:.85}
+  .meta{flex:1;min-width:0}
+  .name{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .date{font-size:11.5px;color:var(--text2);margin-top:2px}
+  .item.today .date{color:rgba(255,255,255,.85)}
+  .del{border:0;background:transparent;color:var(--text2);cursor:pointer;font-size:15px;padding:2px 6px;border-radius:6px}
+  .del:hover{color:var(--text);background:var(--soft)}
+  .empty{padding:26px;text-align:center;color:var(--text2);font-size:12.5px}
+  .hint{margin-top:14px;font-size:11.5px;color:var(--text2);line-height:1.6}
+</style>
+</head>
+<body>
+  <div class="head"><div class="title">倒数日 / 纪念日</div><span style="font-size:11.5px;color:var(--text2)" id="today"></span></div>
+  <div class="form">
+    <input id="name" placeholder="事件名称，如：项目上线" maxlength="40" style="flex:1;min-width:160px">
+    <input id="date" type="date">
+    <button type="button" class="primary" id="add">添加</button>
+  </div>
+  <div class="list" id="list"></div>
+  <p class="hint">未来日期显示「还有」，过去日期显示「已过」；今天到期会高亮。数据仅保存在本机。</p>
+<script>
+(function(){
+  'use strict';
+  var params=new URLSearchParams(location.search);
+  if(params.get('theme')==='light')document.documentElement.setAttribute('data-theme','light');
+  function sendHeight(){try{parent.postMessage({type:'nc-ws-height',h:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)},'*');}catch(e){}}
+  try{new ResizeObserver(sendHeight).observe(document.documentElement);}catch(e){setInterval(sendHeight,900);}
+  var KEY='ws-countdown';
+  var list=[];
+  try{var raw=JSON.parse(localStorage.getItem(KEY)||'[]');if(Array.isArray(raw))list=raw;}catch(e){}
+  var els={name:document.getElementById('name'),date:document.getElementById('date'),add:document.getElementById('add'),
+    list:document.getElementById('list'),today:document.getElementById('today')};
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(list));}catch(e){}}
+  function startOfDay(d){var x=new Date(d);x.setHours(0,0,0,0);return x.getTime();}
+  function render(){
+    var now=new Date();
+    els.today.textContent='今天 '+now.getFullYear()+' 年 '+(now.getMonth()+1)+' 月 '+now.getDate()+' 日';
+    els.list.textContent='';
+    var sorted=list.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
+    if(!sorted.length){var e=document.createElement('div');e.className='empty';e.textContent='还没有倒数日，添加一个吧。';els.list.appendChild(e);sendHeight();return;}
+    sorted.forEach(function(item){
+      var target=new Date(item.date+'T00:00:00');
+      var diff=Math.round((startOfDay(target)-startOfDay(now))/86400000);
+      var card=document.createElement('div');
+      card.className='item'+(diff===0?' today':'');
+      var days=document.createElement('div');days.className='days';
+      var num=Math.abs(diff);
+      days.innerHTML=(diff===0?'<span style="font-size:22px">今天</span>':String(num)+'<small>'+ (diff>0?'天':'天前') +'</small>');
+      var meta=document.createElement('div');meta.className='meta';
+      var name=document.createElement('div');name.className='name';name.textContent=item.name;
+      var date=document.createElement('div');date.className='date';
+      date.textContent=target.getFullYear()+' 年 '+(target.getMonth()+1)+' 月 '+target.getDate()+' 日 · '+(diff>0?'还有 '+diff+' 天':(diff===0?'就是今天':'已过去 '+Math.abs(diff)+' 天'));
+      meta.appendChild(name);meta.appendChild(date);
+      var del=document.createElement('button');del.type='button';del.className='del';del.textContent='×';del.setAttribute('aria-label','删除 '+item.name);
+      del.addEventListener('click',function(){list=list.filter(function(x){return x.id!==item.id;});save();render();});
+      card.appendChild(days);card.appendChild(meta);card.appendChild(del);
+      els.list.appendChild(card);
+    });
+    sendHeight();
+  }
+  els.add.addEventListener('click',function(){
+    var name=els.name.value.trim();
+    var date=els.date.value;
+    if(!name||!date)return;
+    list.push({id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:name,date:date});
+    els.name.value='';
+    save();render();
+  });
+  els.name.addEventListener('keydown',function(e){if(e.key==='Enter')els.add.click();});
+  render();
+  setInterval(render,60000);
+})();
+</script>
+</body>
+</html>

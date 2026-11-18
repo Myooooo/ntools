@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JSON 格式化 / 校验</title>
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#131922; --text:#edf1f7; --text2:#9aa7b8; --line:rgba(255,255,255,.1);
+    --accent:#6ea8fe; --ok:#45d6a0; --bad:#ff7a72; --warn:#e8b45a; --soft:rgba(110,168,254,.14);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  html[data-theme="light"]{
+    --bg:#f4f5f7; --panel:#ffffff; --text:#15181d; --text2:#56616f; --line:rgba(0,0,0,.1);
+    --accent:#2a63c8; --ok:#0e9a6a; --bad:#c53b3b; --warn:#8a5c12; --soft:rgba(47,111,219,.1);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  body{padding:18px 20px 22px;max-width:860px;margin:0 auto}
+  .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+  .title{font-size:16px;font-weight:650}
+  .status{font-size:12px;color:var(--text2)}
+  .status.ok{color:var(--ok)} .status.bad{color:var(--bad)}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;
+    padding:6px 12px;font-size:12.5px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
+  button.danger:hover{border-color:var(--bad);color:var(--bad)}
+  textarea{width:100%;min-height:360px;resize:vertical;background:var(--panel);color:var(--text);
+    border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-family:var(--mono);font-size:12.5px;
+    line-height:1.65;outline:none}
+  textarea:focus{border-color:var(--accent)}
+  .foot{display:flex;justify-content:space-between;gap:12px;margin-top:8px;font-size:11.5px;color:var(--text2);flex-wrap:wrap}
+  .errbox{margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(255,122,114,.1);
+    color:var(--bad);font-size:12px;font-family:var(--mono);display:none;white-space:pre-wrap}
+  .errbox.show{display:block}
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="title">JSON 格式化 / 校验</div>
+    <div class="status" id="status">等待输入</div>
+  </div>
+  <div class="bar">
+    <button type="button" class="primary" id="format">格式化（Ctrl+Enter）</button>
+    <button type="button" id="minify">压缩</button>
+    <button type="button" id="validate">校验</button>
+    <button type="button" id="copy">复制</button>
+    <button type="button" id="download">下载</button>
+    <button type="button" id="sample">示例</button>
+    <button type="button" class="danger" id="clear">清空</button>
+  </div>
+  <textarea id="input" spellcheck="false" placeholder='粘贴 JSON，例如 {"name":"nTools","ok":true}'></textarea>
+  <div class="errbox" id="errbox"></div>
+  <div class="foot">
+    <span id="size">0 字节</span>
+    <span id="info"></span>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  function sendHeight() {
+    try {
+      parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*');
+    } catch (err) { /* ignore */ }
+  }
+  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
+
+  var els = {
+    input: document.getElementById('input'), status: document.getElementById('status'),
+    errbox: document.getElementById('errbox'), size: document.getElementById('size'),
+    info: document.getElementById('info')
+  };
+
+  function setStatus(text, kind) {
+    els.status.textContent = text;
+    els.status.className = 'status' + (kind ? ' ' + kind : '');
+  }
+  function clearError() {
+    els.errbox.classList.remove('show');
+    els.errbox.textContent = '';
+  }
+  function showError(message) {
+    els.errbox.textContent = message;
+    els.errbox.classList.add('show');
+    sendHeight();
+  }
+  function byteSize(text) {
+    try { return new Blob([text]).size; } catch (err) { return text.length; }
+  }
+  function human(bytes) {
+    if (bytes < 1024) return bytes + ' 字节';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  }
+  function typeOf(value) {
+    if (Array.isArray(value)) return '数组（' + value.length + ' 项）';
+    if (value === null) return 'null';
+    return typeof value === 'object' ? '对象（' + Object.keys(value).length + ' 个键）' : typeof value;
+  }
+  function positionToLineCol(text, position) {
+    var upto = text.slice(0, Math.max(0, position));
+    var lines = upto.split('\n');
+    return { line: lines.length, column: (lines[lines.length - 1] || '').length + 1 };
+  }
+  function parse(text) {
+    try {
+      return { ok: true, value: JSON.parse(text) };
+    } catch (err) {
+      var message = String(err && err.message ? err.message : err);
+      var lineMatch = /line (\d+) column (\d+)/i.exec(message);
+      var posMatch = /position (\d+)/i.exec(message);
+      var where = '';
+      if (lineMatch) where = '第 ' + lineMatch[1] + ' 行，第 ' + lineMatch[2] + ' 列';
+      else if (posMatch) {
+        var at = positionToLineCol(text, Number(posMatch[1]));
+        where = '第 ' + at.line + ' 行，第 ' + at.column + ' 列';
+      }
+      return { ok: false, message: message, where: where };
+    }
+  }
+  function refreshMeta() {
+    var text = els.input.value;
+    els.size.textContent = human(byteSize(text));
+    sendHeight();
+  }
+  function formatJson() {
+    var text = els.input.value.trim();
+    if (!text) { setStatus('等待输入'); clearError(); return; }
+    var result = parse(text);
+    if (!result.ok) {
+      setStatus('JSON 无效', 'bad');
+      showError('解析失败：' + result.message + (result.where ? '\\n位置：' + result.where : ''));
+      return;
+    }
+    els.input.value = JSON.stringify(result.value, null, 2);
+    clearError();
+    setStatus('已格式化', 'ok');
+    els.info.textContent = '类型：' + typeOf(result.value);
+    refreshMeta();
+  }
+  function minifyJson() {
+    var text = els.input.value.trim();
+    if (!text) return;
+    var result = parse(text);
+    if (!result.ok) {
+      setStatus('JSON 无效', 'bad');
+      showError('解析失败：' + result.message + (result.where ? '\\n位置：' + result.where : ''));
+      return;
+    }
+    els.input.value = JSON.stringify(result.value);
+    clearError();
+    setStatus('已压缩', 'ok');
+    refreshMeta();
+  }
+  function validateJson() {
+    var text = els.input.value.trim();
+    if (!text) { setStatus('等待输入'); clearError(); return; }
+    var result = parse(text);
+    if (!result.ok) {
+      setStatus('JSON 无效', 'bad');
+      showError('解析失败：' + result.message + (result.where ? '\\n位置：' + result.where : ''));
+      return;
+    }
+    clearError();
+    setStatus('JSON 有效', 'ok');
+    els.info.textContent = '类型：' + typeOf(result.value);
+    refreshMeta();
+  }
+  function copyText(text) {
+    if (!text) return Promise.resolve(false);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; });
+    }
+    try {
+      var area = document.createElement('textarea');
+      area.value = text;
+      area.style.position = 'fixed';
+      area.style.left = '-9999px';
+      document.body.appendChild(area);
+      area.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(area);
+      return Promise.resolve(ok);
+    } catch (err) { return Promise.resolve(false); }
+  }
+
+  document.getElementById('format').addEventListener('click', formatJson);
+  document.getElementById('minify').addEventListener('click', minifyJson);
+  document.getElementById('validate').addEventListener('click', validateJson);
+  document.getElementById('copy').addEventListener('click', function () {
+    copyText(els.input.value).then(function (ok) {
+      setStatus(ok ? '已复制到剪贴板' : '复制失败，请手动选择', ok ? 'ok' : 'bad');
+    });
+  });
+  document.getElementById('download').addEventListener('click', function () {
+    try {
+      var blob = new Blob([els.input.value], { type: 'application/json;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = 'data-' + Date.now() + '.json';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      setStatus('已下载', 'ok');
+    } catch (err) { setStatus('下载失败', 'bad'); }
+  });
+  document.getElementById('clear').addEventListener('click', function () {
+    els.input.value = '';
+    clearError();
+    setStatus('等待输入');
+    els.info.textContent = '';
+    refreshMeta();
+  });
+  document.getElementById('sample').addEventListener('click', function () {
+    els.input.value = JSON.stringify({
+      name: 'nTools', version: '6.7.0', features: ['待办', '笔记', 'nChat'], ok: true, nested: { level: 2 }
+    }, null, 2);
+    validateJson();
+  });
+  els.input.addEventListener('input', function () {
+    clearError();
+    setStatus('编辑中');
+    refreshMeta();
+  });
+  els.input.addEventListener('keydown', function (event) {
+    if (event.ctrlKey && event.key === 'Enter') { event.preventDefault(); formatJson(); }
+  });
+  refreshMeta();
+})();
+</script>
+</body>
+</html>

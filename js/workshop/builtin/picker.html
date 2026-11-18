@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>随机点名 / 抽签</title>
+<style>
+  :root{--bg:#0b0e13;--panel:#131922;--text:#edf1f7;--text2:#9aa7b8;--line:rgba(255,255,255,.1);
+    --accent:#6ea8fe;--warn:#e8b45a;--ok:#45d6a0;--soft:rgba(110,168,254,.14)}
+  html[data-theme="light"]{--bg:#f4f5f7;--panel:#fff;--text:#15181d;--text2:#56616f;--line:rgba(0,0,0,.1);
+    --accent:#2a63c8;--warn:#8a5c12;--ok:#0e9a6a;--soft:rgba(47,111,219,.1)}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  body{padding:20px 22px 26px;max-width:760px;margin:0 auto}
+  .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+  .title{font-size:16px;font-weight:650}
+  .sub{font-size:11.5px;color:var(--text2);margin-top:3px}
+  .stage{position:relative;display:flex;align-items:center;justify-content:center;min-height:150px;
+    border-radius:16px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
+  .result{font-size:34px;font-weight:750;letter-spacing:-.02em;text-align:center;padding:16px;
+    transition:transform .12s ease,opacity .12s ease}
+  .result.rolling{opacity:.65}
+  .result small{display:block;font-size:12px;font-weight:500;color:var(--text2);margin-top:6px;letter-spacing:.08em}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+  button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;padding:8px 14px;font:inherit;font-size:12.5px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
+  button.ghost{background:transparent}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  textarea{width:100%;min-height:120px;background:var(--panel);border:1px solid var(--line);color:var(--text);
+    border-radius:10px;padding:10px 12px;font:inherit;font-size:12.5px;line-height:1.7;resize:vertical}
+  textarea:focus{outline:none;border-color:var(--accent)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .card h2{margin:0 0 8px;font-size:12px;color:var(--text2);letter-spacing:.08em;font-weight:600}
+  .hist{display:flex;flex-wrap:wrap;gap:6px;min-height:24px}
+  .tag{font-size:11.5px;padding:2px 8px;border-radius:99px;background:var(--soft);color:var(--accent)}
+  .hint{margin-top:12px;font-size:11.5px;color:var(--text2);line-height:1.6}
+  @media (max-width:560px){.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <div class="head">
+    <div><div class="title">随机点名 / 抽签</div><div class="sub" id="count">0 位候选</div></div>
+  </div>
+  <div class="stage"><div class="result" id="result">准备好了吗<small>点击「开始抽取」</small></div></div>
+  <div class="bar">
+    <button type="button" class="primary" id="draw">开始抽取</button>
+    <button type="button" id="again" disabled>再抽一次</button>
+    <button type="button" class="ghost" id="reset">重置已抽</button>
+    <button type="button" class="ghost" id="export">导出名单</button>
+    <button type="button" class="ghost" id="import">导入名单</button>
+  </div>
+  <textarea id="names" spellcheck="false" placeholder="每行一个候选，也可以在行内用逗号分隔&#10;例如：&#10;张三&#10;李四&#10;王五"></textarea>
+  <div class="two">
+    <div class="card"><h2>已抽中</h2><div class="hist" id="history"></div></div>
+    <div class="card"><h2>说明</h2><div style="font-size:12px;color:var(--text2);line-height:1.7">默认抽过的人不再重复；「重置已抽」清空记录；名单只在本地保存。</div></div>
+  </div>
+  <input type="file" id="file" accept=".txt,.csv,.json" hidden>
+  <p class="hint">支持导入 txt / csv（逗号或换行分隔）与 JSON 数组；导出为 txt。</p>
+<script>
+(function(){
+  'use strict';
+  var params=new URLSearchParams(location.search);
+  if(params.get('theme')==='light')document.documentElement.setAttribute('data-theme','light');
+  function sendHeight(){try{parent.postMessage({type:'nc-ws-height',h:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)},'*');}catch(e){}}
+  try{new ResizeObserver(sendHeight).observe(document.documentElement);}catch(e){setInterval(sendHeight,900);}
+  var KEY='ws-picker', current=null, history=[], timer=null;
+  var els={names:document.getElementById('names'),result:document.getElementById('result'),draw:document.getElementById('draw'),
+    again:document.getElementById('again'),reset:document.getElementById('reset'),exportBtn:document.getElementById('export'),
+    importBtn:document.getElementById('import'),file:document.getElementById('file'),history:document.getElementById('history'),
+    count:document.getElementById('count')};
+  function save(){try{localStorage.setItem(KEY,JSON.stringify({names:els.names.value,history:history}));}catch(e){}}
+  function load(){
+    try{var data=JSON.parse(localStorage.getItem(KEY)||'null');
+      if(data&&typeof data.names==='string')els.names.value=data.names;
+      if(data&&Array.isArray(data.history))history=data.history;
+    }catch(e){}
+  }
+  function parseNames(){
+    return els.names.value.split(/[\n,，;；、]+/).map(function(s){return s.trim();}).filter(Boolean);
+  }
+  function refresh(){
+    var names=parseNames();
+    els.count.textContent=names.length+' 位候选';
+    var left=names.filter(function(n){return history.indexOf(n)===-1;});
+    els.draw.disabled=left.length===0;
+    els.draw.textContent=left.length? '开始抽取' : '都抽过啦';
+    els.again.disabled=left.length===0;
+    els.history.textContent='';
+    history.forEach(function(n,i){
+      var tag=document.createElement('span');tag.className='tag';tag.textContent=(i+1)+'. '+n;els.history.appendChild(tag);
+    });
+    sendHeight();
+  }
+  function pickLeft(){
+    var names=parseNames();
+    var left=names.filter(function(n){return history.indexOf(n)===-1;});
+    return left;
+  }
+  function draw(){
+    var left=pickLeft();
+    if(!left.length){refresh();return;}
+    if(timer)clearInterval(timer);
+    els.result.classList.add('rolling');
+    var ticks=0;
+    timer=setInterval(function(){
+      var pool=parseNames();
+      if(!pool.length)return;
+      els.result.textContent=pool[Math.floor(Math.random()*pool.length)];
+      ticks+=1;
+      if(ticks>12){
+        clearInterval(timer);timer=null;
+        var winner=left[Math.floor(Math.random()*left.length)];
+        history.push(winner);
+        els.result.innerHTML='';
+        els.result.appendChild(document.createTextNode(winner));
+        var small=document.createElement('small');small.textContent='恭喜！';els.result.appendChild(small);
+        els.result.classList.remove('rolling');
+        save();refresh();
+      }
+    },70);
+  }
+  els.draw.addEventListener('click',draw);
+  els.again.addEventListener('click',draw);
+  els.reset.addEventListener('click',function(){history=[];save();refresh();els.result.textContent='准备好了吗';});
+  els.names.addEventListener('input',function(){save();refresh();});
+  els.exportBtn.addEventListener('click',function(){
+    try{
+      var blob=new Blob([parseNames().join('\n')],{type:'text/plain;charset=utf-8'});
+      var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='candidates.txt';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},800);
+    }catch(e){}
+  });
+  els.importBtn.addEventListener('click',function(){els.file.click();});
+  els.file.addEventListener('change',function(){
+    var file=els.file.files&&els.file.files[0];
+    els.file.value='';
+    if(!file)return;
+    var reader=new FileReader();
+    reader.onload=function(){
+      var text=String(reader.result||'');
+      var list=[];
+      try{var json=JSON.parse(text);if(Array.isArray(json))list=json.map(String);}catch(e){}
+      if(!list.length)list=text.split(/[\n,，;；、\t]+/);
+      list=list.map(function(s){return String(s).trim();}).filter(Boolean);
+      if(!list.length)return;
+      els.names.value=list.join('\n');
+      save();refresh();
+    };
+    reader.readAsText(file);
+  });
+  load();refresh();
+})();
+</script>
+</body>
+</html>

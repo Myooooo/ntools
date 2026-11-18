@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>单位换算</title>
+<style>
+  :root{--bg:#0b0e13;--panel:#131922;--text:#edf1f7;--text2:#9aa7b8;--line:rgba(255,255,255,.1);
+    --accent:#6ea8fe;--soft:rgba(110,168,254,.14)}
+  html[data-theme="light"]{--bg:#f4f5f7;--panel:#fff;--text:#15181d;--text2:#56616f;--line:rgba(0,0,0,.1);
+    --accent:#2a63c8;--soft:rgba(47,111,219,.1)}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  body{padding:20px 22px 26px;max-width:720px;margin:0 auto}
+  .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:16px;font-weight:650}
+  .cats{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;flex-wrap:wrap}
+  .cats button{border:0;background:transparent;color:var(--text2);padding:6px 11px;font:inherit;font-size:12.5px;cursor:pointer}
+  .cats button.on{background:var(--soft);color:var(--text)}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:end}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .field label{font-size:11.5px;color:var(--text2)}
+  input,select{background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:8px;
+    padding:9px 10px;font:inherit;font-size:13px;width:100%}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .swap{align-self:center;margin-bottom:2px;border:1px solid var(--line);background:var(--panel);color:var(--text2);
+    border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:15px}
+  .swap:hover{color:var(--text);border-color:var(--accent)}
+  .result{margin-top:14px;padding:14px 16px;border-radius:12px;background:var(--soft);display:flex;
+    align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .result b{font-size:26px;font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .result span{font-size:12px;color:var(--text2)}
+  .quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .chip{border:1px solid var(--line);background:transparent;color:var(--text2);border-radius:99px;
+    padding:3px 9px;font-size:11.5px;cursor:pointer}
+  .chip:hover{color:var(--text);border-color:var(--accent)}
+  .hint{margin-top:12px;font-size:11.5px;color:var(--text2);line-height:1.6}
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="title">单位换算</div>
+    <div class="cats" id="cats" role="group" aria-label="类别"></div>
+  </div>
+  <div class="panel">
+    <div class="row">
+      <div class="field"><label for="from">从</label><input id="from" type="number" inputmode="decimal" value="1" step="any">
+        <select id="fromUnit"></select></div>
+      <button type="button" class="swap" id="swap" title="交换">⇄</button>
+      <div class="field"><label for="to">到</label><input id="to" readonly>
+        <select id="toUnit"></select></div>
+    </div>
+    <div class="result"><b id="result">1</b><span id="formula"></span></div>
+    <div class="quick" id="quick"></div>
+    <p class="hint">长度 / 面积 / 重量 / 温度 / 存储。结果按十进制显示，过长会截断为 6 位有效数字。</p>
+  </div>
+<script>
+(function(){
+  'use strict';
+  var params=new URLSearchParams(location.search);
+  if(params.get('theme')==='light')document.documentElement.setAttribute('data-theme','light');
+  function sendHeight(){try{parent.postMessage({type:'nc-ws-height',h:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)},'*');}catch(e){}}
+  try{new ResizeObserver(sendHeight).observe(document.documentElement);}catch(e){setInterval(sendHeight,900);}
+
+  var DATA=[
+    {id:'length',label:'长度',base:'米',units:[
+      {k:'mm',n:'毫米',f:0.001},{k:'cm',n:'厘米',f:0.01},{k:'m',n:'米',f:1},
+      {k:'km',n:'千米',f:1000},{k:'in',n:'英寸',f:0.0254},{k:'ft',n:'英尺',f:0.3048},
+      {k:'mi',n:'英里',f:1609.344},{k:'nmi',n:'海里',f:1852}]},
+    {id:'area',label:'面积',base:'平方米',units:[
+      {k:'cm2',n:'平方厘米',f:0.0001},{k:'m2',n:'平方米',f:1},{k:'km2',n:'平方千米',f:1000000},
+      {k:'mu',n:'亩',f:666.6667},{k:'ha',n:'公顷',f:10000},{k:'ft2',n:'平方英尺',f:0.09290304}]},
+    {id:'weight',label:'重量',base:'千克',units:[
+      {k:'g',n:'克',f:0.001},{k:'kg',n:'千克',f:1},{k:'t',n:'吨',f:1000},
+      {k:'jin',n:'斤',f:0.5},{k:'lb',n:'磅',f:0.45359237},{k:'oz',n:'盎司',f:0.0283495}]},
+    {id:'temp',label:'温度',base:'摄氏度',units:[
+      {k:'c',n:'摄氏度',f:1},{k:'f',n:'华氏度',f:1},{k:'k',n:'开尔文',f:1}]},
+    {id:'storage',label:'存储',base:'字节',units:[
+      {k:'b',n:'字节',f:1},{k:'kb',n:'KB',f:1024},{k:'mb',n:'MB',f:1048576},
+      {k:'gb',n:'GB',f:1073741824},{k:'tb',n:'TB',f:1099511627776}]}
+  ];
+  var state={cat:'length',from:'m',to:'km'};
+  var els={cats:document.getElementById('cats'),from:document.getElementById('from'),to:document.getElementById('to'),
+    fromUnit:document.getElementById('fromUnit'),toUnit:document.getElementById('toUnit'),
+    result:document.getElementById('result'),formula:document.getElementById('formula'),quick:document.getElementById('quick')};
+
+  function cat(){for(var i=0;i<DATA.length;i++)if(DATA[i].id===state.cat)return DATA[i];return DATA[0];}
+  function unitOf(key){var list=cat().units;for(var i=0;i<list.length;i++)if(list[i].k===key)return list[i];return list[0];}
+  function convert(value){
+    var c=cat();
+    if(c.id==='temp'){
+      var cVal=state.from==='c'?value:(state.from==='f'?(value-32)*5/9:value-273.15);
+      if(state.to==='c')return cVal;
+      if(state.to==='f')return cVal*9/5+32;
+      return cVal+273.15;
+    }
+    var f=unitOf(state.from),t=unitOf(state.to);
+    return value*f.f/t.f;
+  }
+  function fmt(n){
+    if(!isFinite(n))return '—';
+    if(n===0)return '0';
+    var abs=Math.abs(n);
+    if(abs>=1e9||abs<1e-6)return n.toExponential(4);
+    var s=n.toPrecision(8).replace(/\.?0+$/,'');
+    return s;
+  }
+  function renderCats(){
+    els.cats.textContent='';
+    DATA.forEach(function(c){
+      var b=document.createElement('button');b.type='button';b.textContent=c.label;
+      if(c.id===state.cat)b.classList.add('on');
+      b.addEventListener('click',function(){
+        state.cat=c.id;state.from=c.units[0].k;state.to=(c.units[1]||c.units[0]).k;render();save();
+      });
+      els.cats.appendChild(b);
+    });
+  }
+  function fillUnits(){
+    var c=cat();
+    [els.fromUnit,els.toUnit].forEach(function(sel,index){
+      sel.textContent='';
+      c.units.forEach(function(u){
+        var o=document.createElement('option');o.value=u.k;o.textContent=u.n;sel.appendChild(o);
+      });
+      sel.value=index===0?state.from:state.to;
+    });
+  }
+  function renderQuick(){
+    els.quick.textContent='';
+    [0.5,1,2,5,10,100].forEach(function(v){
+      var b=document.createElement('button');b.type='button';b.className='chip';b.textContent=String(v);
+      b.addEventListener('click',function(){els.from.value=String(v);render();});
+      els.quick.appendChild(b);
+    });
+  }
+  function save(){try{localStorage.setItem('ws-unit',JSON.stringify(state));}catch(e){}}
+  function load(){try{var s=JSON.parse(localStorage.getItem('ws-unit')||'null');if(s&&s.cat&&s.from&&s.to)state=s;}catch(e){}}
+  function render(){
+    renderCats();fillUnits();
+    var value=Number(els.from.value);
+    if(!isFinite(value))value=0;
+    var out=convert(value);
+    els.to.value=fmt(out);
+    els.result.textContent=fmt(out)+' '+unitOf(state.to).n;
+    els.formula.textContent=fmt(value)+' '+unitOf(state.from).n+' = '+fmt(out)+' '+unitOf(state.to).n;
+    sendHeight();
+  }
+  els.from.addEventListener('input',function(){render();});
+  els.fromUnit.addEventListener('change',function(){state.from=els.fromUnit.value;render();save();});
+  els.toUnit.addEventListener('change',function(){state.to=els.toUnit.value;render();save();});
+  document.getElementById('swap').addEventListener('click',function(){
+    var a=state.from;state.from=state.to;state.to=a;
+    var v=els.to.value;els.from.value=v||els.from.value;render();save();
+  });
+  load();renderQuick();render();
+})();
+</script>
+</body>
+</html>

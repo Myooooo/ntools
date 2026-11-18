@@ -11,14 +11,15 @@
     var icons = NC.icons;
     var ui = NC.ui;
 
-    var TABS = ['todo', 'email', 'md', 'nchat', 'qr', 'image'];
+    var TABS = ['todo', 'email', 'md', 'nchat', 'workshop', 'qr', 'image'];
     var PAGE_TITLES = {
         todo: '待办事项',
         email: '邮箱维护',
         qr: '二维码生成',
         md: '笔记本',
-        image: '图片处理',
-        nchat: 'nChat'
+        nchat: 'nChat',
+        workshop: '创意工坊',
+        image: '图片处理'
     };
     var currentTab = 'todo';
     var bannerTimer = null;
@@ -247,6 +248,7 @@
         if (updateHash) setHash(target);
         if (target === 'nchat') initChat();
         if (target === 'md') initNotes();
+        if (target === 'workshop') initWorkshop();
         if (target === 'todo' && NC.view && NC.view.todo && NC.view.todo.render) {
             /* 回到待办时刷新时间标签，确保跨分钟准确 */
             NC.view.todo.refreshTimes();
@@ -393,6 +395,47 @@
     }
 
     NC.initNotes = initNotes;
+
+    /* 创意工坊栈（约 90KB）同样按需加载 */
+    var WORKSHOP_SCRIPTS = [
+        'js/schema-workshop.js',
+        'js/workshop-builtin.js',
+        'js/workshop-db.js',
+        'js/workshop-store.js',
+        'js/workshop-view.js'
+    ];
+    var workshopBundlePromise = null;
+    var workshopInited = false;
+
+    function loadWorkshopBundle() {
+        if (workshopBundlePromise) return workshopBundlePromise;
+        var util = NC.util;
+        if (!util || typeof util.loadScript !== 'function') return Promise.reject(new Error('loader unavailable'));
+        workshopBundlePromise = WORKSHOP_SCRIPTS.reduce(function (chain, src) {
+            return chain.then(function () { return util.loadScript(src); });
+        }, Promise.resolve());
+        return workshopBundlePromise;
+    }
+
+    function initWorkshop() {
+        if (workshopInited) return;
+        workshopInited = true;
+        loadWorkshopBundle().then(function () {
+            var v = NC.view && NC.view.workshop;
+            if (v && typeof v.init === 'function') v.init();
+        }).catch(function (err) {
+            workshopInited = false;
+            var note = document.getElementById('ws-module-note');
+            if (note) {
+                note.hidden = false;
+                note.textContent = '创意工坊模块加载失败（js/workshop-*.js）：' +
+                    (err && err.message ? err.message : err);
+            }
+        });
+    }
+
+    NC.initWorkshop = initWorkshop;
+    NC.loadWorkshopBundle = loadWorkshopBundle;
     NC.loadNotesBundle = loadNotesBundle;
 
     /* 供设置面板使用：导出/导入全量备份前，确保聊天栈已就绪 */

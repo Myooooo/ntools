@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球时间</title>
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#131922; --text:#edf1f7; --text2:#9aa7b8; --line:rgba(255,255,255,.1);
+    --accent:#6ea8fe; --warn:#e8b45a; --soft:rgba(110,168,254,.14);
+  }
+  html[data-theme="light"]{
+    --bg:#f4f5f7; --panel:#ffffff; --text:#15181d; --text2:#56616f; --line:rgba(0,0,0,.1);
+    --accent:#2a63c8; --warn:#8a5c12; --soft:rgba(47,111,219,.1);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
+  body{padding:20px 22px 26px;max-width:760px;margin:0 auto}
+  .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .title{font-size:16px;font-weight:650}
+  .sub{font-size:12px;color:var(--text2);margin-top:3px}
+  .add{display:flex;gap:8px;align-items:center}
+  select,input,button{font:inherit}
+  select{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 9px;font-size:12.5px;max-width:220px}
+  button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;
+    padding:7px 13px;font-size:12.5px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
+  button.icon{padding:6px 8px;line-height:1}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .card{position:relative;overflow:hidden;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:14px 16px 12px}
+  .card.night{background:linear-gradient(160deg,rgba(110,168,254,.12),transparent 60%)}
+  .card.day{background:linear-gradient(160deg,rgba(232,180,90,.14),transparent 60%)}
+  .card__top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .city{font-size:13px;font-weight:600}
+  .zone{font-size:11px;color:var(--text2)}
+  .time{margin-top:8px;font-size:34px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .date{margin-top:2px;font-size:12px;color:var(--text2)}
+  .meta{display:flex;justify-content:space-between;margin-top:10px;font-size:11.5px;color:var(--text2)}
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;border-radius:99px;
+    background:var(--soft);color:var(--accent)}
+  .remove{position:absolute;top:10px;right:10px;border:0;background:transparent;color:var(--text2);
+    cursor:pointer;font-size:15px;line-height:1;padding:2px 4px;border-radius:6px}
+  .remove:hover{color:var(--text);background:var(--soft)}
+  .hint{margin-top:14px;font-size:11.5px;color:var(--text2);line-height:1.6}
+  @media (max-width:560px){ .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div>
+      <div class="title">全球时间</div>
+      <div class="sub" id="local"></div>
+    </div>
+    <div class="add">
+      <select id="citySelect" aria-label="添加城市"></select>
+      <button type="button" class="primary" id="addBtn">添加</button>
+      <button type="button" id="resetBtn" title="恢复默认">重置</button>
+    </div>
+  </div>
+  <div class="grid" id="grid"></div>
+  <p class="hint">时间为实时更新，时区数据来自系统内置 IANA 数据。卡片底色代表当地白天 / 夜晚。</p>
+
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  function sendHeight() {
+    try {
+      parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*');
+    } catch (err) { /* ignore */ }
+  }
+  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
+
+  var KEY = 'ws-worldclock';
+  var CITIES = [
+    { id: 'Asia/Shanghai', name: '北京', short: '中国' },
+    { id: 'Asia/Hong_Kong', name: '香港', short: '中国' },
+    { id: 'Asia/Tokyo', name: '东京', short: '日本' },
+    { id: 'Asia/Seoul', name: '首尔', short: '韩国' },
+    { id: 'Asia/Singapore', name: '新加坡', short: '新加坡' },
+    { id: 'Asia/Dubai', name: '迪拜', short: '阿联酋' },
+    { id: 'Europe/Moscow', name: '莫斯科', short: '俄罗斯' },
+    { id: 'Europe/Berlin', name: '柏林', short: '德国' },
+    { id: 'Europe/Paris', name: '巴黎', short: '法国' },
+    { id: 'Europe/London', name: '伦敦', short: '英国' },
+    { id: 'America/New_York', name: '纽约', short: '美国' },
+    { id: 'America/Chicago', name: '芝加哥', short: '美国' },
+    { id: 'America/Los_Angeles', name: '洛杉矶', short: '美国' },
+    { id: 'America/Sao_Paulo', name: '圣保罗', short: '巴西' },
+    { id: 'Australia/Sydney', name: '悉尼', short: '澳大利亚' }
+  ];
+  var DEFAULTS = ['Asia/Shanghai', 'Asia/Tokyo', 'Europe/London', 'America/New_York'];
+  var selected = load();
+  var els = { grid: document.getElementById('grid'), local: document.getElementById('local'), select: document.getElementById('citySelect') };
+
+  function load() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (Array.isArray(raw) && raw.length) return raw.filter(function (id) { return !!byId(id); });
+    } catch (err) { /* ignore */ }
+    return DEFAULTS.slice();
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(selected)); } catch (err) { /* ignore */ }
+  }
+  function byId(id) {
+    for (var i = 0; i < CITIES.length; i += 1) if (CITIES[i].id === id) return CITIES[i];
+    return null;
+  }
+  function weekdayZh(date, zone) {
+    try {
+      return new Intl.DateTimeFormat('zh-CN', { timeZone: zone, weekday: 'long' }).format(date);
+    } catch (err) { return ''; }
+  }
+  function partsOf(date, zone) {
+    try {
+      var fmt = new Intl.DateTimeFormat('zh-CN', {
+        timeZone: zone, hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+      var out = {};
+      fmt.formatToParts(date).forEach(function (part) { out[part.type] = part.value; });
+      return out;
+    } catch (err) { return null; }
+  }
+  function offsetLabel(date, zone) {
+    try {
+      var fmt = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'shortOffset' });
+      var name = '';
+      fmt.formatToParts(date).forEach(function (p) { if (p.type === 'timeZoneName') name = p.value; });
+      return name.replace('GMT', 'UTC');
+    } catch (err) { return ''; }
+  }
+
+  function render() {
+    var now = new Date();
+    var local = partsOf(now, Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai');
+    els.local.textContent = local
+      ? '本地时间 ' + local.month + '/' + local.day + ' ' + local.hour + ':' + local.minute + ':' + local.second
+      : '本地时间';
+    els.grid.textContent = '';
+    selected.forEach(function (id) {
+      var city = byId(id);
+      if (!city) return;
+      var p = partsOf(now, city.id);
+      if (!p) return;
+      var hour = Number(p.hour) % 24;
+      var card = document.createElement('div');
+      card.className = 'card ' + (hour >= 6 && hour < 18 ? 'day' : 'night');
+      var top = document.createElement('div');
+      top.className = 'card__top';
+      var left = document.createElement('div');
+      var name = document.createElement('div'); name.className = 'city'; name.textContent = city.name;
+      var zone = document.createElement('div'); zone.className = 'zone'; zone.textContent = city.id + ' · ' + city.short;
+      left.appendChild(name); left.appendChild(zone);
+      var badge = document.createElement('span'); badge.className = 'badge';
+      badge.textContent = (hour >= 6 && hour < 18 ? '白天' : '夜晚');
+      top.appendChild(left); top.appendChild(badge);
+      card.appendChild(top);
+      var time = document.createElement('div'); time.className = 'time'; time.textContent = p.hour + ':' + p.minute + ':' + p.second;
+      card.appendChild(time);
+      var date = document.createElement('div'); date.className = 'date';
+      date.textContent = p.year + ' 年 ' + p.month + ' 月 ' + p.day + ' 日 · ' + weekdayZh(now, city.id);
+      card.appendChild(date);
+      var meta = document.createElement('div'); meta.className = 'meta';
+      var offText = offsetLabel(now, city.id);
+      var off = document.createElement('span'); off.textContent = offText;
+      var diff = document.createElement('span'); diff.textContent = '当地 ' + offText;
+      meta.appendChild(off); meta.appendChild(diff);
+      card.appendChild(meta);
+      var remove = document.createElement('button');
+      remove.type = 'button'; remove.className = 'remove'; remove.textContent = '×';
+      remove.setAttribute('aria-label', '移除 ' + city.name);
+      remove.addEventListener('click', function () {
+        selected = selected.filter(function (item) { return item !== id; });
+        save(); render(); sendHeight();
+      });
+      card.appendChild(remove);
+      els.grid.appendChild(card);
+    });
+    sendHeight();
+  }
+
+  CITIES.forEach(function (city) {
+    var option = document.createElement('option');
+    option.value = city.id;
+    option.textContent = city.name + '（' + city.short + '）';
+    els.select.appendChild(option);
+  });
+  document.getElementById('addBtn').addEventListener('click', function () {
+    var id = els.select.value;
+    if (!id || selected.indexOf(id) > -1) { els.select.focus(); return; }
+    selected.push(id);
+    save(); render();
+  });
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    selected = DEFAULTS.slice(); save(); render();
+  });
+  render();
+  setInterval(render, 1000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,333 @@
+/* ==========================================================================
+ * 创意工坊（#page-workshop）
+ * 左：工具列表（内置两组 + 自定义）  右：沙箱预览
+ * ========================================================================== */
+.tools-page--workshop {
+    position: relative;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+}
+
+.ws-shell {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--nc-surface);
+}
+
+/* ---------- 左：列表 ---------- */
+.ws-side {
+    display: flex;
+    flex: 0 0 260px;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    border-right: 1px solid var(--nc-border);
+    background: var(--nc-surface-2);
+}
+
+.ws-side__head {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 10px 8px;
+}
+
+.ws-side__head .nc-btn--primary {
+    flex: 1;
+    justify-content: center;
+}
+
+#ws-side-close {
+    display: none;
+}
+
+.ws-side__search {
+    position: relative;
+    flex: 0 0 auto;
+    padding: 0 10px 8px;
+}
+
+.ws-side__search-icon {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-60%);
+    color: var(--nc-text-3);
+    pointer-events: none;
+}
+
+.ws-list {
+    flex: 1;
+    min-height: 0;
+    padding: 0 6px 14px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.ws-group {
+    margin: 8px 0 2px;
+    padding: 0 6px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    font-weight: 600;
+    letter-spacing: var(--nc-track-meta);
+}
+
+.ws-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 48px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-text-2);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.ws-item:hover {
+    background: var(--nc-surface-hover);
+    color: var(--nc-text);
+}
+
+.ws-item.is-active {
+    background: var(--nc-accent-soft);
+    color: var(--nc-text);
+}
+
+.ws-item__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--nc-surface-3);
+    color: var(--nc-accent);
+}
+
+.ws-item__text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+    flex: 1;
+}
+
+.ws-item__title {
+    font-size: var(--nc-fs-md);
+    color: inherit;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ws-item__desc {
+    font-size: var(--nc-fs-2xs);
+    color: var(--nc-text-3);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ws-item__flags {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: 0 0 auto;
+    color: var(--nc-time);
+}
+
+.ws-item__more {
+    display: none;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--nc-text-3);
+    cursor: pointer;
+}
+
+.ws-item:hover .ws-item__more,
+.ws-item__more:focus-visible {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ws-item__more:hover {
+    background: var(--nc-surface-3);
+    color: var(--nc-text);
+}
+
+.ws-empty-list {
+    padding: 14px 10px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-xs);
+    text-align: center;
+    line-height: 1.7;
+}
+
+/* ---------- 右：预览 ---------- */
+.ws-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+}
+
+.ws-head {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+    height: 46px;
+    padding: 0 10px 0 14px;
+    border-bottom: 1px solid var(--nc-border-faint);
+}
+
+.ws-head__toggle {
+    display: none;
+}
+
+.ws-head__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+}
+
+.ws-name {
+    font-size: var(--nc-fs-lg);
+    font-weight: 600;
+    color: var(--nc-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ws-kind {
+    flex: 0 0 auto;
+    padding: 1px 7px;
+    border-radius: 99px;
+    background: var(--nc-surface-3);
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+}
+
+.ws-head__actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+#ws-pin-btn[aria-pressed="true"],
+#ws-focus-btn[aria-pressed="true"] {
+    color: var(--nc-accent);
+}
+
+.ws-stage {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--nc-bg-soft);
+}
+
+.ws-frame {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: var(--nc-bg);
+}
+
+.ws-frame[hidden] {
+    display: none;
+}
+
+.ws-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--nc-text-3);
+    text-align: center;
+    padding: 24px;
+}
+
+.ws-empty[hidden] {
+    display: none;
+}
+
+.ws-empty__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    margin-bottom: 4px;
+    border-radius: 14px;
+    background: var(--nc-surface-2);
+    color: var(--nc-accent);
+}
+
+.ws-empty__title {
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-md);
+}
+
+.ws-empty__hint {
+    font-size: var(--nc-fs-sm);
+    line-height: 1.7;
+}
+
+/* ---------- 专注模式 ---------- */
+.ws-shell.is-focus .ws-side {
+    display: none;
+}
+
+/* ---------- 窄屏：列表变抽屉 ---------- */
+@media (max-width: 1100px) {
+    .ws-side {
+        position: absolute;
+        z-index: 6;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: min(280px, 82%);
+        flex-basis: auto;
+        border-right-color: var(--nc-border-strong);
+        box-shadow: var(--nc-shadow-3);
+        transform: translateX(-102%);
+        transition: transform var(--nc-dur-panel) var(--nc-ease-drawer);
+    }
+
+    .ws-shell.is-side-open .ws-side {
+        transform: translateX(0);
+    }
+
+    #ws-side-close,
+    .ws-head__toggle {
+        display: inline-flex;
+    }
+}

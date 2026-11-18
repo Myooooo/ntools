@@ -59,6 +59,7 @@
             { id: 'email', title: '邮箱维护', desc: '邮箱数据用量与备份入口', icon: 'mail', group: 'modules' },
             { id: 'notes', title: '笔记本', desc: '笔记库状态、默认视图与导出', icon: 'notebook-text', group: 'modules' },
             { id: 'nchat', title: 'nChat', desc: '当前端点与聊天入口', icon: 'messages-square', group: 'modules' },
+            { id: 'workshop', title: '创意工坊', desc: '生成参数、内置工具与库用量', icon: 'wand', group: 'modules' },
             { id: 'qr', title: '二维码生成', desc: '默认生成尺寸', icon: 'qr-code', group: 'modules' },
             { id: 'image', title: '图片处理', desc: 'Base64 导出的 JPEG 质量', icon: 'image', group: 'modules' },
             { id: 'data', title: '数据', desc: '导入导出与本地数据清理', icon: 'download', group: 'system' },
@@ -75,7 +76,7 @@
 
     /* 模块分区：保留入口，并给出「实时状态 + 实用默认值 + 快捷跳转」，
      * 不再显示「暂无可配置项」这种消极占位。 */
-    var MODULE_TABS = ['notes', 'email', 'qr', 'image', 'nchat'];
+    var MODULE_TABS = ['notes', 'email', 'qr', 'image', 'nchat', 'workshop'];
 
     var PREF_KEYS = {
         qrSize: 'ntools.qr.size',
@@ -919,7 +920,7 @@
             todo: '待办事项', email: '邮箱维护', nchat: 'nChat', md: '笔记本', qr: '二维码生成', image: '图片处理'
         };
         var currentStart = typeof NC.getStartTab === 'function' ? NC.getStartTab() : 'todo';
-        ['todo', 'email', 'md', 'nchat', 'qr', 'image'].forEach(function (tab) {
+        ['todo', 'email', 'md', 'nchat', 'workshop', 'qr', 'image'].forEach(function (tab) {
             if (!tabTitles[tab]) return;
             var option = util.e('option', { value: tab, text: tabTitles[tab] });
             if (tab === currentStart) option.selected = true;

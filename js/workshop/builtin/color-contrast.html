@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>颜色与对比度</title>
+<style>
+  :root{--bg:#0b0e13;--panel:#131922;--text:#edf1f7;--text2:#9aa7b8;--line:rgba(255,255,255,.1);
+    --accent:#6ea8fe;--ok:#45d6a0;--bad:#ff7a72;--soft:rgba(110,168,254,.14)}
+  html[data-theme="light"]{--bg:#f4f5f7;--panel:#fff;--text:#15181d;--text2:#56616f;--line:rgba(0,0,0,.1);
+    --accent:#2a63c8;--ok:#0e9a6a;--bad:#c53b3b;--soft:rgba(47,111,219,.1)}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  body{padding:20px 22px 26px;max-width:760px;margin:0 auto}
+  .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .title{font-size:16px;font-weight:650}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:11.5px;color:var(--text2)}
+  .colorline{display:flex;gap:8px;align-items:center}
+  input[type="color"]{width:42px;height:38px;border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:3px;cursor:pointer}
+  input[type="text"]{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:9px 10px;font:inherit;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace;text-transform:uppercase}
+  input[type="text"]:focus{outline:none;border-color:var(--accent)}
+  .preview{margin-top:16px;border-radius:12px;padding:22px 20px;border:1px solid var(--line)}
+  .preview .big{font-size:26px;font-weight:700;letter-spacing:-.01em}
+  .preview .small{margin-top:8px;font-size:13px;line-height:1.7}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .stat .k{font-size:11.5px;color:var(--text2)}
+  .stat .v{margin-top:4px;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat .tag{display:inline-block;margin-top:6px;font-size:11px;padding:2px 8px;border-radius:99px}
+  .ok{background:rgba(69,214,160,.14);color:var(--ok)}
+  .bad{background:rgba(255,122,114,.14);color:var(--bad)}
+  .palette{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .swatch{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);cursor:pointer;position:relative}
+  .swatch:hover{transform:scale(1.06)}
+  .hint{margin-top:12px;font-size:11.5px;color:var(--text2);line-height:1.6}
+  .swap{margin-top:14px;border:1px solid var(--line);background:transparent;color:var(--text2);border-radius:8px;
+    padding:7px 14px;font:inherit;font-size:12.5px;cursor:pointer}
+  .swap:hover{color:var(--text);border-color:var(--accent)}
+  @media (max-width:560px){.row{grid-template-columns:1fr}.stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <div class="head">
+    <div class="title">颜色与对比度</div>
+    <button type="button" class="swap" id="swapBtn" style="margin:0">交换前景 / 背景</button>
+  </div>
+  <div class="panel">
+    <div class="row">
+      <div class="field"><label for="fgText">前景色（文字）</label>
+        <div class="colorline"><input type="color" id="fg" value="#edf1f7"><input type="text" id="fgText" value="#EDF1F7" maxlength="7"></div>
+      </div>
+      <div class="field"><label for="bgText">背景色</label>
+        <div class="colorline"><input type="color" id="bg" value="#0b0e13"><input type="text" id="bgText" value="#0B0E13" maxlength="7"></div>
+      </div>
+    </div>
+    <div class="preview" id="preview">
+      <div class="big">示例标题 Sample Text</div>
+      <div class="small">正文示例：在信创内网里做一块看板，配色要经得起长时间盯屏幕。The quick brown fox jumps over the lazy dog.</div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">对比度</div><div class="v" id="ratio">—</div><div class="tag" id="normalTag">—</div></div>
+      <div class="stat"><div class="k">大字号（≥18.66px）</div><div class="v" id="largeV">—</div><div class="tag" id="largeTag">—</div></div>
+      <div class="stat"><div class="k">建议文字色</div><div class="v" id="suggest" style="font-size:15px">—</div><div class="tag" id="suggestTag">—</div></div>
+    </div>
+    <div class="palette" id="palette" aria-label="常用色板"></div>
+    <p class="hint">WCAG：正文 AA ≥ 4.5:1，AAA ≥ 7:1；大字号 AA ≥ 3:1，AAA ≥ 4.5:1。点色块可把颜色套到前景，按住 Shift 点套到背景。</p>
+  </div>
+<script>
+(function(){
+  'use strict';
+  var params=new URLSearchParams(location.search);
+  if(params.get('theme')==='light')document.documentElement.setAttribute('data-theme','light');
+  function sendHeight(){try{parent.postMessage({type:'nc-ws-height',h:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)},'*');}catch(e){}}
+  try{new ResizeObserver(sendHeight).observe(document.documentElement);}catch(e){setInterval(sendHeight,900);}
+
+  var els={fg:document.getElementById('fg'),bg:document.getElementById('bg'),
+    fgText:document.getElementById('fgText'),bgText:document.getElementById('bgText'),
+    preview:document.getElementById('preview'),ratio:document.getElementById('ratio'),
+    normalTag:document.getElementById('normalTag'),largeV:document.getElementById('largeV'),
+    largeTag:document.getElementById('largeTag'),suggest:document.getElementById('suggest'),
+    suggestTag:document.getElementById('suggestTag'),palette:document.getElementById('palette')};
+  var PALETTE=['#0b0e13','#15181d','#2a63c8','#6ea8fe','#45d6a0','#e8b45a','#ff7a72','#a78bfa','#ffffff','#f4f5f7','#56616f','#131922'];
+
+  function hexToRgb(hex){
+    var m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex));
+    if(!m)return null;
+    return {r:parseInt(m[1],16),g:parseInt(m[2],16),b:parseInt(m[3],16)};
+  }
+  function luminance(rgb){
+    var a=[rgb.r,rgb.g,rgb.b].map(function(v){
+      v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);
+    });
+    return 0.2126*a[0]+0.7152*a[1]+0.0722*a[2];
+  }
+  function contrast(a,b){
+    var l1=luminance(a),l2=luminance(b);
+    var hi=Math.max(l1,l2),lo=Math.min(l1,l2);
+    return (hi+0.05)/(lo+0.05);
+  }
+  function tag(el,pass,text){el.textContent=text;el.className='tag '+(pass?'ok':'bad');}
+  function render(){
+    var fg=hexToRgb(els.fgText.value),bg=hexToRgb(els.bgText.value);
+    if(!fg||!bg)return;
+    els.preview.style.background=els.bgText.value;
+    els.preview.style.color=els.fgText.value;
+    var ratio=contrast(fg,bg);
+    els.ratio.textContent=ratio.toFixed(2)+':1';
+    tag(els.normalTag,ratio>=4.5,ratio>=7?'AAA':(ratio>=4.5?'AA':'不达标'));
+    els.largeV.textContent=ratio.toFixed(2)+':1';
+    tag(els.largeTag,ratio>=3,ratio>=4.5?'AAA':(ratio>=3?'AA':'不达标'));
+    var whiteRatio=contrast({r:255,g:255,b:255},bg);
+    var blackRatio=contrast({r:0,g:0,b:0},bg);
+    var useWhite=whiteRatio>=blackRatio;
+    els.suggest.textContent=useWhite?'#FFFFFF':'#000000';
+    tag(els.suggestTag,Math.max(whiteRatio,blackRatio)>=4.5,useWhite?whiteRatio.toFixed(1)+':1':blackRatio.toFixed(1)+':1');
+    sendHeight();
+  }
+  function sync(from,to){
+    var value=from.value;
+    if(from===els.fg||from===els.bg){to.value=value.toUpperCase();}
+    else if(/^#[0-9a-f]{6}$/i.test(value)){to.value=value.toUpperCase();from.value=value.toUpperCase();}
+    render();
+  }
+  els.fg.addEventListener('input',function(){sync(els.fg,els.fgText);});
+  els.bg.addEventListener('input',function(){sync(els.bg,els.bgText);});
+  els.fgText.addEventListener('input',function(){if(hexToRgb(els.fgText.value))sync(els.fgText,els.fg);});
+  els.bgText.addEventListener('input',function(){if(hexToRgb(els.bgText.value))sync(els.bgText,els.bg);});
+  document.getElementById('swapBtn').addEventListener('click',function(){
+    var a=els.fgText.value;els.fgText.value=els.bgText.value;els.bgText.value=a;
+    els.fg.value=els.fgText.value;els.bg.value=els.bgText.value;render();
+  });
+  PALETTE.forEach(function(color){
+    var sw=document.createElement('button');sw.type='button';sw.className='swatch';sw.style.background=color;
+    sw.title=color;sw.setAttribute('aria-label',color);
+    sw.addEventListener('click',function(event){
+      if(event.shiftKey){els.bgText.value=color;els.bg.value=color;sync(els.bgText,els.bg);}
+      else{els.fgText.value=color;els.fg.value=color;sync(els.fgText,els.fg);}
+    });
+    els.palette.appendChild(sw);
+  });
+  render();
+})();
+</script>
+</body>
+</html>
