@@ -512,6 +512,71 @@
         ui.toast(ok ? '已导出对话 Markdown' : '导出失败', { type: ok ? 'success' : 'error' });
     }
 
+    /** 把当前对话导出成一篇笔记（复用 exportMarkdown 的正文） */
+    function exportToNotes() {
+        var messages = conversation().messages;
+        if (!messages || !messages.length) {
+            ui.toast('当前没有可导出的对话', { type: 'warn' });
+            return;
+        }
+        var markdown = conversation().exportMarkdown();
+        var session = null;
+        try {
+            session = conversation().getActiveSession ? conversation().getActiveSession() : null;
+        } catch (err) { session = null; }
+        var stamp = new Date();
+        var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+        var when = stamp.getFullYear() + '-' + pad(stamp.getMonth() + 1) + '-' + pad(stamp.getDate()) +
+            ' ' + pad(stamp.getHours()) + ':' + pad(stamp.getMinutes());
+        var title = '对话 · ' + ((session && session.title) || when);
+
+        var proceed = function () {
+            var notes = NC.store && NC.store.notes;
+            if (!notes || typeof notes.createNote !== 'function' || !notes.isReady || !notes.isReady()) {
+                ui.toast('笔记本模块未就绪，请先打开一次「笔记本」后重试', { type: 'error', duration: 5000 });
+                return;
+            }
+            if (notes.isReadOnly && notes.isReadOnly()) {
+                ui.toast('笔记本当前为只读镜像，无法新建笔记', { type: 'warn' });
+                return;
+            }
+            var note = notes.createNote({ title: title });
+            if (!note) {
+                ui.toast('新建笔记失败（可能已达数量上限）', { type: 'error' });
+                return;
+            }
+            notes.updateNote(note.id, { content: markdown });
+            if (typeof notes.flush === 'function') notes.flush();
+            ui.toast('已存入笔记本「' + note.title + '」', {
+                type: 'success',
+                duration: 5200,
+                action: {
+                    label: '打开',
+                    onClick: function () {
+                        if (NC.switchTab) NC.switchTab('md', true);
+                        if (NC.view && NC.view.notes && typeof NC.view.notes.focusNote === 'function') {
+                            NC.view.notes.focusNote(note.id);
+                        }
+                    }
+                }
+            });
+        };
+
+        var ready = NC.store && NC.store.notes && NC.store.notes.isReady && NC.store.notes.isReady();
+        if (ready || typeof NC.loadNotesBundle !== 'function') { proceed(); return; }
+        ui.toast('正在准备笔记本…', { type: 'info', duration: 1400 });
+        NC.loadNotesBundle().then(function () {
+            if (NC.store.notes && typeof NC.store.notes.init === 'function') NC.store.notes.init();
+            var tries = 50;
+            (function wait() {
+                var ok = NC.store.notes && NC.store.notes.isReady && NC.store.notes.isReady();
+                if (ok || tries <= 0) { proceed(); return; }
+                tries -= 1;
+                setTimeout(wait, 120);
+            })();
+        }, function () { proceed(); });
+    }
+
     function backupConversation() {
         if (!conversation().messages.length) {
             ui.toast('当前没有可备份的对话', { type: 'warn' });
@@ -628,6 +693,7 @@
 
         var map = {
             'export-conversation-btn': exportMarkdown,
+            'export-note-btn': exportToNotes,
             'backup-conversation-btn': backupConversation,
             'restore-conversation-btn': function () {
                 var input = document.getElementById('restore-conversation-input');
