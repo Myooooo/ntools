@@ -11,7 +11,7 @@
     var icons = NC.icons;
     var ui = NC.ui;
 
-    var TABS = ['todo', 'email', 'nchat', 'md', 'qr', 'image'];
+    var TABS = ['todo', 'email', 'md', 'nchat', 'qr', 'image'];
     var PAGE_TITLES = {
         todo: '待办事项',
         email: '邮箱维护',
