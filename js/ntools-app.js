@@ -268,10 +268,27 @@
         } catch (err) { /* file:// 下 replaceState 失败时忽略 */ }
     }
 
+    /* 启动时默认页面：存 ntools.startTab，取值必须是 TABS 之一 */
+    var START_TAB_KEY = 'ntools.startTab';
+    function readStartTab() {
+        var value = '';
+        try { value = String(global.localStorage.getItem(START_TAB_KEY) || ''); } catch (err) { value = ''; }
+        return TABS.indexOf(value) > -1 ? value : 'todo';
+    }
+    function writeStartTab(tab) {
+        var next = TABS.indexOf(tab) > -1 ? tab : 'todo';
+        try { global.localStorage.setItem(START_TAB_KEY, next); return true; } catch (err) { return false; }
+    }
+    NC.getStartTab = readStartTab;
+    NC.setStartTab = writeStartTab;
+    NC.tabTitles = function () { return Object.assign({}, PAGE_TITLES); };
+
     function routeFromHash(firstLoad) {
-        var tab = normalizeTab(global.location.hash) || 'todo';
+        var fromHash = normalizeTab(global.location.hash);
+        var tab = fromHash || (firstLoad ? readStartTab() : 'todo') || 'todo';
+        /* 首次进入不再把 tab 写进地址栏：否则刷新会带着 #tab，把「启动时默认页面」永久覆盖掉。
+         * 用户主动点导航时仍然会写 hash（switchTab(tab, true)）。 */
         switchTab(tab, false);
-        if (firstLoad && !global.location.hash) setHash(tab);
     }
 
     function bindTabsShortcut() {

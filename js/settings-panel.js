@@ -911,6 +911,33 @@
         }));
         rows.appendChild(liteRow);
 
+        /* 启动时默认页面：选项即左侧导航的模块 */
+        var startRow = util.e('div', { class: 'sp-row' });
+        startRow.appendChild(util.e('span', { class: 'sp-row__label', text: '启动时默认页面' }));
+        var startSelect = util.e('select', { class: 'nc-select sp-select--start' });
+        var tabTitles = (typeof NC.tabTitles === 'function' ? NC.tabTitles() : null) || {
+            todo: '待办事项', email: '邮箱维护', nchat: 'nChat', md: '笔记本', qr: '二维码生成', image: '图片处理'
+        };
+        var currentStart = typeof NC.getStartTab === 'function' ? NC.getStartTab() : 'todo';
+        ['todo', 'email', 'nchat', 'md', 'qr', 'image'].forEach(function (tab) {
+            if (!tabTitles[tab]) return;
+            var option = util.e('option', { value: tab, text: tabTitles[tab] });
+            if (tab === currentStart) option.selected = true;
+            startSelect.appendChild(option);
+        });
+        startSelect.addEventListener('change', function () {
+            if (typeof NC.setStartTab !== 'function') return;
+            NC.setStartTab(startSelect.value);
+            var label = tabTitles[startSelect.value] || startSelect.value;
+            setStatus('启动页面已设为「' + label + '」');
+            toast('下次启动将打开「' + label + '」', 'success');
+        });
+        var startWrap = util.e('div', { class: 'sp-row__control' });
+        startWrap.appendChild(startSelect);
+        startWrap.appendChild(util.e('span', { class: 'sp-hint', text: '打开 ntools.html 且地址栏没有 #标签 时生效（默认待办事项）' }));
+        startRow.appendChild(startWrap);
+        rows.appendChild(startRow);
+
         var workEnd = util.e('input', { type: 'time', class: 'nc-input sp-time', value: store().getWorkEndTime() });
         workEnd.addEventListener('change', function () {
             if (store().setWorkEndTime(workEnd.value)) {
