@@ -18,6 +18,7 @@
     var store = null;
     var schema = null;
     var unsubscribe = null;
+    var drag = { id: null, category: null };
     var state = {
         initialized: false,
         activeId: null,
@@ -30,6 +31,7 @@
     /* 草稿：未保存前只在内存里，点「保存」才落库 */
     var draft = {
         active: false,
+        appId: null,
         title: '',
         code: '',
         turns: [],
@@ -77,6 +79,80 @@
         return all;
     }
 
+    function clearDropMarks() {
+        Array.prototype.forEach.call(els.list ? els.list.querySelectorAll('.ws-item') : [], function (row) {
+            row.classList.remove('is-drop-before', 'is-drop-after');
+        });
+    }
+
+    function bindDrag(row, item) {
+        row.draggable = true;
+        row.addEventListener('dragstart', function (event) {
+            drag.id = item.id;
+            drag.category = item.category;
+            row.classList.add('is-dragging');
+            try {
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', item.id);
+            } catch (err) { /* ignore */ }
+        });
+        row.addEventListener('dragend', function () {
+            row.classList.remove('is-dragging');
+            clearDropMarks();
+            drag.id = null;
+            drag.category = null;
+        });
+        row.addEventListener('dragover', function (event) {
+            if (!drag.id || drag.category !== item.category || drag.id === item.id) return;
+            event.preventDefault();
+            var rect = row.getBoundingClientRect();
+            var before = event.clientY < rect.top + rect.height / 2;
+            row.classList.toggle('is-drop-before', before);
+            row.classList.toggle('is-drop-after', !before);
+        });
+        row.addEventListener('dragleave', function () {
+            row.classList.remove('is-drop-before', 'is-drop-after');
+        });
+        row.addEventListener('drop', function (event) {
+            event.preventDefault();
+            var before = row.classList.contains('is-drop-before');
+            clearDropMarks();
+            if (!drag.id || drag.category !== item.category || drag.id === item.id) return;
+            reorderWithin(item.category, drag.id, item.id, before);
+            drag.id = null;
+            drag.category = null;
+        });
+    }
+
+    /** 同分类内拖拽排序；写入 order 后按「分类顺序 + 组内顺序」落库 */
+    function reorderWithin(category, fromId, toId, before) {
+        var all = store.list();
+        var groups = ['office', 'fun', 'custom'];
+        var ordered = [];
+        groups.forEach(function (cat) {
+            var list = all.filter(function (entry) { return (entry.category || 'custom') === cat; });
+            if (cat === category) {
+                var fromIndex = -1;
+                var toIndex = -1;
+                list.forEach(function (entry, index) {
+                    if (entry.id === fromId) fromIndex = index;
+                    if (entry.id === toId) toIndex = index;
+                });
+                if (fromIndex > -1 && toIndex > -1) {
+                    var moved = list.splice(fromIndex, 1)[0];
+                    toIndex = list.map(function (entry) { return entry.id; }).indexOf(toId);
+                    if (toIndex < 0) toIndex = list.length;
+                    list.splice(before ? toIndex : toIndex + 1, 0, moved);
+                }
+            }
+            list.forEach(function (entry) { ordered.push(entry.id); });
+        });
+        if (store.applyOrder(ordered)) {
+            renderList();
+            toast('顺序已更新', 'success');
+        }
+    }
+
     function itemRow(item) {
         var row = document.createElement('button');
         row.type = 'button';
@@ -119,6 +195,7 @@
         });
         row.appendChild(more);
 
+        bindDrag(row, item);
         row.addEventListener('click', function () { selectItem(item.id); });
         return row;
     }
@@ -240,7 +317,12 @@
         state.activeId = id;
         writeActive(id);
         renderList();
-        renderActive();
+        var item = currentItem();
+        if (item && item.kind === 'custom') {
+            enterEdit(id);
+        } else {
+            renderActive();
+        }
         if (state.sideOpen) toggleSide(false);
     }
 
@@ -282,16 +364,26 @@
         ];
         if (item.kind === 'custom') {
             items.push({
+                label: '编辑（对话调整）',
+                icon: 'edit',
+                onSelect: function () { selectItem(item.id); }
+            });
+            items.push({
                 label: '重命名',
                 icon: 'edit',
                 onSelect: function () {
-                    /* 阶段 4 换成行内输入；先用系统 prompt 兜底 */
-                    var next = global.prompt ? global.prompt('新的名称', item.title) : null;
-                    if (next && String(next).trim()) {
-                        store.renameApp(item.id, next);
-                        renderList();
-                        renderActive();
-                    }
+                    NC.ui.prompt({ title: '重命名应用', value: item.title, required: true, maxLength: 40, confirmText: '保存' })
+                        .then(function (next) {
+                            if (!next) return;
+                            if (store.renameApp(item.id, next)) {
+                                if (state.activeId === item.id) {
+                                    draft.title = store.getApp(item.id).title;
+                                    if (els.title) els.title.textContent = draft.title;
+                                }
+                                renderList();
+                                toast('已重命名', 'success');
+                            }
+                        });
                 }
             });
             items.push({
@@ -382,6 +474,7 @@
     function enterDraft() {
         if (draft.streaming) stopGeneration();
         draft.active = true;
+        draft.appId = null;
         draft.title = '新应用';
         draft.code = '';
         draft.turns = [];
@@ -401,6 +494,7 @@
         if (els.kind) { els.kind.hidden = false; els.kind.textContent = '草稿'; }
         if (els.pin) { els.pin.disabled = true; els.pin.setAttribute('aria-pressed', 'false'); }
         if (els.save) els.save.hidden = true;
+        if (els.versions) els.versions.hidden = true;
         if (els.loading) els.loading.hidden = true;
         if (els.prompt) {
             els.prompt.value = '';
@@ -411,6 +505,69 @@
         setChatHint('Ctrl+Enter 生成');
         if (els.generateBtn) { els.generateBtn.disabled = false; els.generateBtn.textContent = '生成'; }
         appendChat('bot', '说说你想要的小工具：用来做什么、大概长什么样。我会直接生成一个可运行的单页应用。');
+    }
+
+    /** 打开已保存的自定义应用：进入可对话调整的编辑态（改动自动落库） */
+    function enterEdit(appId) {
+        var app = store.getApp(appId);
+        if (!app) return false;
+        if (draft.streaming) stopGeneration();
+        draft.active = true;
+        draft.appId = appId;
+        draft.title = app.title;
+        draft.code = app.code || '';
+        draft.turns = store.listTurns(appId).map(function (turn) {
+            return { role: turn.role, content: turn.text };
+        });
+        state.activeId = appId;
+        writeActive(appId);
+        showChat(true);
+        clearChatLog();
+        draft.turns.forEach(function (turn) {
+            appendChat(turn.role === 'user' ? 'user' : 'bot', turn.content);
+        });
+        if (!draft.turns.length) {
+            appendChat('bot', '这是你保存的应用。想改哪里直接说，比如「把主色换成蓝色」「加一个导出按钮」。');
+        }
+        if (els.title) els.title.textContent = app.title;
+        if (els.kind) { els.kind.hidden = false; els.kind.textContent = '自定义'; }
+        if (els.pin) els.pin.disabled = false;
+        if (els.save) els.save.hidden = true;
+        if (els.versions) els.versions.hidden = store.listVersions(appId).length === 0;
+        if (els.prompt) { els.prompt.value = ''; els.prompt.readOnly = false; }
+        setChatHint('Ctrl+Enter 发送修改');
+        renderDraft();
+        renderList();
+        return true;
+    }
+
+    function openVersions(anchor) {
+        if (!draft.appId) return;
+        var versions = store.listVersions(draft.appId);
+        if (!versions.length) { toast('还没有历史版本', 'info'); return; }
+        var items = versions.map(function (version, index) {
+            var time = new Date(version.at);
+            var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+            return {
+                label: (index === 0 ? '当前 · ' : '') + pad(time.getMonth() + 1) + '-' + pad(time.getDate()) +
+                    ' ' + pad(time.getHours()) + ':' + pad(time.getMinutes()) + ' · ' + (version.label || '版本'),
+                icon: index === 0 ? 'check' : 'repeat',
+                onSelect: function () {
+                    if (index === 0) return;
+                    if (store.restoreVersion(draft.appId, version.id)) {
+                        var app = store.getApp(draft.appId);
+                        draft.code = app ? app.code : draft.code;
+                        renderDraft();
+                        toast('已恢复到该版本', 'success');
+                        if (els.versions) els.versions.hidden = false;
+                        renderList();
+                    } else {
+                        toast('恢复失败', 'error');
+                    }
+                }
+            };
+        });
+        NC.ui.openMenu(anchor, items);
     }
 
     function setLoading(show, text) {
@@ -474,10 +631,28 @@
             return;
         }
         draft.code = parsed.code;
-        draft.title = deriveTitle(prompt || draft.title);
+        if (!draft.appId) draft.title = deriveTitle(prompt || draft.title);
         /* 标题优先用页面 <title> */
         var titleMatch = /<title[^>]*>([^<]{1,40})<\/title>/i.exec(parsed.code);
         if (titleMatch && titleMatch[1].trim()) draft.title = titleMatch[1].trim();
+        if (draft.appId) {
+            var updated = store.updateCode(draft.appId, parsed.code, '对话调整');
+            if (!updated || !updated.ok) {
+                appendChat('error', '保存修改失败' + (updated && updated.reason === 'too-big' ? '：超过体积上限' : ''));
+                toast('保存修改失败', 'error');
+                return;
+            }
+            store.addTurn(draft.appId, 'user', prompt);
+            store.addTurn(draft.appId, 'assistant', '已更新页面');
+            if (els.title) els.title.textContent = draft.title;
+            if (els.versions) els.versions.hidden = false;
+            renderDraft();
+            renderList();
+            appendChat('bot', '已改好，看看预览；不满意继续说。', '耗时 ' + seconds + 's');
+            toast('已更新「' + draft.title + '」', 'success');
+            return;
+        }
+        draft.turns.push({ role: 'assistant', content: '已生成页面「' + draft.title + '」' });
         if (els.title) els.title.textContent = draft.title;
         if (els.save) els.save.hidden = false;
         renderDraft();
@@ -498,7 +673,7 @@
         setHidden(els.empty, true);
     }
 
-    function buildMessages(prompt) {
+    function buildMessages(prompt, code) {
         var messages = [{
             role: 'system',
             content: schema.buildSystemPrompt({ allowNetwork: true })
@@ -506,6 +681,12 @@
         draft.turns.forEach(function (turn) {
             messages.push({ role: turn.role, content: turn.content });
         });
+        if (code) {
+            messages.push({
+                role: 'user',
+                content: '当前页面完整 HTML：\n' + code + '\n\n请基于这个页面修改，并输出修改后的完整单页 HTML。'
+            });
+        }
         messages.push({ role: 'user', content: prompt });
         return messages;
     }
@@ -537,7 +718,9 @@
         var runtime = Object.assign({}, config, {
             temperature: params.temperature,
             top_p: params.topP,
-            enableAdvanced: true
+            enableAdvanced: true,
+            reasoning: params.reasoning !== false,
+            reasoningEffort: params.reasoning !== false ? params.effort : ''
         });
 
         appendChat('user', prompt);
@@ -555,7 +738,7 @@
         }, 500);
 
         draft.controller = global.AbortController ? new global.AbortController() : null;
-        var messages = buildMessages(prompt);
+        var messages = buildMessages(prompt, draft.code);
         draft.turns.push({ role: 'user', content: prompt });
         NC.api.chat({
             config: runtime,
@@ -604,6 +787,9 @@
             return;
         }
         var appId = created.app.id;
+        draft.turns.forEach(function (turn) {
+            if (turn.role === 'user' || turn.role === 'assistant') store.addTurn(appId, turn.role, turn.content);
+        });
         draft.active = false;
         showChat(false);
         selectItem(appId);
@@ -615,6 +801,7 @@
         if (els.generateBtn) els.generateBtn.addEventListener('click', generate);
         if (els.stopBtn) els.stopBtn.addEventListener('click', function () { stopGeneration(); });
         if (els.save) els.save.addEventListener('click', saveDraft);
+        if (els.versions) els.versions.addEventListener('click', function () { openVersions(els.versions); });
         if (els.chatClose) {
             els.chatClose.addEventListener('click', function () {
                 if (draft.streaming) stopGeneration();
@@ -686,7 +873,7 @@
             save: $('ws-save-btn'), loading: $('ws-loading'), loadingText: $('ws-loading-text'),
             stopBtn: $('ws-stop-btn'), chat: $('ws-chat'), chatLog: $('ws-chat-log'),
             prompt: $('ws-prompt'), generateBtn: $('ws-generate-btn'), chatHint: $('ws-chat-hint'),
-            chatClose: $('ws-chat-close')
+            chatClose: $('ws-chat-close'), versions: $('ws-versions-btn')
         };
         store = NC.store && NC.store.workshop;
         schema = NC.schema && NC.schema.workshop;

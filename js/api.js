@@ -201,7 +201,12 @@
         }
         /* 创意工坊等场景需要限制输出长度；部分网关不认识该字段，外层会按 400 重试 */
         var maxTokens = Number(opts.maxTokens);
-        if (isFinite(maxTokens) && maxTokens > 0) payload.max_tokens = Math.round(maxTokens);
+        if (!opts.dropOptional && isFinite(maxTokens) && maxTokens > 0) payload.max_tokens = Math.round(maxTokens);
+        /* 推理强度：只在显式打开推理时发送，关闭则完全不出现相关字段 */
+        if (!opts.dropOptional && config.reasoning !== false) {
+            var effort = String(config.reasoningEffort || '').toLowerCase();
+            if (effort === 'low' || effort === 'medium' || effort === 'high') payload.reasoning_effort = effort;
+        }
         // bocai：在标准 OpenAI body 上追加稳定会话键（参考实现用服务端 sessionId
         // 维持多轮身份）。openai 格式保持字段完全不变。
         if (isBocai(config)) {
@@ -805,7 +810,8 @@
                         messages: opts.messages,
                         stream: true,
                         includeUsage: includeUsage,
-                        maxTokens: opts.maxTokens
+                        maxTokens: opts.maxTokens,
+                        dropOptional: opts.dropOptional === true
                     })),
                     signal: controller ? controller.signal : undefined
                 });
@@ -1007,9 +1013,11 @@
             };
             var includeUsage = true;
             var result = await streamOnce(runOpts, includeUsage);
-            /* 兼容：网关不认 stream_options 时去掉 include_usage 重来一次 */
+            /* 兼容：网关不认 stream_options / max_tokens / reasoning_effort 时，
+             * 去掉这些可选字段重来一次（推理字段最容易触发 400/422） */
             if (result && result.retryable) {
                 includeUsage = false;
+                if (opts.maxTokens || (opts.config && opts.config.reasoningEffort)) runOpts.dropOptional = true;
                 result = await streamOnce(runOpts, includeUsage);
             }
             /* 瞬时错误退避重试：只在"一个字都没吐出来"时进行 */

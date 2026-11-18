@@ -1292,6 +1292,27 @@
             var msg = NC.api.extractErrorMessage('maximum context length is 8192 tokens', 'Bad Request');
             assert(msg.indexOf('上下文长度超出') === 0 || msg.indexOf('上下文长度超出') > -1, msg);
         }, [API]);
+        t('api', 'buildPayload：创意工坊的 max_tokens 与推理强度', function () {
+            var base = {
+                config: { modelId: 'gpt-4o-mini', apiUrl: 'http://x/v1', enableAdvanced: true, temperature: 1, top_p: 0.95, reasoningEffort: 'high' },
+                messages: [{ role: 'user', content: 'hi' }],
+                stream: true,
+                includeUsage: false,
+                maxTokens: 25600
+            };
+            var payload = NC.api.buildPayload(base);
+            eq(payload.max_tokens, 25600);
+            eq(payload.reasoning_effort, 'high');
+            var off = NC.api.buildPayload({
+                config: { modelId: 'gpt-4o-mini', reasoning: false, reasoningEffort: 'high' },
+                messages: [{ role: 'user', content: 'hi' }],
+                maxTokens: 100
+            });
+            eq(off.reasoning_effort, undefined);
+            var dropped = NC.api.buildPayload(Object.assign({}, base, { dropOptional: true }));
+            eq(dropped.max_tokens, undefined);
+            eq(dropped.reasoning_effort, undefined);
+        });
         t('api', 'buildPayload 白名单', function () {
             var payload = NC.api.buildPayload({
                 config: { modelId: 'm1', systemPrompt: 'sys', enableAdvanced: false, temperature: 9 },
