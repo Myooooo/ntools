@@ -208,7 +208,6 @@
 
 .tools-page.is-active {
     display: flex;
-    animation: nc-rise-in var(--nc-dur-page) var(--nc-ease-out) both;
 }
 
 .tools-page[data-page="todo"] {
@@ -4931,5 +4930,219 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
 @media (prefers-reduced-motion: reduce) {
     .todo-detail.is-detail-leaving {
         animation: none;
+    }
+}
+
+/* ==========================================================================
+ * v8 移动端外壳：顶部 chrome + 底部悬浮液态玻璃 Tab Bar
+ * 只在 ≤768px 生效；桌面/平板保持左导轨。
+ * ========================================================================== */
+@media (max-width: 768px) {
+    /* 顶部：品牌 + 设置/主题/更多；导航移到底部，不再占顶部两行 */
+    .tools-app .tools-rail {
+        flex: 0 0 auto;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 8px 12px;
+        border-right: 0;
+        border-bottom: 1px solid var(--nc-border);
+        background: var(--nc-material-chrome-bg);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        overflow: visible;
+        z-index: var(--nc-z-sticky);
+    }
+
+    .tools-app .tools-rail__brand {
+        flex: 1;
+        justify-content: flex-start;
+        gap: 8px;
+        padding: 0 2px;
+        min-height: 0;
+    }
+
+    .tools-brand__name {
+        display: inline;
+        font-size: var(--nc-fs-base);
+    }
+
+    .tools-rail__toggle {
+        display: none !important;
+    }
+
+    .tools-app .tools-rail__foot {
+        width: auto;
+        flex-direction: row;
+        align-items: center;
+        gap: 1px;
+        padding-top: 0;
+        border-top: 0;
+    }
+
+    .tools-rail__version {
+        display: none;
+    }
+
+    /* 底部 Tab Bar：悬浮、圆角、毛玻璃 + 顶部镜面高光 */
+    .tools-nav {
+        position: fixed;
+        left: 50%;
+        bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+        z-index: var(--nc-z-sticky);
+        display: flex;
+        flex: none;
+        flex-direction: row;
+        align-items: stretch;
+        gap: 2px;
+        width: min(520px, calc(100vw - 20px));
+        height: auto;
+        min-height: 60px;
+        padding: 6px;
+        transform: translateX(-50%);
+        border: 1px solid var(--nc-material-edge);
+        border-top-color: rgba(255, 255, 255, 0.22);
+        border-radius: 26px;
+        background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0) 46%),
+            var(--nc-material-float-bg);
+        -webkit-backdrop-filter: blur(var(--nc-blur-float)) saturate(var(--nc-material-saturate));
+        backdrop-filter: blur(var(--nc-blur-float)) saturate(var(--nc-material-saturate));
+        box-shadow:
+            0 18px 44px -20px rgba(0, 0, 0, 0.72),
+            0 2px 10px -4px rgba(0, 0, 0, 0.38),
+            inset 0 1px 0 rgba(255, 255, 255, 0.30),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+        overflow: hidden;
+    }
+
+    .tools-nav::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: radial-gradient(120% 90% at 50% 0%, rgba(255, 255, 255, 0.26), transparent 58%);
+        opacity: 0.75;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    .tools-nav__item {
+        position: relative;
+        z-index: 1;
+        flex: 1 1 0;
+        min-width: 0;
+        height: 48px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 4px 2px;
+        border-radius: 18px;
+        color: var(--nc-text-3);
+        transition:
+            background-color var(--nc-dur-fast) var(--nc-ease),
+            color var(--nc-dur-fast) var(--nc-ease);
+    }
+
+    .tools-nav__item.is-active {
+        background: var(--nc-accent-soft);
+        color: var(--nc-text);
+    }
+
+    .tools-nav__item.is-active::before {
+        display: none;
+    }
+
+    .tools-nav__item.is-active .tools-nav__icon {
+        color: var(--nc-accent);
+    }
+
+    .tools-nav__icon {
+        width: 20px;
+        height: 20px;
+    }
+
+    .tools-nav__label {
+        display: block;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--nc-fs-2xs);
+        font-weight: 500;
+        letter-spacing: 0;
+        line-height: 1.2;
+    }
+
+    .tools-nav__badge {
+        position: absolute;
+        top: 3px;
+        right: 8px;
+        margin: 0;
+        min-width: 15px;
+        height: 15px;
+        padding: 0 4px;
+        font-size: 9px;
+        line-height: 15px;
+        border-radius: 8px;
+    }
+
+    /* 内容为悬浮 Tab Bar 让出空间（内容仍可从玻璃下方滚过） */
+    .tools-main {
+        padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .nc-toasts {
+        bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* 浅色：白色玻璃需要更实的描边，避免与纸面混在一起 */
+    html[data-theme="light"] .tools-nav {
+        border-color: rgba(20, 24, 32, 0.12);
+        border-top-color: rgba(255, 255, 255, 0.95);
+        box-shadow:
+            0 18px 40px -22px rgba(16, 20, 28, 0.28),
+            0 2px 10px -6px rgba(16, 20, 28, 0.16),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95),
+            inset 0 -1px 0 rgba(20, 24, 32, 0.06);
+    }
+
+    /* Lite：实色 + 1px 边，无模糊/高光/阴影 */
+    html[data-lite="true"] .tools-nav {
+        background: var(--nc-elevated);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        border-color: var(--nc-border-strong);
+        box-shadow: none;
+    }
+
+    html[data-lite="true"] .tools-nav::before {
+        display: none;
+    }
+
+    html[data-lite="true"] .tools-nav__item.is-active {
+        background: var(--nc-accent-soft);
+        box-shadow: inset 0 0 0 1px var(--nc-accent-ring);
+    }
+}
+
+/* 超窄屏（≤380）：标签再收一点，保证 5 项不挤 */
+@media (max-width: 380px) {
+    .tools-nav {
+        width: calc(100vw - 12px);
+        border-radius: 22px;
+        padding: 5px;
+    }
+
+    .tools-nav__item {
+        height: 46px;
+    }
+
+    .tools-nav__label {
+        font-size: 10px;
     }
 }
