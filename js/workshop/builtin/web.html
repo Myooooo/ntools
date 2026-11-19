@@ -23,7 +23,8 @@
   .tabs button[aria-selected="true"] { color: var(--ws-text); border-bottom-color: var(--ws-accent); }
 
   .kv { display: flex; flex-direction: column; gap: 6px; }
-  .kv-row { display: grid; grid-template-columns: 1fr 1.4fr 28px; gap: 6px; align-items: center; }
+  .kv-row { display: grid; grid-template-columns: 18px 1fr 1.4fr 28px; gap: 6px; align-items: center; }
+  .kv-check { accent-color: var(--ws-accent); margin: 0; }
   .kv-row input { min-width: 0; }
   .kv-remove {
     border: 0; background: transparent; color: var(--ws-text-3); cursor: pointer;
@@ -164,6 +165,11 @@
   function kvRow(container, key, value) {
     var row = document.createElement('div');
     row.className = 'kv-row';
+    var enabled = document.createElement('input');
+    enabled.type = 'checkbox';
+    enabled.className = 'kv-check';
+    enabled.checked = true;
+    enabled.setAttribute('aria-label', '启用这一行');
     var k = document.createElement('input');
     k.className = 'input';
     k.placeholder = '名称';
@@ -178,7 +184,7 @@
     remove.setAttribute('aria-label', '删除这一行');
     remove.textContent = '×';
     remove.addEventListener('click', function () { row.remove(); sendHeight(); });
-    row.appendChild(k); row.appendChild(v); row.appendChild(remove);
+    row.appendChild(enabled); row.appendChild(k); row.appendChild(v); row.appendChild(remove);
     container.appendChild(row);
     return row;
   }
@@ -186,9 +192,11 @@
   function readRows(container) {
     var out = {};
     Array.prototype.forEach.call(container.querySelectorAll('.kv-row'), function (row) {
-      var inputs = row.querySelectorAll('input');
-      var key = (inputs[0].value || '').trim();
-      var value = (inputs[1].value || '').trim();
+      var enabled = row.querySelector('.kv-check');
+      if (enabled && !enabled.checked) return;
+      var inputs = row.querySelectorAll('.kv-row input:not(.kv-check)');
+      var key = (inputs[0] && inputs[0].value || '').trim();
+      var value = (inputs[1] && inputs[1].value || '').trim();
       if (key) out[key] = value;
     });
     return out;
