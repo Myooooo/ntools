@@ -733,6 +733,17 @@
             assert(w2.indexOf("connect-src 'none'") > -1, '禁网时 connect-src 为 none');
             assert(w2.indexOf('--ws-bg:#f4f5f7') > -1, '浅色主题变量');
         });
+        t('workshop', 'wrapHtml 保留完整文档的 head 样式与脚本', function () {
+            var w = NC.schema.workshop.wrapHtml(
+                '<!DOCTYPE html><html><head><title>T</title><style>.a{color:red}</style><script>window.x=1<\/script></head><body><div class="a">hi</div></body></html>',
+                { theme: 'dark' });
+            assert(w.indexOf('.a{color:red}') > -1, 'head 里的 style 不能丢');
+            assert(w.indexOf('window.x=1') > -1, 'head 里的 script 不能丢');
+            assert(w.indexOf('<div class="a">hi</div>') > -1, 'body 内容保留');
+            assert(w.indexOf('Content-Security-Policy') > -1, '仍注入 CSP');
+            assert(w.indexOf('nc-ws-height') > -1, '仍注入高度桥');
+            assert(w.indexOf('<title>T</title>') > -1, '原 title 保留');
+        });
         t('workshop', 'buildSystemPrompt：网络策略随开关变化', function () {
             var on = NC.schema.workshop.buildSystemPrompt({ allowNetwork: true });
             var off = NC.schema.workshop.buildSystemPrompt({ allowNetwork: false });

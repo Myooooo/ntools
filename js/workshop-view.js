@@ -23,7 +23,7 @@
         initialized: false,
         activeId: null,
         filter: '',
-        focus: false,
+        sideCollapsed: false,
         sideOpen: false,
         lastError: ''
     };
@@ -204,33 +204,24 @@
         if (!els.list) return;
         els.list.textContent = '';
         var items = groupedItems();
-        var byCategory = Object.create(null);
-        items.forEach(function (item) {
-            var key = CATEGORY_ORDER.indexOf(item.category) > -1 ? item.category : 'custom';
-            (byCategory[key] = byCategory[key] || []).push(item);
-        });
-
-        var labels = { office: '办公实用', fun: '效率趣味', custom: '自定义' };
+        var groups = [
+            { key: 'builtin', label: '内置', list: items.filter(function (item) { return item.kind === 'builtin'; }) },
+            { key: 'custom', label: '自定义', list: items.filter(function (item) { return item.kind === 'custom'; }) }
+        ];
         var rendered = 0;
-        CATEGORY_ORDER.forEach(function (category) {
-            var list = byCategory[category];
-            if (category === 'custom' && (!list || !list.length)) {
-                var group = document.createElement('div');
-                group.className = 'ws-group';
-                group.textContent = labels[category];
-                els.list.appendChild(group);
+        groups.forEach(function (group) {
+            var head = document.createElement('div');
+            head.className = 'ws-group';
+            head.textContent = group.label;
+            els.list.appendChild(head);
+            if (group.key === 'custom' && !group.list.length) {
                 var empty = document.createElement('div');
                 empty.className = 'ws-empty-list';
-                empty.textContent = '还没有自定义应用。点「新建」用一句话生成一个。';
+                empty.textContent = '还没有自定义应用。点「新建」生成，或从菜单导入 HTML。';
                 els.list.appendChild(empty);
                 return;
             }
-            if (!list || !list.length) return;
-            var head = document.createElement('div');
-            head.className = 'ws-group';
-            head.textContent = labels[category];
-            els.list.appendChild(head);
-            list.forEach(function (item) {
+            group.list.forEach(function (item) {
                 els.list.appendChild(itemRow(item));
                 rendered += 1;
             });
@@ -298,6 +289,7 @@
             }
         }
         if (els.pin) els.pin.setAttribute('aria-pressed', item && item.pinned ? 'true' : 'false');
+        if (els.exportBtn) els.exportBtn.hidden = !(item && item.kind === 'custom' && item.code);
         if (!item) {
             clearFrame();
             setHidden(els.empty, false);
@@ -313,6 +305,7 @@
         draft.active = false;
         showChat(false);
         if (els.save) els.save.hidden = true;
+        if (els.exportBtn) els.exportBtn.hidden = true;
         if (els.pin) els.pin.disabled = false;
         state.activeId = id;
         writeActive(id);
@@ -343,10 +336,28 @@
         toast(item.pinned ? '已取消置顶' : '已置顶', 'success');
     }
 
-    function toggleFocus(force) {
-        state.focus = typeof force === 'boolean' ? force : !state.focus;
-        if (els.shell) els.shell.classList.toggle('is-focus', state.focus);
-        if (els.focusBtn) els.focusBtn.setAttribute('aria-pressed', state.focus ? 'true' : 'false');
+    function applySideCollapsed(collapsed) {
+        state.sideCollapsed = collapsed === true;
+        if (els.shell) els.shell.classList.toggle('is-side-collapsed', state.sideCollapsed);
+        if (els.sideOpen) els.sideOpen.setAttribute('aria-expanded', state.sideCollapsed ? 'false' : 'true');
+        if (els.sideOpen) {
+            els.sideOpen.setAttribute('aria-label', state.sideCollapsed ? '展开工具列表' : '收起工具列表');
+            els.sideOpen.setAttribute('title', state.sideCollapsed ? '展开工具列表' : '收起工具列表');
+        }
+        try { global.localStorage.setItem('ntools.workshop.side', state.sideCollapsed ? '1' : '0'); } catch (err) { /* ignore */ }
+    }
+
+    function readSideCollapsed() {
+        try { return global.localStorage.getItem('ntools.workshop.side') === '1'; } catch (err) { return false; }
+    }
+
+    function isNarrow() {
+        return global.innerWidth <= 1100;
+    }
+
+    function onSideToggle() {
+        if (isNarrow()) toggleSide(true);
+        else applySideCollapsed(!state.sideCollapsed);
     }
 
     function toggleSide(force) {
@@ -494,6 +505,7 @@
         if (els.kind) { els.kind.hidden = false; els.kind.textContent = '草稿'; }
         if (els.pin) { els.pin.disabled = true; els.pin.setAttribute('aria-pressed', 'false'); }
         if (els.save) els.save.hidden = true;
+        if (els.exportBtn) els.exportBtn.hidden = true;
         if (els.versions) els.versions.hidden = true;
         if (els.loading) els.loading.hidden = true;
         if (els.prompt) {
@@ -534,6 +546,7 @@
         if (els.pin) els.pin.disabled = false;
         if (els.save) els.save.hidden = true;
         if (els.versions) els.versions.hidden = store.listVersions(appId).length === 0;
+        if (els.exportBtn) els.exportBtn.hidden = !app.code;
         if (els.prompt) { els.prompt.value = ''; els.prompt.readOnly = false; }
         setChatHint('Ctrl+Enter 发送修改');
         renderDraft();
@@ -655,6 +668,7 @@
         draft.turns.push({ role: 'assistant', content: '已生成页面「' + draft.title + '」' });
         if (els.title) els.title.textContent = draft.title;
         if (els.save) els.save.hidden = false;
+        if (els.exportBtn) els.exportBtn.hidden = false;
         renderDraft();
         appendChat('bot', '已生成「' + draft.title + '」，可以直接在左侧使用；想改哪里，继续告诉我。', '耗时 ' + seconds + 's');
         toast('已生成「' + draft.title + '」，可继续调整或保存', 'success');
@@ -779,6 +793,51 @@
         });
     }
 
+    function safeFileName(name) {
+        return String(name || 'workshop').replace(/[\\/:*?"<>|\s]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'workshop';
+    }
+
+    function currentCode() {
+        if (draft.active && draft.code) return { code: draft.code, title: draft.title };
+        var item = currentItem();
+        if (item && item.kind === 'custom' && item.code) return { code: item.code, title: item.title };
+        return null;
+    }
+
+    function exportHtml() {
+        var target = currentCode();
+        if (!target) { toast('当前没有可导出的页面', 'warn'); return; }
+        var ok = NC.util.downloadBlob(safeFileName(target.title) + '.html', target.code, 'text/html;charset=utf-8');
+        toast(ok ? '已导出 ' + safeFileName(target.title) + '.html' : '导出失败：浏览器阻止了下载', ok ? 'success' : 'error');
+    }
+
+    function importHtml(event) {
+        var input = event && event.target ? event.target : els.importFile;
+        var file = input && input.files ? input.files[0] : null;
+        if (input) input.value = '';
+        if (!file) return;
+        var limit = schema.LIMITS.appBytes;
+        if (file.size > limit) {
+            toast('文件超过 ' + Math.round(limit / 1024) + 'KB 上限', 'error');
+            return;
+        }
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            var code = String(e.target.result || '');
+            if (!code.trim()) { toast('文件是空的', 'error'); return; }
+            var title = String(file.name || '').replace(/\.html?$/i, '').replace(/[_-]+/g, ' ').trim() || '导入的应用';
+            var created = store.createApp({ title: title, code: code });
+            if (!created || !created.ok) {
+                toast(created && created.message ? created.message : '导入失败', 'error');
+                return;
+            }
+            selectItem(created.app.id);
+            toast('已导入「' + created.app.title + '」', 'success');
+        };
+        reader.onerror = function () { toast('读取文件失败', 'error'); };
+        reader.readAsText(file);
+    }
+
     function saveDraft() {
         if (!draft.code) { toast('还没有生成内容', 'warn'); return; }
         var created = store.createApp({ title: draft.title || '未命名应用', code: draft.code });
@@ -826,21 +885,27 @@
         }
         if (els.pin) els.pin.addEventListener('click', togglePin);
         if (els.reloadBtn) els.reloadBtn.addEventListener('click', reloadFrame);
-        if (els.focusBtn) els.focusBtn.addEventListener('click', function () { toggleFocus(); });
-        if (els.sideOpen) els.sideOpen.addEventListener('click', function () { toggleSide(true); });
+        if (els.sideOpen) els.sideOpen.addEventListener('click', onSideToggle);
+        if (els.exportBtn) els.exportBtn.addEventListener('click', exportHtml);
+        if (els.importFile) els.importFile.addEventListener('change', importHtml);
         if (els.sideClose) els.sideClose.addEventListener('click', function () { toggleSide(false); });
         if (els.moreBtn) {
             els.moreBtn.addEventListener('click', function () {
                 NC.ui.openMenu(els.moreBtn, [
                     {
-                        label: '重新加载全部',
-                        icon: 'refresh',
-                        onSelect: function () { reloadFrame(); }
+                        label: '导入 HTML',
+                        icon: 'upload',
+                        onSelect: function () { if (els.importFile) els.importFile.click(); }
                     },
                     {
-                        label: '专注模式',
-                        icon: 'external',
-                        onSelect: function () { toggleFocus(); }
+                        label: '导出当前 HTML',
+                        icon: 'download',
+                        onSelect: exportHtml
+                    },
+                    {
+                        label: '重新加载预览',
+                        icon: 'refresh',
+                        onSelect: reloadFrame
                     }
                 ]);
             });
@@ -848,9 +913,9 @@
         document.addEventListener('keydown', function (event) {
             var page = document.getElementById('page-workshop');
             if (!page || page.hasAttribute('hidden')) return;
-            if (event.key === 'Escape' && state.focus) {
+            if (event.key === 'Escape' && state.sideOpen) {
                 event.preventDefault();
-                toggleFocus(false);
+                toggleSide(false);
             }
         });
         if (NC.events && NC.events.on) {
@@ -868,9 +933,10 @@
             newBtn: $('ws-new-btn'), moreBtn: $('ws-more-btn'),
             sideOpen: $('ws-side-open'), sideClose: $('ws-side-close'),
             title: $('ws-title'), kind: $('ws-kind'),
-            reloadBtn: $('ws-reload-btn'), pin: $('ws-pin-btn'), focusBtn: $('ws-focus-btn'),
+            reloadBtn: $('ws-reload-btn'), pin: $('ws-pin-btn'),
             frame: $('ws-frame'), empty: $('ws-empty'), moduleNote: $('ws-module-note'),
-            save: $('ws-save-btn'), loading: $('ws-loading'), loadingText: $('ws-loading-text'),
+            save: $('ws-save-btn'), exportBtn: $('ws-export-btn'), importFile: $('ws-import-file'),
+            loading: $('ws-loading'), loadingText: $('ws-loading-text'),
             stopBtn: $('ws-stop-btn'), chat: $('ws-chat'), chatLog: $('ws-chat-log'),
             prompt: $('ws-prompt'), generateBtn: $('ws-generate-btn'), chatHint: $('ws-chat-hint'),
             chatClose: $('ws-chat-close'), versions: $('ws-versions-btn')
@@ -894,6 +960,7 @@
         });
         bind();
         bindFrameMessages();
+        applySideCollapsed(readSideCollapsed());
         state.initialized = true;
         store.init().then(function () {
             renderList();

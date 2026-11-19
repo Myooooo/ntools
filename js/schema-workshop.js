@@ -194,23 +194,34 @@
         var opts = options || {};
         var allowNetwork = opts.allowNetwork !== false;
         var connect = allowNetwork ? 'http: https:' : "'none'";
-        var source = String(code == null ? '' : code);
-        var looksFull = /<html[\s>]/i.test(source);
-        var head = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
-            '<meta name="viewport" content="width=device-width,initial-scale=1">' +
-            '<meta http-equiv="Content-Security-Policy" content="default-src ' + "'none'" + '; ' +
-            'img-src data: blob:; media-src data: blob:; style-src ' + "'unsafe-inline'" + '; ' +
-            'script-src ' + "'unsafe-inline'" + '; font-src data:; connect-src ' + connect + ';' + '">' +
-            '<title>' + escapeAttr(opts.title || '创意工坊') + '</title>' +
-            '<style>' + themeCss(opts.theme) + '</style></head><body>';
-        var tail = bridgeScript() + '</body></html>';
-        if (looksFull) {
-            /* 模型给了完整文档：保留它，但去掉自带的 <head> 里可能的外链，由我们的壳兜底 */
-            var bodyMatch = /<body[^>]*>([\s\S]*?)<\/body>/i.exec(source);
-            var inner = bodyMatch ? bodyMatch[1] : source.replace(/<!DOCTYPE[^>]*>/i, '').replace(/<\/?html[^>]*>/gi, '');
-            return head + inner + tail;
+        var source = String(code == null ? '' : code).trim();
+
+        var csp = '<meta http-equiv="Content-Security-Policy" content="default-src ' + "'none'" + '; ' +
+            'img-src data: blob: http: https:; media-src data: blob: http: https:; ' +
+            'style-src ' + "'unsafe-inline'" + ' http: https:; ' +
+            'script-src ' + "'unsafe-inline'" + '; font-src data: http: https:; ' +
+            'connect-src ' + connect + ';' + '">';
+        var viewport = '<meta name="viewport" content="width=device-width,initial-scale=1">';
+        var theme = '<style>' + themeCss(opts.theme) + '</style>';
+        var bridge = bridgeScript();
+
+        /* 完整文档：保留原有 head/body（样式与脚本都在），只补 CSP、主题与高度桥。
+         * 之前只取 <body> 内层，导致模型写在 <head> 里的 <style>/<script> 被整段丢掉。 */
+        if (/<html[\s>]/i.test(source)) {
+            var doc = source.replace(/^\s*<!doctype[^>]*>/i, '');
+            if (/<head[^>]*>/i.test(doc)) {
+                doc = doc.replace(/<head([^>]*)>/i, '<head$1>' + csp + viewport + theme);
+            } else {
+                doc = doc.replace(/<html([^>]*)>/i, '<html$1><head>' + csp + viewport + theme + '</head>');
+            }
+            if (/<\/body>/i.test(doc)) doc = doc.replace(/<\/body>/i, bridge + '</body>');
+            else doc += bridge;
+            return '<!DOCTYPE html>' + doc;
         }
-        return head + source + tail;
+        /* 片段：套壳并保留片段里的 <style>/<script> */
+        return '<!DOCTYPE html><html><head><meta charset="utf-8">' + viewport + csp +
+            '<title>' + escapeAttr(opts.title || '创意工坊') + '</title>' + theme +
+            '</head><body>' + source + bridge + '</body></html>';
     }
 
     function buildSystemPrompt(options) {

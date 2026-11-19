@@ -57,8 +57,6 @@
     <script defer src="js/todo-ai.js"></script>
     <script defer src="js/todo.js"></script>
     <!-- 页面模块：工具叶子（由 platform-compat 提供，未就位时 ntools-app.js 做降级） -->
-    <script defer src="js/qr.js"></script>
-    <script defer src="js/image.js"></script>
     <!-- 组合根 -->
     <script defer src="js/ntools-app.js"></script>
 </head>
@@ -97,14 +95,6 @@
             <a class="tools-nav__item" href="#workshop" data-tab="workshop" title="创意工坊">
                 <span class="tools-nav__icon" data-icon="wand"></span>
                 <span class="tools-nav__label">创意工坊</span>
-            </a>
-            <a class="tools-nav__item" href="#qr" data-tab="qr" title="二维码生成">
-                <span class="tools-nav__icon" data-icon="qr-code"></span>
-                <span class="tools-nav__label">二维码生成</span>
-            </a>
-            <a class="tools-nav__item" href="#image" data-tab="image" title="图片与Base64转换">
-                <span class="tools-nav__icon" data-icon="image"></span>
-                <span class="tools-nav__label">图片处理</span>
             </a>
         </nav>
 
@@ -315,58 +305,7 @@
                 </div>
             </section>
 
-            <!-- ---------------- Tab 2：二维码 ---------------- -->
-            <section class="tools-page" id="page-qr" data-panel="qr" data-page="qr" aria-label="二维码生成" hidden>
-                <header class="tools-head">
-                    <div class="tools-head__text">
-                        <h1 class="tools-title">二维码生成</h1>
-                        <p class="tools-subtitle">本地离线生成二维码，支持下载 PNG。</p>
-                    </div>
-                </header>
-                <div class="tool-layout tool-layout--qr">
-                    <div class="tool-card qr-stage-card">
-                        <div class="qr-stage">
-                            <div id="qr-output" class="qr-output"></div>
-                            <div id="qr-placeholder" class="qr-placeholder">
-                                <span class="qr-placeholder__icon" data-icon="qr-code" data-icon-size="28"></span>
-                                <p>输入内容后点击「生成二维码」</p>
-                            </div>
-                        </div>
-                        <p class="tool-note">二维码在当前设备本地生成，不会上传到网络。</p>
-                    </div>
-                    <div class="tool-card qr-form">
-                        <div class="nc-field">
-                            <label class="nc-label" for="qr-input">网址或文本</label>
-                            <input type="text" class="nc-input" id="qr-input" value="https://example.com" placeholder="粘贴网址或任意文本" spellcheck="false">
-                        </div>
-                        <div class="nc-field">
-                            <label class="nc-label" for="qr-size">尺寸</label>
-                            <select class="nc-select" id="qr-size">
-                                <option value="128">128 px</option>
-                                <option value="256" selected>256 px</option>
-                                <option value="512">512 px</option>
-                            </select>
-                        </div>
-                        <div class="tool-actions">
-                            <button type="button" class="nc-btn nc-btn--primary" id="qr-generate">
-                                <span data-icon="zap" data-icon-size="16"></span>
-                                <span>生成二维码</span>
-                            </button>
-                            <button type="button" class="nc-btn" id="qr-download">
-                                <span data-icon="download" data-icon-size="16"></span>
-                                <span>下载 PNG</span>
-                            </button>
-                        </div>
-                        <div class="tool-module-note" id="qr-module-note" hidden></div>
-                    </div>
-                </div>
-                <footer class="tool-foot">
-                    <span class="tool-foot__note">支持 128 / 256 / 512 px，下载为 PNG</span>
-                    <span class="tool-foot__hints" aria-hidden="true">
-                        <span><kbd class="nc-kbd">Enter</kbd> 生成</span>
-                    </span>
-                </footer>
-            </section>
+
 
             <!-- ---------------- Tab 3：Markdown ---------------- -->
             <!-- ---------------- Tab 3：笔记（原 Markdown 工具） ---------------- -->
@@ -469,68 +408,7 @@
                 <div class="tool-module-note" id="notes-module-note" hidden></div>
             </section>
 
-            <!-- ---------------- Tab 4：图片转换 ---------------- -->
-            <section class="tools-page" id="page-image" data-panel="image" data-page="image" aria-label="图片与 Base64 转换" hidden>
-                <header class="tools-head">
-                    <div class="tools-head__text">
-                        <h1 class="tools-title">图片与 Base64</h1>
-                        <p class="tools-subtitle">图片转 Base64 或反向还原，全部在本地完成。</p>
-                    </div>
-                </header>
-                <div class="image-drop" id="img-dropzone" role="button" tabindex="0" aria-label="选择图片，或将图片拖拽到此处">
-                    <span class="image-drop__icon" data-icon="image" data-icon-size="26"></span>
-                    <div class="image-drop__text">
-                        <strong>点击选择图片</strong>
-                        <span>或将图片拖拽到此区域</span>
-                    </div>
-                    <input type="file" id="img-file" accept="image/*" hidden>
-                </div>
-                <div class="tool-layout tool-layout--image">
-                    <div class="tool-card image-pane">
-                        <div class="image-pane__head">
-                            <span>预览</span>
-                            <span class="tool-meta">原始：<span id="img-res-original">-</span></span>
-                        </div>
-                        <div class="image-preview-wrap">
-                            <img id="img-preview" alt="图片预览">
-                            <span class="image-preview-placeholder">尚未选择图片</span>
-                        </div>
-                        <div class="image-controls">
-                            <div class="range-row">
-                                <label class="nc-label" for="img-scale">缩放比例</label>
-                                <input type="range" id="img-scale" class="nc-range" min="10" max="100" value="100">
-                                <span class="range-row__value" id="img-scale-label">100%</span>
-                            </div>
-                            <div class="tool-meta">目标尺寸：<span id="img-res-target">-</span></div>
-                            <button type="button" class="nc-btn nc-btn--primary nc-btn--block" id="img-convert">
-                                <span data-icon="zap" data-icon-size="16"></span>
-                                <span>转换为 Base64</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="tool-card image-pane">
-                        <div class="image-pane__head"><span>Base64 结果</span></div>
-                        <textarea id="img-output" class="nc-textarea image-output" spellcheck="false" placeholder="生成结果显示在这里；也可以粘贴 data:image/... 后点击「还原图片」"></textarea>
-                        <div class="tool-actions">
-                            <button type="button" class="nc-btn" id="img-copy">
-                                <span data-icon="copy" data-icon-size="16"></span>
-                                <span>复制</span>
-                            </button>
-                            <button type="button" class="nc-btn" id="img-restore">
-                                <span data-icon="refresh" data-icon-size="16"></span>
-                                <span>还原图片</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div class="tool-module-note" id="image-module-note" hidden></div>
-                <footer class="tool-foot">
-                    <span class="tool-foot__note">支持 PNG / JPEG / WebP / GIF / BMP，单张上限 20 MB</span>
-                    <span class="tool-foot__hints" aria-hidden="true">
-                        <span><kbd class="nc-kbd">拖拽</kbd> 载入图片</span>
-                    </span>
-                </footer>
-            </section>
+
 
             <!-- ---------------- Tab 5：nChat（原生嵌入） ---------------- -->
             <section class="tools-page tools-page--nchat" id="page-nchat" data-panel="nchat" data-page="nchat" aria-label="nChat 聊天" hidden>
@@ -668,7 +546,7 @@
                     </aside>
                     <div class="ws-main">
                         <header class="ws-head">
-                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost ws-head__toggle" id="ws-side-open" aria-label="打开工坊列表" title="工坊列表">
+                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost ws-head__toggle" id="ws-side-open" aria-label="收起工具列表" title="收起工具列表" aria-expanded="true">
                                 <span data-icon="panel-left" data-icon-size="16"></span>
                             </button>
                             <div class="ws-head__title">
@@ -682,14 +560,14 @@
                                 <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-versions-btn" aria-label="版本历史" title="版本历史" hidden>
                                     <span data-icon="repeat" data-icon-size="16"></span>
                                 </button>
+                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-export-btn" aria-label="导出 HTML" title="导出 HTML" hidden>
+                                    <span data-icon="download" data-icon-size="16"></span>
+                                </button>
                                 <button type="button" class="nc-btn nc-btn--sm nc-btn--primary" id="ws-save-btn" hidden>
                                     <span data-icon="check" data-icon-size="15"></span><span>保存</span>
                                 </button>
                                 <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-pin-btn" aria-label="置顶" title="置顶" aria-pressed="false">
                                     <span data-icon="pin" data-icon-size="16"></span>
-                                </button>
-                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-focus-btn" aria-label="专注模式" title="专注模式" aria-pressed="false">
-                                    <span data-icon="external" data-icon-size="16"></span>
                                 </button>
                             </div>
                         </header>
@@ -724,6 +602,7 @@
                         </div>
                     </aside>
                 </div>
+                <input type="file" id="ws-import-file" accept=".html,.htm,text/html" hidden>
                 <div class="tool-module-note" id="ws-module-note" hidden></div>
             </section>
         </main>

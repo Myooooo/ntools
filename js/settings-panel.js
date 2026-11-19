@@ -60,9 +60,7 @@
             { id: 'notes', title: '笔记本', desc: '笔记库状态、默认视图与导出', icon: 'notebook-text', group: 'modules' },
             { id: 'nchat', title: 'nChat', desc: '当前端点与聊天入口', icon: 'messages-square', group: 'modules' },
             { id: 'workshop', title: '创意工坊', desc: '生成参数、内置工具与库用量', icon: 'wand', group: 'modules' },
-            { id: 'qr', title: '二维码生成', desc: '默认生成尺寸', icon: 'qr-code', group: 'modules' },
-            { id: 'image', title: '图片处理', desc: 'Base64 导出的 JPEG 质量', icon: 'image', group: 'modules' },
-            { id: 'data', title: '数据', desc: '备份、导入导出与清理', icon: 'download', group: 'system' },
+            { id: 'data', title: '数据', desc: '备份、导入导出与本地数据清理', icon: 'download', group: 'system' },
             { id: 'about', title: '关于', desc: '版本、兼容性与快捷键', icon: 'info', group: 'system' }
         ].concat(sections.map(function (section) {
             section.group = section.group || 'modules';
@@ -76,11 +74,9 @@
 
     /* 模块分区：保留入口，并给出「实时状态 + 实用默认值 + 快捷跳转」，
      * 不再显示「暂无可配置项」这种消极占位。 */
-    var MODULE_TABS = ['notes', 'email', 'qr', 'image', 'nchat', 'workshop'];
+    var MODULE_TABS = ['notes', 'email', 'nchat', 'workshop'];
 
     var PREF_KEYS = {
-        qrSize: 'ntools.qr.size',
-        imageQuality: 'ntools.image.quality',
         notesMode: 'ntools.notes.mode'
     };
 
@@ -567,8 +563,6 @@
 
         if (id === 'notes') renderNotesModule(container);
         else if (id === 'email') renderEmailModule(container);
-        else if (id === 'qr') renderQrModule(container);
-        else if (id === 'image') renderImageModule(container);
         else if (id === 'nchat') renderChatModule(container);
         else if (id === 'workshop') renderWorkshopParams(container);
     }
@@ -685,52 +679,6 @@
         actions.appendChild(util.e('p', {
             class: 'sp-hint',
             text: '导出的 JSON 只包含分组与地址，可单独迁移；整体备份与恢复在邮件页「备份恢复」里。'
-        }));
-        container.appendChild(actions);
-    }
-
-    function renderQrModule(container) {
-        var prefs = moduleCard('默认尺寸', '新建二维码时预选的尺寸；生成页仍可随时改。');
-        var current = prefGet(PREF_KEYS.qrSize, '256');
-        if (['128', '256', '512'].indexOf(current) < 0) current = '256';
-        modulePrefRow(prefs, '尺寸', [
-            { value: '128', label: '128 px' },
-            { value: '256', label: '256 px' },
-            { value: '512', label: '512 px' }
-        ], current, {
-            key: PREF_KEYS.qrSize,
-            onChange: function () { setStatus('已保存二维码默认尺寸'); }
-        });
-        container.appendChild(prefs);
-
-        var actions = moduleCard('快捷操作');
-        var bar = util.e('div', { class: 'sp-data-card__actions' });
-        bar.appendChild(button('打开二维码工具', { small: true, icon: 'qr-code', onClick: function () { openModule('qr'); } }));
-        actions.appendChild(bar);
-        container.appendChild(actions);
-    }
-
-    function renderImageModule(container) {
-        var prefs = moduleCard('导出质量', '转换为 Base64 时 JPEG 的编码质量。');
-        var current = prefGet(PREF_KEYS.imageQuality, '0.92');
-        if (['0.8', '0.92', '0.98'].indexOf(current) < 0) current = '0.92';
-        modulePrefRow(prefs, 'JPEG 质量', [
-            { value: '0.8', label: '紧凑 80%' },
-            { value: '0.92', label: '标准 92%' },
-            { value: '0.98', label: '高清 98%' }
-        ], current, {
-            key: PREF_KEYS.imageQuality,
-            onChange: function () { setStatus('已保存 JPEG 质量'); }
-        });
-        container.appendChild(prefs);
-
-        var actions = moduleCard('快捷操作');
-        var bar = util.e('div', { class: 'sp-data-card__actions' });
-        bar.appendChild(button('打开图片工具', { small: true, icon: 'image', onClick: function () { openModule('image'); } }));
-        actions.appendChild(bar);
-        actions.appendChild(util.e('p', {
-            class: 'sp-hint',
-            text: '支持 PNG / JPEG / WebP / GIF / BMP，单张上限 20 MB；压缩比例在页面内调整。'
         }));
         container.appendChild(actions);
     }
@@ -921,7 +869,7 @@
             todo: '待办事项', email: '邮箱维护', nchat: 'nChat', md: '笔记本', qr: '二维码生成', image: '图片处理'
         };
         var currentStart = typeof NC.getStartTab === 'function' ? NC.getStartTab() : 'todo';
-        ['todo', 'email', 'md', 'nchat', 'workshop', 'qr', 'image'].forEach(function (tab) {
+        ['todo', 'email', 'md', 'nchat', 'workshop'].forEach(function (tab) {
             if (!tabTitles[tab]) return;
             var option = util.e('option', { value: tab, text: tabTitles[tab] });
             if (tab === currentStart) option.selected = true;

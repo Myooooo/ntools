@@ -11,15 +11,13 @@
     var icons = NC.icons;
     var ui = NC.ui;
 
-    var TABS = ['todo', 'email', 'md', 'nchat', 'workshop', 'qr', 'image'];
+    var TABS = ['todo', 'email', 'md', 'nchat', 'workshop'];
     var PAGE_TITLES = {
         todo: '待办事项',
         email: '邮箱维护',
-        qr: '二维码生成',
         md: '笔记本',
         nchat: 'nChat',
-        workshop: '创意工坊',
-        image: '图片处理'
+        workshop: '创意工坊'
     };
     var currentTab = 'todo';
     var bannerTimer = null;
@@ -54,8 +52,6 @@
         initTodo();
 
         /* 工具叶子模块：由 platform-compat 提供，缺失时降级展示说明 */
-        initLeafModule('qr', 'page-qr', 'qr-module-note');
-        initLeafModule('image', 'page-image', 'image-module-note');
 
         routeFromHash(true);
         maybeAutoLite();
