@@ -3,7 +3,7 @@
  * 方向：Precision Workbench —— 石墨/纸面、发丝线、仪器蓝强调、铜色时间语义
  * 目标环境：Chromium 102（不用 :has / dvh 强依赖 / color-mix 等新特性）
  * 主题：默认深色；html[data-theme="light"] 浅色；
- *      html[data-lite="true"] = Light 性能模式（标准模式的减法：去高级动效与页面特效）
+ *      html[data-lite="true"] = Lite 性能模式（标准模式的减法：去高级动效与页面特效）
  * ========================================================================== */
 
 :root {
@@ -15,14 +15,14 @@
     --nc-font-num: var(--nc-font-sans);
 
     --nc-fs-2xs: 11px;
-    --nc-fs-xs: 11.5px;
-    --nc-fs-sm: 12.5px;
-    --nc-fs-md: 13.5px;
+    --nc-fs-xs: 12px;
+    --nc-fs-sm: 13px;
+    --nc-fs-md: 14px;
     --nc-fs-base: 14px;
-    --nc-fs-lg: 15.5px;
+    --nc-fs-lg: 15px;
     --nc-fs-xl: 20px;
-    --nc-fs-2xl: 26px;
-    --nc-fs-3xl: 32px;
+    --nc-fs-2xl: 24px;
+    --nc-fs-3xl: 30px;
 
     --nc-lh-tight: 1.2;
     --nc-lh-snug: 1.35;
@@ -49,6 +49,7 @@
     --nc-space-12: 48px;
 
     /* ---------- 圆角（层级化，不只有一个半径） ---------- */
+    --nc-radius-2xs: 2px;
     --nc-radius-xs: 4px;
     --nc-radius-sm: 6px;
     --nc-radius-md: 9px;
@@ -66,23 +67,36 @@
     --nc-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
     --nc-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
     --nc-ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+    --nc-ease-emphasized: cubic-bezier(0.2, 0.9, 0.25, 1);
+    --nc-ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
-    --nc-dur-press: 120ms;
-    --nc-dur-fast: 140ms;
-    --nc-dur: 180ms;
-    --nc-dur-slow: 260ms;
-    --nc-dur-page: 180ms;
-    --nc-dur-panel: 220ms;
+    --nc-dur-press: 90ms;
+    --nc-dur-fast: 120ms;
+    --nc-dur: 160ms;
+    --nc-dur-slow: 220ms;
+    --nc-dur-page: 120ms;
+    --nc-dur-panel: 320ms;
     --nc-dur-tip: 125ms;
+    --nc-dur-exit: 120ms;
+    --nc-dur-scrim: 180ms;
 
     /* 按压反馈：只做 3% 缩放，按下即时、释放快速回弹 */
     --nc-press-scale: 0.97;
+
+    /* 控件高度（触控目标） */
+    --nc-control-h-xs: 28px;
+    --nc-control-h-sm: 32px;
+    --nc-control-h-md: 36px;
+    --nc-control-h-lg: 40px;
+    --nc-control-h-touch: 44px;
 
     /* ---------- 层级 ---------- */
     --nc-z-sticky: 20;
     --nc-z-dropdown: 900;
     --nc-z-modal: 1000;
+    --nc-z-popover: 1010;
     --nc-z-toast: 1100;
+    --nc-z-tooltip: 1150;
 
     /* ---------- 深色：石墨 ---------- */
     --nc-bg: #0b0e13;
@@ -98,8 +112,10 @@
     --nc-border-faint: rgba(255, 255, 255, 0.035);
     --nc-text: #edf1f7;
     --nc-text-2: #9aa7b8;
-    --nc-text-3: #7f8c9b;
+    --nc-text-3: #8b98a8;
     --nc-text-invert: #0b0e13;
+    --nc-text-on-accent: var(--nc-text-invert);
+    --nc-switch-knob: #0b0e13;
     --nc-accent: #6ea8fe;
     --nc-accent-hover: #8cbcff;
     --nc-accent-soft: rgba(110, 168, 254, 0.13);
@@ -135,6 +151,21 @@
     --nc-scrim-blur: saturate(120%) blur(8px);
     --nc-glass-highlight: rgba(255, 255, 255, 0.07);
     --nc-overlay: rgba(4, 6, 10, 0.62);
+
+    /* ---------- 材质档位（v8） ---------- */
+    --nc-material-chrome-bg: rgba(15, 20, 27, 0.86);
+    --nc-material-float-bg: rgba(22, 29, 40, 0.84);
+    --nc-material-sheet-bg: rgba(19, 26, 35, 0.94);
+    --nc-material-scrim: var(--nc-overlay);
+    --nc-material-edge: rgba(255, 255, 255, 0.08);
+    --nc-material-saturate: 160%;
+    --nc-blur-chrome: 10px;
+    --nc-blur-float: 14px;
+    --nc-blur-sheet: 0px; /* 面板由 scrim 提供模糊，避免玻璃叠玻璃 */
+    --nc-blur-scrim: 8px;
+    --nc-elev-border: var(--nc-border-strong);
+    --nc-shadow-float: var(--nc-shadow-2);
+    --nc-shadow-sheet: var(--nc-shadow-3);
     --nc-ambient:
         repeating-linear-gradient(0deg, transparent 0 31px, rgba(255, 255, 255, 0.016) 31px 32px),
         repeating-linear-gradient(90deg, transparent 0 31px, rgba(255, 255, 255, 0.016) 31px 32px),
@@ -180,7 +211,7 @@ html[data-theme="light"] {
     --nc-surface: #ffffff;
     --nc-surface-2: #f7f8fa;
     --nc-surface-3: #edeff3;
-    --nc-surface-hover: #f0f3f7;
+    --nc-surface-hover: #eef1f5;
     --nc-elevated: #ffffff;
     --nc-input-bg: rgba(255, 255, 255, 0.86);
     --nc-border: rgba(20, 24, 32, 0.09);
@@ -188,8 +219,10 @@ html[data-theme="light"] {
     --nc-border-faint: rgba(20, 24, 32, 0.05);
     --nc-text: #15181d;
     --nc-text-2: #56616f;
-    --nc-text-3: #5f6c7b;
+    --nc-text-3: #5c6a7a;
     --nc-text-invert: #ffffff;
+    --nc-text-on-accent: var(--nc-text-invert);
+    --nc-switch-knob: #ffffff;
     --nc-accent: #2a63c8;
     --nc-accent-hover: #255cc0;
     --nc-accent-soft: rgba(47, 111, 219, 0.1);
@@ -224,6 +257,13 @@ html[data-theme="light"] {
     --nc-scrim-blur: saturate(110%) blur(8px);
     --nc-glass-highlight: rgba(255, 255, 255, 0.85);
     --nc-overlay: rgba(15, 18, 24, 0.3);
+
+    --nc-material-chrome-bg: rgba(250, 251, 252, 0.92);
+    --nc-material-float-bg: rgba(255, 255, 255, 0.92);
+    --nc-material-sheet-bg: rgba(252, 252, 253, 0.97);
+    --nc-material-scrim: var(--nc-overlay);
+    --nc-material-edge: rgba(255, 255, 255, 0.9);
+    --nc-elev-border: var(--nc-border);
     --nc-ambient:
         repeating-linear-gradient(0deg, transparent 0 31px, rgba(20, 24, 32, 0.022) 31px 32px),
         repeating-linear-gradient(90deg, transparent 0 31px, rgba(20, 24, 32, 0.022) 31px 32px),
@@ -248,7 +288,7 @@ html[data-theme="light"] {
     --nc-focus-ring: 0 0 0 3px var(--nc-accent-ring);
 }
 
-/* ---------- Light（Lite）性能模式：标准模式的减法 ----------
+/* ---------- Lite 性能模式：标准模式的减法 ----------
  * 只去掉高级动效与页面特效：ambient、网格、玻璃/模糊、渐变、阴影、悬浮位移、
  * 进入位移/缩放、以及非必要的动画时长；布局、字阶、颜色语义、即时反馈全部保留。
  * ------------------------------------------------------------------------- */
@@ -271,6 +311,18 @@ html[data-lite="true"] {
     --nc-glass-panel-blur: none;
     --nc-scrim-blur: none;
     --nc-glass-highlight: transparent;
+    --nc-material-chrome-bg: var(--nc-surface);
+    --nc-material-float-bg: var(--nc-elevated);
+    --nc-material-sheet-bg: var(--nc-bg-soft);
+    --nc-material-scrim: var(--nc-overlay);
+    --nc-material-edge: transparent;
+    --nc-blur-chrome: 0px;
+    --nc-blur-float: 0px;
+    --nc-blur-sheet: 0px;
+    --nc-blur-scrim: 0px;
+    --nc-elev-border: var(--nc-border-strong);
+    --nc-shadow-float: none;
+    --nc-shadow-sheet: none;
     --nc-ambient: none;
     --nc-grid: none;
     --nc-sheen: none;

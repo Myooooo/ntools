@@ -514,12 +514,12 @@
                     onSelect: function () { NC.theme.toggle(); }
                 },
                 {
-                    label: NC.theme.isLite() ? '关闭 Light 模式' : '开启 Light 模式',
+                    label: NC.theme.isLite() ? '关闭 Lite 模式' : '开启 Lite 模式',
                     icon: 'zap',
                     hint: NC.theme.isLite() ? '已开启' : '',
                     onSelect: function () {
                         var next = NC.theme.toggleLite();
-                        ui.toast(next ? '已开启 Light 模式：关闭高级动效与页面特效' : '已关闭 Light 模式', {
+                        ui.toast(next ? '已开启 Lite 模式：关闭模糊与重动效' : '已关闭 Lite 模式', {
                             type: 'info',
                             duration: 2200
                         });

@@ -854,8 +854,8 @@
         rows.appendChild(themeRow);
 
         var liteRow = util.e('div', { class: 'sp-row' });
-        liteRow.appendChild(util.e('span', { class: 'sp-row__label', text: 'Light 模式' }));
-        liteRow.appendChild(switchField('关闭高级动效与页面特效，优先性能', NC.theme.isLite(), function (checked) {
+        liteRow.appendChild(util.e('span', { class: 'sp-row__label', text: 'Lite 模式' }));
+        liteRow.appendChild(switchField('关闭模糊、阴影与位移动画，优先性能', NC.theme.isLite(), function (checked) {
             NC.theme.setLite(checked);
             renderSection('general');
         }));

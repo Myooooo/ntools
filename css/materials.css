@@ -1,0 +1,121 @@
+/* ==========================================================================
+ * materials.css — v8 材质工具类（Quiet Glass）
+ * 只定义"材质"，不定义布局；由 components / 模块按需套用。
+ * 约束：Safari 需要 -webkit-；Lite 下全部转实色；禁止玻璃叠玻璃。
+ * ========================================================================== */
+
+/* ---------- 浮层：菜单 / 下拉 / Toast / 小面板 ---------- */
+.nc-material-float {
+    background: var(--nc-material-float-bg);
+    -webkit-backdrop-filter: blur(var(--nc-blur-float)) saturate(var(--nc-material-saturate));
+    backdrop-filter: blur(var(--nc-blur-float)) saturate(var(--nc-material-saturate));
+    border: 1px solid var(--nc-elev-border);
+    box-shadow: var(--nc-shadow-float), inset 0 1px 0 var(--nc-material-edge);
+}
+
+/* ---------- 页头 / 导轨 / 状态栏：静态 chrome ---------- */
+.nc-material-chrome {
+    background: var(--nc-material-chrome-bg);
+    border-color: var(--nc-border);
+    box-shadow: inset 0 1px 0 var(--nc-material-edge);
+}
+
+/* ---------- 模态 / 设置面板：厚材质（不叠模糊） ---------- */
+.nc-material-sheet {
+    background: var(--nc-material-sheet-bg);
+    border: 1px solid var(--nc-elev-border);
+    box-shadow: var(--nc-shadow-sheet), inset 0 1px 0 var(--nc-material-edge);
+}
+
+/* ---------- 遮罩：模糊由这一层负责，面板不要再叠 ---------- */
+.nc-material-scrim {
+    background: var(--nc-material-scrim);
+    -webkit-backdrop-filter: blur(var(--nc-blur-scrim)) saturate(120%);
+    backdrop-filter: blur(var(--nc-blur-scrim)) saturate(120%);
+}
+
+/* ---------- 液态玻璃：静态高光边缘（L1） ---------- */
+.nc-liquid {
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--nc-radius-xl);
+    background:
+        linear-gradient(150deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .02) 42%, rgba(255, 255, 255, .08));
+    border: 1px solid var(--nc-material-edge);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .35),
+        inset 0 -1px 0 rgba(0, 0, 0, .22),
+        0 10px 28px -14px rgba(0, 0, 0, .6);
+}
+
+.nc-liquid::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(120px 80px at var(--nc-liquid-x, 50%) var(--nc-liquid-y, 0%),
+            rgba(255, 255, 255, .32), transparent 68%);
+    opacity: .55;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.nc-liquid > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* ---------- 不支持 backdrop-filter：转实色 ---------- */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .nc-material-float,
+    .nc-material-scrim {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background: var(--nc-elevated);
+    }
+
+    .nc-material-scrim {
+        background: var(--nc-overlay);
+    }
+}
+
+/* ---------- Lite：全部转实色，不叠模糊与阴影 ---------- */
+html[data-lite="true"] .nc-material-float,
+html[data-lite="true"] .nc-material-scrim,
+html[data-lite="true"] .nc-material-sheet {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--nc-elevated);
+    box-shadow: none;
+    border-color: var(--nc-border-strong);
+}
+
+html[data-lite="true"] .nc-material-chrome {
+    background: var(--nc-surface);
+    box-shadow: none;
+}
+
+html[data-lite="true"] .nc-liquid::before {
+    display: none;
+}
+
+@media (hover: none) {
+    .nc-liquid::before {
+        display: none;
+    }
+}
+
+@media (prefers-contrast: more) {
+    .nc-material-float,
+    .nc-material-sheet,
+    .nc-material-chrome {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background: var(--nc-elevated);
+        border-color: var(--nc-border-strong);
+    }
+
+    .nc-material-scrim {
+        background: rgba(0, 0, 0, .72);
+    }
+}

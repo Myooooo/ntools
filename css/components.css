@@ -473,7 +473,7 @@ html[data-theme="light"] .nc-select {
 
 .nc-switch input:checked + .nc-switch__track::after {
     transform: translateX(18px);
-    background: #fff;
+    background: var(--nc-switch-knob);
 }
 
 /* 按下时 knob 拉长（真实开关被按住的物理感），松开回弹 */
