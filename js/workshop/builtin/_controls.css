@@ -1,0 +1,430 @@
+/* ==========================================================================
+ * _controls.css — 内置工具的统一自绘控件（v8.1）
+ * 加载顺序：tokens.css → _shared.css → 工具内联样式 → 本文件
+ * 只处理"控件与工具页头"，不接管各工具的内容布局。
+ * ========================================================================== */
+
+/* ---------- 工具页框架：12 个工具共用同一版心与留白 ---------- */
+body {
+    max-width: 860px;
+    padding: 22px 24px 28px;
+}
+
+/* ---------- 工具页头排版：与主应用 17/11.5 对齐 ---------- */
+.head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.title {
+    margin: 0;
+    color: var(--nc-text);
+    font-size: 17px;
+    font-weight: 650;
+    letter-spacing: -0.012em;
+    line-height: 1.25;
+}
+
+.sub {
+    margin: 3px 0 0;
+    color: var(--nc-text-2);
+    font-size: 11.5px;
+    line-height: 1.5;
+}
+
+.hint {
+    color: var(--nc-text-3);
+    font-size: 11.5px;
+    line-height: 1.6;
+}
+
+/* 面板圆角与共享 card 对齐 */
+.panel {
+    border-radius: var(--nc-radius-lg);
+}
+
+/* ---------- 文本输入 / 多行输入 / 原生 select 兜底 ---------- */
+.input,
+.select,
+.textarea,
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+input[type="url"],
+input[type="email"],
+textarea {
+    width: 100%;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-input-bg);
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-fs-md);
+    line-height: 1.4;
+    outline: none;
+    transition:
+        border-color var(--nc-dur-fast) var(--nc-ease-out),
+        box-shadow var(--nc-dur-fast) var(--nc-ease-out),
+        background-color var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+.textarea,
+textarea {
+    min-height: 120px;
+    padding: 9px 10px;
+    resize: vertical;
+    line-height: 1.6;
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus,
+input:focus,
+textarea:focus {
+    border-color: var(--nc-accent);
+    box-shadow: 0 0 0 3px var(--nc-accent-soft);
+}
+
+.input[readonly],
+input[readonly] {
+    color: var(--nc-text-2);
+}
+
+.input:disabled,
+input:disabled,
+textarea:disabled,
+select:disabled {
+    color: var(--nc-text-3);
+    opacity: .6;
+    cursor: not-allowed;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* 日期/时间：保留系统选择器（跨浏览器最稳），只统一外观与图标透明度 */
+input[type="date"],
+input[type="time"] {
+    position: relative;
+    color-scheme: inherit;
+    padding-right: 34px;
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 15px 15px;
+}
+
+input[type="date"] {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238b98a8' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='10' height='9' rx='2'/%3E%3Cpath d='M3 7h10M5.5 2.5v3M10.5 2.5v3'/%3E%3C/svg%3E");
+}
+
+input[type="time"] {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238b98a8' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='8' cy='8' r='5.5'/%3E%3Cpath d='M8 4.8v3.4l2 1.2'/%3E%3C/svg%3E");
+}
+
+/* 原生指示器保留命中区但不可见：点右侧图标仍能打开系统选择器 */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 34px;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+/* 色板 */
+input[type="color"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 42px;
+    height: 36px;
+    padding: 3px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-input-bg);
+    cursor: pointer;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+input[type="color"]::-webkit-color-swatch {
+    border: 1px solid var(--nc-border);
+    border-radius: 5px;
+}
+
+/* ---------- 自绘复选框 / 单选框 ---------- */
+input[type="checkbox"],
+input[type="radio"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    margin: 0;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: 4px;
+    background: var(--nc-surface-2);
+    color: var(--nc-text);
+    cursor: pointer;
+    vertical-align: -3px;
+    transition:
+        background-color var(--nc-dur-fast) var(--nc-ease-out),
+        border-color var(--nc-dur-fast) var(--nc-ease-out),
+        box-shadow var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+input[type="checkbox"]:hover,
+input[type="radio"]:hover {
+    border-color: var(--nc-accent);
+}
+
+input[type="checkbox"]:checked {
+    border-color: var(--nc-accent);
+    background: var(--nc-accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5 6.5 11.5 12.5 4.5' fill='none' stroke='%230b0e13' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px 12px no-repeat;
+}
+
+html[data-theme="light"] input[type="checkbox"]:checked {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5 6.5 11.5 12.5 4.5' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+input[type="radio"] {
+    border-radius: 50%;
+}
+
+input[type="radio"]:checked {
+    border-color: var(--nc-accent);
+    background: radial-gradient(circle at center, var(--nc-text-on-accent) 0 34%, transparent 35%), var(--nc-accent);
+}
+
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--nc-accent-soft);
+}
+
+input[type="checkbox"]:disabled,
+input[type="radio"]:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+/* ---------- 自绘 range ---------- */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 22px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--nc-surface-3);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    margin-top: -5px;
+    border: 2px solid var(--nc-accent);
+    border-radius: 50%;
+    background: var(--nc-surface);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .28);
+}
+
+input[type="range"]:focus-visible {
+    outline: none;
+}
+
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+    box-shadow: var(--nc-focus-ring);
+}
+
+/* ---------- 自绘 select ---------- */
+.tselect {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: middle;
+}
+
+.tselect.is-block {
+    display: block;
+    width: 100%;
+}
+
+.tselect__native {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.tselect__trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-input-bg);
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-fs-md);
+    line-height: 1.4;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        border-color var(--nc-dur-fast) var(--nc-ease-out),
+        box-shadow var(--nc-dur-fast) var(--nc-ease-out),
+        background-color var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+.tselect__trigger:hover {
+    border-color: var(--nc-border-strong);
+    background: var(--nc-surface-2);
+}
+
+.tselect__trigger:focus-visible {
+    outline: none;
+    border-color: var(--nc-accent);
+    box-shadow: 0 0 0 3px var(--nc-accent-soft);
+}
+
+.tselect__trigger:disabled {
+    opacity: .55;
+    cursor: not-allowed;
+}
+
+.tselect__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tselect__caret {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-right: 1.5px solid var(--nc-text-3);
+    border-bottom: 1.5px solid var(--nc-text-3);
+    transform: rotate(45deg) translateY(-1px);
+}
+
+.tselect__list {
+    position: fixed;
+    z-index: 1000;
+    box-sizing: border-box;
+    min-width: 120px;
+    max-height: 260px;
+    padding: 5px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-elevated);
+    box-shadow: var(--nc-shadow-3);
+    opacity: 0;
+    transform: translateY(-4px);
+    transition:
+        opacity var(--nc-dur-fast) var(--nc-ease-out),
+        transform var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+.tselect__list.is-open {
+    opacity: 1;
+    transform: none;
+}
+
+.tselect__option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 32px;
+    padding: 0 9px;
+    border: 0;
+    border-radius: var(--nc-radius-sm);
+    background: transparent;
+    color: var(--nc-text);
+    font: inherit;
+    font-size: var(--nc-fs-md);
+    text-align: left;
+    cursor: pointer;
+}
+
+.tselect__option:hover,
+.tselect__option:focus-visible,
+.tselect__option.is-active {
+    outline: none;
+    background: var(--nc-surface-2);
+}
+
+.tselect__option[aria-selected="true"] {
+    background: var(--nc-accent-soft);
+    color: var(--nc-text);
+}
+
+.tselect__option:disabled {
+    color: var(--nc-text-3);
+    opacity: .5;
+    cursor: not-allowed;
+}
+
+/* 头部工具条里的 select 不要占满整行 */
+.bar .tselect {
+    width: auto;
+    max-width: 240px;
+    flex: 0 1 240px;
+}
+
+/* 主按钮文字色：与主应用 on-accent 一致，避免白字落在浅蓝上 */
+.btn--primary,
+button.primary {
+    color: var(--nc-text-on-accent);
+}
+
+/* Lite：去掉自绘控件的过渡/阴影，保留边框与颜色 */
+html[data-lite="true"] .tselect__trigger,
+html[data-lite="true"] .tselect__list,
+html[data-lite="true"] input,
+html[data-lite="true"] textarea,
+html[data-lite="true"] input[type="checkbox"],
+html[data-lite="true"] input[type="radio"],
+html[data-lite="true"] input[type="range"]::-webkit-slider-thumb {
+    transition: none;
+    box-shadow: none;
+}

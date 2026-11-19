@@ -16,6 +16,10 @@
   .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
   .title{font-size:16px;font-weight:650}
   .form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .form input{width:auto}
+  .form #name{flex:1 1 240px;min-width:0}
+  .form #date{flex:0 0 180px}
+  .form button{flex:0 0 auto}
   input{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;font:inherit;font-size:12.5px}
   input:focus{outline:none;border-color:var(--accent)}
   button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;padding:8px 14px;font:inherit;font-size:12.5px;cursor:pointer}
@@ -46,6 +50,7 @@
   }
   html,body{font-family:var(--nc-font-sans)}
 </style>
+<link rel="stylesheet" href="_controls.css">
 <script src="_shared.js"></script>
 </head>
 <body>

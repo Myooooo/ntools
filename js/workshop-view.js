@@ -220,7 +220,7 @@
         var all = store ? store.list() : [];
         var builtin = all.filter(function (item) { return item.kind === 'builtin'; }).length;
         var custom = all.filter(function (item) { return item.kind === 'custom'; }).length;
-        els.subtitle.textContent = builtin + ' 个内置 · ' + custom + ' 个自定义';
+        els.subtitle.textContent = builtin + ' 内置 · ' + custom + ' 自定义';
     }
 
     function renderList() {
@@ -577,7 +577,7 @@
             var title = els.empty.querySelector('.ws-empty__title');
             var hint = els.empty.querySelector('.ws-empty__hint');
             if (title) title.textContent = '描述你想要的工具';
-            if (hint) hint.textContent = '在右侧写一句话，例如「做一个番茄钟，25 分钟专注、结束提示音」。';
+            if (hint) hint.textContent = '用一句话描述，例如「做一个番茄钟，25 分钟专注、结束提示音」。';
         }
         if (els.title) els.title.textContent = '新应用';
         if (els.kind) { els.kind.hidden = false; els.kind.textContent = '草稿'; }

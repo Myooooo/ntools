@@ -38,7 +38,7 @@
 - **渲染**：Markdown 走 `marked` + `DOMPurify` 统一净化，流式回复只重画尾部未完成块；界面用 CSS 变量（设计令牌）驱动，深浅色与 Lite 模式共用同一套变量。Lite 下去掉毛玻璃、阴影与位移动画，但保留 80–140ms 的按压、淡入与颜色反馈。
 - **材质**：`css/materials.css` 定义 chrome / float / sheet / scrim 四档；浮层 14px 毛玻璃、设置/模态为厚材质 + 静态遮罩模糊；所有模糊同时写 `-webkit-backdrop-filter`，Safari 可用。
 - **兼容**：面向 Chromium 102 编写，不使用 ES Module、可选链之外的新语法、容器查询等新特性；内网网关的 CORS、非 SSE 响应、纯字符串 `content` 等差异都在请求层做了兼容。Safari 16+ 通过 `-webkit-` 前缀、`@supports` 回退与静态模糊适配。
-- **内置工具**：12 个工具共同加载 `css/tokens.css` 与 `js/workshop/builtin/_shared.css`；`_shared.js` 通过 postMessage 热切换主题/Lite，切换主题不再重载 iframe。
+- **内置工具**：12 个工具共同加载 `css/tokens.css`、`js/workshop/builtin/_shared.css` 与 `_controls.css`；输入、下拉、复选、range 全部自绘，`_shared.js` 通过 postMessage 热切换主题/Lite，切换主题不再重载 iframe。
 - **可测**：数据契约与解析逻辑是纯函数，配套断言；交互、时间线、数据故障注入等用无头 Chrome 跑端到端脚本（开发侧，不随包分发）。
 
 ## 数据与备份

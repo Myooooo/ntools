@@ -40,6 +40,7 @@
   .out { width: 100%; min-height: 130px; max-height: 220px; }
   .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 </style>
+<link rel="stylesheet" href="_controls.css">
 <script src="_shared.js"></script>
 </head>
 <body>
@@ -79,7 +80,7 @@
     <section class="card rise rise-3">
       <div class="section-label" style="margin-top:0">Base64 结果</div>
       <textarea class="textarea out" id="output" spellcheck="false" placeholder="结果显示在这里；也可以粘贴 data:image/... 后点「还原图片」"></textarea>
-      <div class="meta" style="margin-top:8px"><span id="outMeta">—</span></div>
+      <div class="meta" style="margin-top:8px"><span id="outMeta"></span></div>
       <p class="hint" id="toastLine" role="status" aria-live="polite" style="margin-top:4px;min-height:18px"></p>
       <div class="row-actions">
         <button type="button" class="btn" id="copy">复制</button>
