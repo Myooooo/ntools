@@ -211,6 +211,9 @@
     }
 
     function bindNav() {
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden && NC.ui && NC.ui.closeAllPopovers) NC.ui.closeAllPopovers('hidden');
+        });
         Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (link) {
             link.addEventListener('click', function (event) {
                 event.preventDefault();
@@ -226,6 +229,8 @@
     function switchTab(tab, updateHash) {
         var target = normalizeTab(tab);
         if (!target) return;
+        // 切页前先关掉菜单/下拉/工具提示，避免浮层悬在新页面上
+        if (NC.ui && NC.ui.closeAllPopovers) NC.ui.closeAllPopovers('route');
         currentTab = target;
 
         Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (link) {

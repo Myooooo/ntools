@@ -90,6 +90,10 @@ html[data-lite="true"] .nc-material-sheet {
     border-color: var(--nc-border-strong);
 }
 
+html[data-lite="true"] .nc-material-scrim {
+    background: var(--nc-overlay);
+}
+
 html[data-lite="true"] .nc-material-chrome {
     background: var(--nc-surface);
     box-shadow: none;

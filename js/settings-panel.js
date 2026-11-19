@@ -27,6 +27,8 @@
     var sections = [];
     var built = false;
     var open = false;
+    var pickerBtn = null;
+    var pickerLabel = null;
 
     function store() { return NC.store && NC.store.llm; }
     function ai() { return NC.ai; }
@@ -2120,6 +2122,20 @@
             if (active) nav.setAttribute('aria-current', 'page');
             else nav.removeAttribute('aria-current');
         });
+        if (pickerLabel) {
+            var currentMeta = sectionMeta().filter(function (item) { return item.id === id; })[0];
+            pickerLabel.textContent = currentMeta ? currentMeta.title : '设置';
+        }
+        /* 移动端：把当前分区滚进视野，避免“当前项在屏外” */
+        var activeNav = navEl.querySelector('.sp-nav.is-active');
+        if (activeNav && navEl.scrollWidth > navEl.clientWidth + 1) {
+            var targetLeft = activeNav.offsetLeft - (navEl.clientWidth - activeNav.offsetWidth) / 2;
+            try {
+                navEl.scrollTo({ left: Math.max(0, targetLeft), behavior: (NC.theme && NC.theme.isLite()) ? 'auto' : 'smooth' });
+            } catch (err) {
+                navEl.scrollLeft = Math.max(0, targetLeft);
+            }
+        }
         bodyEl.textContent = '';
         bodyEl.scrollTop = 0;
         var wrap = util.e('div', { class: 'sp-content' + (silent ? '' : ' nc-anim-in') });
@@ -2148,13 +2164,29 @@
             document.body.appendChild(sheet);
         }
         sheet.textContent = '';
-        var backdrop = util.e('div', { class: 'settings-sheet__backdrop' });
+        var backdrop = util.e('div', { class: 'settings-sheet__backdrop nc-material-scrim' });
         backdrop.addEventListener('click', close);
         sheet.appendChild(backdrop);
 
-        var panel = util.e('div', { class: 'settings-sheet__panel' });
+        var panel = util.e('div', { class: 'settings-sheet__panel nc-material-sheet' });
         var head = util.e('div', { class: 'settings-sheet__head' });
         head.appendChild(util.e('div', { class: 'settings-sheet__title', text: '设置' }));
+        pickerBtn = util.e('button', { type: 'button', class: 'settings-sheet__picker', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': '切换设置分区' });
+        pickerLabel = util.e('span', { class: 'settings-sheet__picker-label', text: '通用' });
+        pickerBtn.appendChild(pickerLabel);
+        pickerBtn.appendChild(icons.el('chevron-down', 14));
+        pickerBtn.addEventListener('click', function () {
+            var items = sectionMeta().map(function (section) {
+                return {
+                    label: section.title,
+                    icon: section.icon,
+                    hint: section.id === currentSection ? '当前' : '',
+                    onSelect: function () { editingProfileId = null; renderSection(section.id); }
+                };
+            });
+            ui.openMenu(pickerBtn, items);
+        });
+        head.appendChild(pickerBtn);
         closeBtn = button('', { ghost: true, small: true, iconOnly: true, icon: 'x', iconSize: 16, title: '关闭设置' });
         closeBtn.classList.add('settings-sheet__close');
         closeBtn.setAttribute('aria-label', '关闭设置');
@@ -2201,25 +2233,50 @@
         build();
         previousFocus = document.activeElement;
         sheet.hidden = false;
-        requestAnimationFrame(function () { sheet.classList.add('is-open'); });
+        sheet.classList.remove('is-closing');
+        // 强制提交初始态，保证第一帧有 0 的起点
+        void sheet.offsetWidth;
+        sheet.classList.add('is-open');
         open = true;
         renderSection(sectionId || currentSection || 'general', { silent: true });
         releaseTrap = ui.trapFocus(sheet);
         setTimeout(function () {
-            if (closeBtn) closeBtn.focus();
-        }, 50);
+            if (closeBtn) {
+                try { closeBtn.focus({ preventScroll: true }); } catch (err) { closeBtn.focus(); }
+            }
+        }, 120);
+    }
+
+    function finishClose() {
+        if (open) return;
+        sheet.hidden = true;
+        sheet.classList.remove('is-closing');
     }
 
     function close() {
         if (!built || !open) return;
         open = false;
+        sheet.classList.add('is-closing');
         sheet.classList.remove('is-open');
         if (releaseTrap) { releaseTrap(); releaseTrap = null; }
+        var panel = sheet.querySelector('.settings-sheet__panel');
+        var done = false;
+        function onEnd(event) {
+            if (done || event.target !== panel) return;
+            if (event.propertyName !== 'opacity' && event.propertyName !== 'transform') return;
+            done = true;
+            panel.removeEventListener('transitionend', onEnd);
+            finishClose();
+        }
+        if (panel) panel.addEventListener('transitionend', onEnd);
         setTimeout(function () {
-            if (!open) sheet.hidden = true;
-        }, 240);
+            if (done) return;
+            done = true;
+            if (panel) panel.removeEventListener('transitionend', onEnd);
+            finishClose();
+        }, 300);
         if (previousFocus && previousFocus.focus) {
-            try { previousFocus.focus(); } catch (err) { /* ignore */ }
+            try { previousFocus.focus({ preventScroll: true }); } catch (err) { previousFocus.focus(); }
         }
     }
 

@@ -56,11 +56,11 @@
         closeActiveSelect(false);
         var previousFocus = document.activeElement;
         var overlay = document.createElement('div');
-        overlay.className = 'nc-modal-overlay';
+        overlay.className = 'nc-modal-overlay nc-material-scrim';
         overlay.setAttribute('role', 'presentation');
 
         var card = document.createElement('div');
-        card.className = 'nc-modal' + (opts.size ? ' nc-modal--' + opts.size : '');
+        card.className = 'nc-modal nc-material-sheet' + (opts.size ? ' nc-modal--' + opts.size : '');
         card.setAttribute('role', 'dialog');
         card.setAttribute('aria-modal', 'true');
 
@@ -293,7 +293,7 @@
         var duration = opts.duration == null ? 3200 : opts.duration;
         var container = ensureToastContainer();
         var item = document.createElement('div');
-        item.className = 'nc-toast nc-toast--' + type;
+        item.className = 'nc-toast nc-toast--' + type + ' nc-material-float';
         item.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
         var iconName = type === 'success' ? 'check-circle' : type === 'error' ? 'alert' : type === 'warn' ? 'alert' : 'info';
@@ -355,7 +355,7 @@
      * 约束：同一时刻只允许一个菜单；重复点击同一触发按钮为开/关；关闭有退出动画。
      * ------------------------------------------------------------------ */
     var activeMenu = null;
-    var MENU_EXIT_MS = 140;
+    var MENU_EXIT_MS = 120;
 
     function removeClosingMenus() {
         var nodes = document.querySelectorAll('.nc-menu.is-closing');
@@ -364,12 +364,21 @@
         });
     }
 
-    function closeActiveMenu() {
+    function closeActiveMenu(reason) {
         if (activeMenu) {
             var instance = activeMenu;
             activeMenu = null;
-            instance.close();
+            instance.close(reason);
         }
+    }
+
+    /** 关闭所有浮层（路由切换 / 页面隐藏 / 打开设置前调用） */
+    function closeAllPopovers(reason) {
+        closeActiveMenu(reason || 'route');
+        closeActiveSelect(false);
+        try {
+            if (global.NC && global.NC.tooltip && global.NC.tooltip.hide) global.NC.tooltip.hide();
+        } catch (err) { /* ignore */ }
     }
 
     function openMenu(anchor, items, options) {
@@ -387,7 +396,7 @@
 
         var previousFocus = document.activeElement;
         var menu = document.createElement('div');
-        menu.className = 'nc-menu';
+        menu.className = 'nc-menu nc-material-float';
         menu.setAttribute('role', 'menu');
         var buttons = [];
         var activeIndex = -1;
@@ -444,7 +453,7 @@
             global.removeEventListener('scroll', onViewportChange, true);
         }
 
-        function close() {
+        function close(reason) {
             if (closed) return;
             closed = true;
             detachListeners();
@@ -454,7 +463,11 @@
             setTimeout(function () {
                 if (menu.parentNode) menu.parentNode.removeChild(menu);
             }, MENU_EXIT_MS);
-            if (previousFocus && previousFocus.focus) {
+            if (anchor && anchor.setAttribute && anchor.getAttribute('aria-haspopup')) {
+                anchor.setAttribute('aria-expanded', 'false');
+            }
+            // 路由/页面隐藏时不要把焦点拽回一个已经不可见的触发按钮
+            if (reason !== 'route' && reason !== 'hidden' && previousFocus && previousFocus.focus) {
                 try { previousFocus.focus(); } catch (err) { /* ignore */ }
             }
             if (opts.onClose) opts.onClose();
@@ -498,6 +511,12 @@
 
         instance = { el: menu, close: close, anchor: anchor };
         activeMenu = instance;
+        if (anchor && anchor.setAttribute && anchor.getAttribute('aria-haspopup')) {
+            anchor.setAttribute('aria-expanded', 'true');
+        }
+        // commit 初始态后再加 is-open，保证首帧有过渡
+        void menu.offsetWidth;
+        menu.classList.add('is-open');
 
         setTimeout(function () {
             if (closed) return;
@@ -970,7 +989,7 @@
         if (activeMenu) closeActiveMenu();
 
         var pop = document.createElement('div');
-        pop.className = 'nc-select-pop';
+        pop.className = 'nc-select-pop nc-material-float';
         pop.id = 'nc-select-pop-' + (++selectSeq);
         pop.setAttribute('role', 'listbox');
         pop.setAttribute('aria-label', selectLabel(select));
@@ -1372,6 +1391,7 @@
         enhanceSegs: enhanceSegs,
         syncSeg: syncSeg,
         closeSelect: closeActiveSelect,
+        closeAllPopovers: closeAllPopovers,
         trapFocus: trapFocus,
         getFocusable: getFocusable,
         installGlobalErrorHandlers: installGlobalErrorHandlers,

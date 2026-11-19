@@ -1532,3 +1532,154 @@ html[data-lite="true"] .settings-sheet__backdrop {
         transition: none;
     }
 }
+
+/* ==========================================================================
+ * v8 设置面板：静态模糊 + 动态不透明度
+ * - 遮罩模糊常驻，只渐入 opacity；不再动画 blur 半径
+ * - 根节点不做 opacity 过渡（避免双重变淡 + backdrop root）
+ * - 面板为厚材质（高不透明 tint），不叠第二层模糊
+ * ========================================================================== */
+.settings-sheet {
+    visibility: hidden;
+    pointer-events: none;
+    opacity: 1;
+    transition: visibility 0s linear var(--nc-dur-scrim);
+    background: transparent;
+}
+
+.settings-sheet.is-open {
+    visibility: visible;
+    pointer-events: auto;
+    opacity: 1;
+    transition-delay: 0s;
+}
+
+.settings-sheet__backdrop {
+    background: var(--nc-overlay);
+    -webkit-backdrop-filter: blur(var(--nc-blur-scrim)) saturate(120%);
+    backdrop-filter: blur(var(--nc-blur-scrim)) saturate(120%);
+    opacity: 0;
+    transition: opacity var(--nc-dur-scrim) linear;
+}
+
+.settings-sheet.is-open .settings-sheet__backdrop {
+    opacity: 1;
+}
+
+.settings-sheet__panel {
+    width: min(920px, calc(100vw - 64px));
+    height: min(760px, calc(100vh - 64px));
+    max-height: none;
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+    background: var(--nc-material-sheet-bg);
+    border: 1px solid var(--nc-elev-border);
+    box-shadow: var(--nc-shadow-sheet), inset 0 1px 0 var(--nc-material-edge);
+    transition:
+        opacity 220ms var(--nc-ease-out),
+        transform var(--nc-dur-panel) var(--nc-ease-emphasized);
+    overflow: hidden;
+}
+
+.settings-sheet.is-open .settings-sheet__panel {
+    opacity: 1;
+    transform: none;
+    /* 覆盖旧层 line 51 的 transition-duration: --nc-dur-slow */
+    transition-duration: 220ms, var(--nc-dur-panel);
+}
+
+.settings-sheet.is-closing .settings-sheet__panel {
+    opacity: 0;
+    transform: translateY(6px) scale(0.99);
+    transition-duration: var(--nc-dur-exit);
+    transition-timing-function: var(--nc-ease-exit);
+}
+
+/* 移动端分区选择器（≤560 替代横向滚动导航；桌面隐藏） */
+.settings-sheet__picker {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    min-height: 30px;
+    margin-left: auto;
+    margin-right: 8px;
+    padding: 0 10px;
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-surface-2);
+    color: var(--nc-text);
+    font-size: var(--nc-fs-sm);
+    white-space: nowrap;
+}
+
+.settings-sheet__picker .nc-icon {
+    color: var(--nc-text-3);
+}
+
+@media (max-width: 560px) {
+    .settings-sheet__picker {
+        display: inline-flex;
+    }
+
+    .settings-sheet__nav {
+        display: none;
+    }
+
+    .settings-sheet__layout {
+        grid-template-rows: minmax(0, 1fr);
+    }
+}
+
+/* 面板头：不再做无意义的毛玻璃（下面是不透明面板），只留发丝线与内高光 */
+.settings-sheet__head {
+    background: transparent;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-bottom: 1px solid var(--nc-border);
+    box-shadow: inset 0 1px 0 var(--nc-material-edge);
+}
+
+html[data-lite="true"] .settings-sheet__backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgba(4, 6, 10, 0.72);
+    transition: opacity var(--nc-dur-fast) linear;
+}
+
+html[data-lite="true"] .settings-sheet__panel,
+html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
+    transform: none;
+    transition: opacity var(--nc-dur-fast) linear;
+    background: var(--nc-bg-soft);
+    box-shadow: none;
+}
+
+@media (max-width: 900px) {
+    .settings-sheet {
+        padding: 0;
+    }
+
+    .settings-sheet__panel {
+        width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+        border: 0;
+        border-radius: 0;
+    }
+
+    .settings-sheet__head {
+        border-radius: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .settings-sheet__backdrop {
+        transition: opacity 120ms linear;
+    }
+
+    .settings-sheet__panel,
+    .settings-sheet.is-closing .settings-sheet__panel {
+        transform: none;
+        transition: opacity 120ms linear;
+    }
+}

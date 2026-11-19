@@ -770,12 +770,14 @@ html[data-lite="true"] .nc-switch__track::after {
     box-shadow: var(--nc-shadow-3);
     opacity: 0;
     transform: translateY(10px) scale(0.98);
-    transition: opacity var(--nc-dur) var(--nc-ease-out), transform var(--nc-dur-slow) var(--nc-ease-out);
+    transition: opacity var(--nc-dur) var(--nc-ease-out), transform var(--nc-dur) var(--nc-ease-out);
 }
 
 .nc-modal-overlay.show .nc-modal {
     opacity: 1;
     transform: translateY(0) scale(1);
+    /* 进入稍慢、关闭更快（关闭走基础 160ms） */
+    transition-duration: var(--nc-dur-panel);
 }
 
 .nc-modal--sm { width: min(400px, 100%); }
@@ -917,7 +919,7 @@ html[data-lite="true"] .nc-switch__track::after {
  * -------------------------------------------------------------------------- */
 .nc-menu {
     position: fixed;
-    z-index: var(--nc-z-dropdown);
+    z-index: var(--nc-z-popover);
     min-width: 196px;
     max-width: 280px;
     padding: 6px;
@@ -925,7 +927,6 @@ html[data-lite="true"] .nc-switch__track::after {
     border: 1px solid var(--nc-border-strong);
     border-radius: var(--nc-radius-md);
     box-shadow: var(--nc-shadow-3);
-    animation: nc-pop-in var(--nc-dur) var(--nc-ease-out) both;
 }
 
 .nc-menu__item {
@@ -1436,7 +1437,7 @@ html[data-theme="light"] .nc-select {
 }
 
 .nc-toast.show { transform: translateY(0); }
-.nc-toast.is-leaving { transform: translateY(4px); }
+.nc-toast.is-leaving { transform: translateY(8px); }
 
 .nc-toast__action {
     border-radius: var(--nc-radius-sm);
@@ -1450,10 +1451,17 @@ html[data-theme="light"] .nc-select {
     box-shadow: var(--nc-shadow-3);
     padding: 5px;
     transform-origin: var(--nc-menu-origin, top right);
-    /* 菜单属于“偶发”浮层：160ms + 0.96 缩放，比原来的 0.985 更容易被感知 */
-    --nc-enter-scale: 0.96;
-    --nc-enter-y: 8px;
-    animation: nc-pop-in 160ms var(--nc-ease-out) both;
+    /* 菜单属于“偶发”浮层：160ms + 0.96 缩放；用 transition 以便中断/反向 */
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+    transition:
+        opacity var(--nc-dur) var(--nc-ease-out),
+        transform var(--nc-dur) var(--nc-ease-out);
+}
+
+.nc-menu.is-open {
+    opacity: 1;
+    transform: none;
 }
 
 .nc-menu__item {
@@ -1495,18 +1503,23 @@ html[data-theme="light"] .nc-select {
     }
 }
 
-/* v4.1 菜单退出动画：打开为 pop-in，关闭更快更轻 */
+/* 退出比进入更快；仍用 transition，快速开关不会闪跳 */
 .nc-menu.is-closing {
-    animation: none;
     opacity: 0;
     transform: scale(0.97);
-    transition: opacity 120ms var(--nc-ease), transform 120ms var(--nc-ease);
+    transition-duration: var(--nc-dur-exit);
+    transition-timing-function: var(--nc-ease-exit);
     pointer-events: none;
 }
 
+html[data-lite="true"] .nc-menu {
+    transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
-    .nc-menu.is-closing {
-        transition: none;
+    .nc-menu {
+        transform: none !important;
+        transition: opacity 120ms linear !important;
     }
 }
 
@@ -2457,28 +2470,23 @@ html[data-lite="true"] .nc-seg__indicator {
 }
 
 
-/* v6.4.1 模态遮罩：同样让 blur 与暗度一起渐入 */
+/* v8 模态遮罩：模糊常驻，只渐入透明度；不再逐帧动画 blur 半径 */
 .nc-modal-overlay {
-    background: rgba(4, 6, 10, 0);
-    -webkit-backdrop-filter: saturate(100%) blur(0px);
-    backdrop-filter: saturate(100%) blur(0px);
-    transition:
-        opacity var(--nc-dur-panel) var(--nc-ease-out),
-        background-color var(--nc-dur-panel) var(--nc-ease-out),
-        -webkit-backdrop-filter var(--nc-dur-panel) var(--nc-ease-out),
-        backdrop-filter var(--nc-dur-panel) var(--nc-ease-out);
+    background: var(--nc-overlay);
+    -webkit-backdrop-filter: blur(var(--nc-blur-scrim)) saturate(120%);
+    backdrop-filter: blur(var(--nc-blur-scrim)) saturate(120%);
+    opacity: 0;
+    transition: opacity var(--nc-dur-scrim) linear;
 }
 
 .nc-modal-overlay.show {
-    background: var(--nc-overlay);
-    -webkit-backdrop-filter: var(--nc-scrim-blur);
-    backdrop-filter: var(--nc-scrim-blur);
+    opacity: 1;
 }
 
 html[data-lite="true"] .nc-modal-overlay {
-    transition-duration: 0.01ms;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+    transition-duration: var(--nc-dur-fast);
 }
 
 @media (prefers-reduced-motion: reduce) {
