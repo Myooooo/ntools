@@ -2451,7 +2451,8 @@ html[data-lite="true"] .nc-dt__pop.is-open {
 }
 
 html[data-lite="true"] .nc-seg__indicator {
-    box-shadow: none;
+    /* 无阴影时用 1px 边保证选中态可辨，而不是仅靠 1.03:1 的底色 */
+    box-shadow: inset 0 0 0 1px var(--nc-border-strong);
     transition: none;
 }
 
@@ -2493,4 +2494,20 @@ html[data-lite="true"] .nc-modal-overlay {
     .nc-modal-overlay {
         transition: none;
     }
+}
+
+
+/* ==========================================================================
+ * v8 Lite：保留透明度/颜色反馈，去掉位移与布局动画
+ * ========================================================================== */
+html[data-lite="true"] .nc-modal,
+html[data-lite="true"] .nc-toast {
+    transform: none !important;
+}
+
+html[data-lite="true"] .tools-rail,
+html[data-lite="true"] .chat-sessions,
+html[data-lite="true"] .notes-side,
+html[data-lite="true"] .nc-progress__bar {
+    transition: none;
 }

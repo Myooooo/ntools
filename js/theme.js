@@ -71,10 +71,25 @@
             applyTheme(isLight() ? 'light' : 'dark');
         }
         var storedLite = storage.getRaw(LITE_KEY);
-        if (storedLite === 'true' || storedLite === 'false') {
+        var forcedFx = '';
+        try {
+            forcedFx = String((new URLSearchParams(global.location.search)).get('fx') || '');
+        } catch (err) { forcedFx = ''; }
+        if (forcedFx === 'lite' || forcedFx === 'full') {
+            // 支持 ?fx=lite / ?fx=full 现场切换，不写入偏好
+            applyLite(forcedFx === 'lite');
+        } else if (storedLite === 'true' || storedLite === 'false') {
             applyLite(storedLite === 'true');
         } else {
-            applyLite(isLite());
+            // 首次启动：内存 ≤4GB 或只有 2 核，默认 Lite；Safari 无 deviceMemory，不误判
+            var weak = false;
+            try {
+                var mem = global.navigator && global.navigator.deviceMemory;
+                var cores = global.navigator && global.navigator.hardwareConcurrency;
+                weak = (typeof mem === 'number' && mem > 0 && mem <= 4) ||
+                    (typeof cores === 'number' && cores > 0 && cores <= 2);
+            } catch (err) { weak = false; }
+            applyLite(weak);
         }
         if (systemQuery) {
             var listener = function () {

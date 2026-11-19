@@ -296,13 +296,16 @@ html[data-lite="true"] {
     /* 无模糊时加深遮罩，补偿“推后一层”的层次感（几何与色相不变） */
     --nc-overlay: rgba(4, 6, 10, 0.72);
 
-    --nc-dur-press: 0ms;
-    --nc-dur-fast: 0ms;
-    --nc-dur: 0ms;
-    --nc-dur-slow: 0ms;
+    /* Lite 不再把所有过渡归零：保留按压/淡入/颜色反馈，只去掉重动效 */
+    --nc-dur-press: 80ms;
+    --nc-dur-fast: 120ms;
+    --nc-dur: 140ms;
+    --nc-dur-slow: 140ms;
     --nc-dur-page: 0ms;
-    --nc-dur-panel: 0ms;
+    --nc-dur-panel: 120ms;
     --nc-dur-tip: 0ms;
+    --nc-dur-exit: 100ms;
+    --nc-dur-scrim: 120ms;
 
     --nc-glass: var(--nc-surface);
     --nc-glass-bg: var(--nc-surface);
@@ -349,13 +352,15 @@ html[data-lite="true"] *::before,
 html[data-lite="true"] *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
 }
 
 html[data-lite="true"] .nc-spinner,
 html[data-lite="true"] .nc-btn.is-loading::after,
-html[data-lite="true"] .chat-loading__spinner {
+html[data-lite="true"] .nc-loading__spinner,
+html[data-lite="true"] .chat-loading__spinner,
+html[data-lite="true"] .chat-reasoning__spinner,
+html[data-lite="true"] .ws-spinner {
     animation-duration: 800ms !important;
     animation-iteration-count: infinite !important;
 }
@@ -388,12 +393,13 @@ html[data-theme="light"][data-lite="true"] {
 /* ---------- 系统级减少动效：保留可读的淡入，去掉位移 ---------- */
 @media (prefers-reduced-motion: reduce) {
     :root {
-        --nc-dur-press: 0ms;
-        --nc-dur-fast: 0ms;
-        --nc-dur: 0ms;
-        --nc-dur-slow: 0ms;
+        --nc-dur-press: 80ms;
+        --nc-dur-fast: 120ms;
+        --nc-dur: 120ms;
+        --nc-dur-slow: 120ms;
         --nc-dur-page: 0ms;
-        --nc-dur-panel: 0ms;
+        --nc-dur-panel: 120ms;
+        --nc-dur-tip: 0ms;
         --nc-enter-y: 0px;
         --nc-enter-scale: 1;
         --nc-hover-lift: none;
@@ -404,7 +410,17 @@ html[data-theme="light"][data-lite="true"] {
     *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+
+    /* 功能性指示保留，避免“看起来卡死” */
+    .nc-spinner,
+    .nc-btn.is-loading::after,
+    .nc-loading__spinner,
+    .chat-loading__spinner,
+    .chat-reasoning__spinner,
+    .ws-spinner {
+        animation-duration: 800ms !important;
+        animation-iteration-count: infinite !important;
     }
 }

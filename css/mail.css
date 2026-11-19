@@ -381,7 +381,7 @@
   /* ---------- 模态框 ---------- */
   .modal-mask {
     position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center;
-    padding: 20px; background: var(--overlay); backdrop-filter: blur(4px);
+    padding: 20px; background: var(--overlay); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
   }
   .modal-mask.closed { display: none; }
   .modal {
@@ -537,7 +537,8 @@
   }
 
   html[data-lite="true"] .modal-mask {
-    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
   }
 
   html[data-lite="true"] .boot-logo,
@@ -846,7 +847,8 @@
   }
 
   html[data-lite="true"] .modal-mask {
-    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
   }
 
   /* ==========================================================================

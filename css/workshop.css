@@ -587,6 +587,7 @@ html[data-lite="true"] .ws-scrim {
     justify-content: center;
     gap: 10px;
     background: var(--nc-overlay);
+    -webkit-backdrop-filter: var(--nc-scrim-blur);
     backdrop-filter: var(--nc-scrim-blur);
 }
 
@@ -614,6 +615,7 @@ html[data-lite="true"] .ws-spinner {
 }
 
 html[data-lite="true"] .ws-loading {
+    -webkit-backdrop-filter: none;
     backdrop-filter: none;
 }
 
