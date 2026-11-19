@@ -526,15 +526,24 @@
 
             <!-- ---------------- Tab：创意工坊 ---------------- -->
             <section class="tools-page tools-page--workshop" id="page-workshop" data-panel="workshop" data-page="workshop" aria-label="创意工坊" hidden>
+                <header class="tools-head tools-head--workshop">
+                    <div class="tools-head__text">
+                        <h1 class="tools-title">创意工坊</h1>
+                        <p class="tools-subtitle" id="ws-subtitle">工具库</p>
+                    </div>
+                    <div class="tools-head__actions">
+                        <button type="button" class="nc-btn nc-btn--sm nc-btn--primary" id="ws-new-btn" title="用自然语言新建应用">
+                            <span data-icon="plus" data-icon-size="15"></span><span>新建</span>
+                        </button>
+                        <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-more-btn" aria-label="工坊操作" title="工坊操作" aria-haspopup="menu">
+                            <span data-icon="more" data-icon-size="16"></span>
+                        </button>
+                    </div>
+                </header>
                 <div class="ws-shell" id="ws-shell">
                     <aside class="ws-side" aria-label="工坊列表">
                         <div class="ws-side__head">
-                            <button type="button" class="nc-btn nc-btn--sm nc-btn--primary" id="ws-new-btn" title="用自然语言新建应用">
-                                <span data-icon="plus" data-icon-size="15"></span><span>新建</span>
-                            </button>
-                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-more-btn" aria-label="工坊操作" title="工坊操作" aria-haspopup="menu">
-                                <span data-icon="more" data-icon-size="15"></span>
-                            </button>
+                            <span class="ws-side__title">工具库</span>
                             <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-side-close" aria-label="关闭列表" title="关闭列表">
                                 <span data-icon="chevron-left" data-icon-size="15"></span>
                             </button>
@@ -545,16 +554,24 @@
                         </div>
                         <div class="ws-list nc-scroll" id="ws-list" role="list"></div>
                     </aside>
+                    <div class="ws-scrim" id="ws-scrim" hidden></div>
                     <div class="ws-main">
                         <header class="ws-head">
                             <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost ws-head__toggle" id="ws-side-open" aria-label="收起工具列表" title="收起工具列表" aria-expanded="true">
                                 <span data-icon="panel-left" data-icon-size="16"></span>
                             </button>
                             <div class="ws-head__title">
-                                <span class="ws-name" id="ws-title">创意工坊</span>
+                                <nav class="ws-breadcrumb" aria-label="当前位置">
+                                    <span class="ws-breadcrumb__root">创意工坊</span>
+                                    <span class="ws-breadcrumb__sep" aria-hidden="true">/</span>
+                                    <span class="ws-name" id="ws-title">创意工坊</span>
+                                </nav>
                                 <span class="ws-kind" id="ws-kind" hidden>内置</span>
                             </div>
                             <div class="ws-head__actions">
+                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-focus-toggle" aria-label="聚焦预览" title="聚焦预览" aria-pressed="false">
+                                    <span data-icon="maximize" data-icon-size="16"></span>
+                                </button>
                                 <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-reload-btn" aria-label="重新加载" title="重新加载">
                                     <span data-icon="refresh" data-icon-size="16"></span>
                                 </button>
@@ -574,15 +591,19 @@
                         </header>
                         <div class="ws-stage" id="ws-stage">
                             <iframe class="ws-frame" id="ws-frame" title="创意工坊预览" sandbox="allow-scripts allow-forms allow-modals allow-same-origin" referrerpolicy="no-referrer" hidden></iframe>
-                            <div class="ws-loading" id="ws-loading" hidden>
+                            <div class="ws-loading" id="ws-loading" role="status" aria-live="polite" hidden>
                                 <span class="ws-spinner" aria-hidden="true"></span>
                                 <span class="ws-loading__text" id="ws-loading-text">正在生成…</span>
                                 <button type="button" class="nc-btn nc-btn--sm" id="ws-stop-btn">停止</button>
                             </div>
                             <div class="ws-empty" id="ws-empty">
                                 <span class="ws-empty__icon" data-icon="wand" data-icon-size="22" aria-hidden="true"></span>
-                                <p class="ws-empty__title">从左侧选一个工具开始</p>
-                                <p class="ws-empty__hint">内置工具开箱即用；「新建」可以用一句话生成属于你的小应用。</p>
+                                <p class="ws-empty__title">选择一个工具开始</p>
+                                <p class="ws-empty__hint">内置工具开箱即用；也可以新建一个只属于你的小应用。</p>
+                                <div class="ws-empty__actions">
+                                    <button type="button" class="nc-btn nc-btn--sm nc-btn--primary" id="ws-empty-new">新建应用</button>
+                                    <button type="button" class="nc-btn nc-btn--sm" id="ws-empty-import">导入 HTML</button>
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -4,8 +4,8 @@
  * ========================================================================== */
 .tools-page--workshop {
     position: relative;
-    padding: 0;
-    gap: 0;
+    padding: 20px 24px 0;
+    gap: 14px;
     overflow: hidden;
 }
 
@@ -16,14 +16,16 @@
     min-height: 0;
     overflow: hidden;
     background: var(--nc-surface);
+    border: 1px solid var(--nc-border);
+    border-radius: var(--nc-radius-lg);
 }
 
 /* ---------- 左：列表 ---------- */
 .ws-side {
     display: flex;
-    flex: 0 0 260px;
+    flex: 0 0 240px;
     flex-direction: column;
-    width: 260px;
+    width: 240px;
     min-height: 0;
     min-width: 0;
     overflow: hidden;
@@ -45,13 +47,17 @@
     display: flex;
     flex: 0 0 auto;
     align-items: center;
+    justify-content: space-between;
     gap: 6px;
-    padding: 10px 10px 8px;
+    height: 44px;
+    padding: 0 10px 0 14px;
 }
 
-.ws-side__head .nc-btn--primary {
-    flex: 1;
-    justify-content: center;
+.ws-side__title {
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    font-weight: 600;
+    letter-spacing: var(--nc-track-meta);
 }
 
 #ws-side-close {
@@ -93,11 +99,9 @@
 .ws-item {
     display: flex;
     align-items: center;
-    gap: 9px;
     width: 100%;
     min-height: 48px;
-    padding: 6px 8px;
-    border: 0;
+    padding: 0 2px 0 0;
     border-radius: var(--nc-radius-sm);
     background: transparent;
     color: var(--nc-text-2);
@@ -114,6 +118,23 @@
 .ws-item.is-active {
     background: var(--nc-accent-soft);
     color: var(--nc-text);
+    box-shadow: inset 2px 0 0 var(--nc-accent);
+}
+
+.ws-item__main {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 6px 4px 6px 8px;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
 }
 
 .ws-item__icon {
@@ -161,28 +182,46 @@
 }
 
 .ws-item__more {
-    display: none;
-    flex: 0 0 auto;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: 0;
-    border-radius: 5px;
-    background: transparent;
-    color: var(--nc-text-3);
-    cursor: pointer;
-}
-
-.ws-item:hover .ws-item__more,
-.ws-item__more:focus-visible {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--nc-text-3);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity var(--nc-dur-fast) var(--nc-ease), background-color var(--nc-dur-fast) var(--nc-ease), color var(--nc-dur-fast) var(--nc-ease);
 }
 
-.ws-item__more:hover {
+@media (hover: hover) and (pointer: fine) {
+    .ws-item:hover .ws-item__more {
+        opacity: 1;
+    }
+}
+
+.ws-item__more:focus-visible {
+    opacity: 1;
     background: var(--nc-surface-3);
     color: var(--nc-text);
+}
+
+@media (hover: none), (pointer: coarse) {
+    .ws-item__more {
+        opacity: .8;
+    }
+}
+
+@media (pointer: coarse) {
+    .ws-item__more {
+        width: 32px;
+        height: 32px;
+        opacity: .8;
+    }
 }
 
 .ws-empty-list {
@@ -207,7 +246,7 @@
     flex: 0 0 auto;
     align-items: center;
     gap: 8px;
-    height: 46px;
+    height: 52px;
     padding: 0 10px 0 14px;
     border-bottom: 1px solid var(--nc-border-faint);
 }
@@ -224,13 +263,35 @@
     flex: 1;
 }
 
+.ws-breadcrumb {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    min-width: 0;
+}
+
+.ws-breadcrumb__root {
+    flex: 0 0 auto;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-sm);
+    letter-spacing: var(--nc-track-ui);
+}
+
+.ws-breadcrumb__sep {
+    flex: 0 0 auto;
+    color: var(--nc-border-strong);
+    font-size: var(--nc-fs-sm);
+}
+
 .ws-name {
-    font-size: var(--nc-fs-lg);
-    font-weight: 600;
-    color: var(--nc-text);
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--nc-text);
+    font-size: var(--nc-fs-md);
+    font-weight: 550;
+    letter-spacing: var(--nc-track-ui);
 }
 
 .ws-kind {
@@ -250,8 +311,19 @@
 }
 
 #ws-pin-btn[aria-pressed="true"],
-#ws-focus-btn[aria-pressed="true"] {
+#ws-focus-toggle[aria-pressed="true"] {
     color: var(--nc-accent);
+    background: var(--nc-accent-faint);
+}
+
+/* 聚焦预览：隐藏工具库与对话，舞台占满 */
+.ws-shell.is-focus .ws-side,
+.ws-shell.is-focus .ws-chat {
+    display: none;
+}
+
+.ws-shell.is-focus .ws-main {
+    flex: 1;
 }
 
 .ws-stage {
@@ -309,8 +381,50 @@
 }
 
 .ws-empty__hint {
+    max-width: 360px;
     font-size: var(--nc-fs-sm);
     line-height: 1.7;
+}
+
+.ws-empty__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+/* ---------- 抽屉遮罩（仅窄屏） ---------- */
+.ws-scrim {
+    display: none;
+}
+
+@media (max-width: 1100px) {
+    .ws-scrim {
+        display: block;
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+        background: var(--nc-overlay);
+        -webkit-backdrop-filter: blur(var(--nc-blur-scrim)) saturate(120%);
+        backdrop-filter: blur(var(--nc-blur-scrim)) saturate(120%);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--nc-dur-scrim) linear;
+    }
+
+    .ws-shell.is-side-open .ws-scrim {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    .ws-scrim[hidden] {
+        display: none;
+    }
+}
+
+html[data-lite="true"] .ws-scrim {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
 }
 
 /* ---------- 窄屏：列表变抽屉 ---------- */
@@ -530,4 +644,46 @@ html[data-lite="true"] .ws-loading {
 
 .ws-item.is-drop-after {
     box-shadow: inset 0 -2px 0 var(--nc-accent);
+}
+
+/* v8：工坊页头在窄屏保持单行（标题/计数在左，新建/更多在右） */
+@media (max-width: 900px) {
+    /* tools.css 的 page-head 列布局有 4 个类，这里用 ID 确保覆盖 */
+    #page-workshop .tools-head.tools-head--workshop {
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .tools-head--workshop .tools-head__text {
+        flex: 1;
+        min-width: 0;
+    }
+
+    #page-workshop .tools-head__actions {
+        width: auto;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+    }
+
+    .tools-head--workshop .tools-subtitle {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
+@media (max-width: 560px) {
+    .tools-head--workshop .tools-title {
+        font-size: var(--nc-fs-xl);
+    }
+
+    .tools-head--workshop .tools-subtitle {
+        font-size: var(--nc-fs-2xs);
+    }
+
+    .ws-breadcrumb__root,
+    .ws-breadcrumb__sep {
+        display: none;
+    }
 }

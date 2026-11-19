@@ -18,6 +18,7 @@
     var schema = null;
     var unsubscribe = null;
     var drag = { id: null, category: null };
+    var sideRelease = null;
     var state = {
         initialized: false,
         activeId: null,
@@ -157,16 +158,21 @@
     }
 
     function itemRow(item) {
-        var row = document.createElement('button');
-        row.type = 'button';
+        var row = document.createElement('div');
         row.className = 'ws-item' + (item.id === state.activeId ? ' is-active' : '');
         row.setAttribute('role', 'listitem');
         row.setAttribute('data-ws-id', item.id);
 
+        var main = document.createElement('button');
+        main.type = 'button';
+        main.className = 'ws-item__main';
+        main.setAttribute('data-ws-id', item.id);
+        if (item.id === state.activeId) main.setAttribute('aria-current', 'true');
+
         var iconBox = document.createElement('span');
         iconBox.className = 'ws-item__icon';
-        iconBox.appendChild(icon(item.icon || 'sparkles', 15));
-        row.appendChild(iconBox);
+        iconBox.appendChild(icon(item.icon || 'sparkles', 16));
+        main.appendChild(iconBox);
 
         var text = document.createElement('span');
         text.className = 'ws-item__text';
@@ -178,20 +184,22 @@
         desc.className = 'ws-item__desc';
         desc.textContent = item.kind === 'builtin' ? (item.desc || '') : '自定义应用';
         text.appendChild(desc);
-        row.appendChild(text);
+        main.appendChild(text);
 
         if (item.pinned) {
             var flags = document.createElement('span');
             flags.className = 'ws-item__flags';
             flags.appendChild(icon('pin', 12));
-            row.appendChild(flags);
+            main.appendChild(flags);
         }
 
-        var more = document.createElement('span');
+        row.appendChild(main);
+
+        var more = document.createElement('button');
+        more.type = 'button';
         more.className = 'ws-item__more';
-        more.setAttribute('role', 'button');
         more.setAttribute('aria-label', item.title + ' 操作');
-        more.appendChild(icon('more', 13));
+        more.appendChild(icon('more', 14));
         more.addEventListener('click', function (event) {
             event.stopPropagation();
             openItemMenu(item, more);
@@ -199,22 +207,41 @@
         row.appendChild(more);
 
         bindDrag(row, item);
-        row.addEventListener('click', function () { selectItem(item.id); });
+        // 行本身也可点（padding/空白区域），键盘仍走 main 按钮的 click 冒泡
+        row.addEventListener('click', function (event) {
+            if (event.target && event.target.closest && event.target.closest('.ws-item__more')) return;
+            selectItem(item.id);
+        });
         return row;
+    }
+
+    function renderHeaderMeta() {
+        if (!els.subtitle) return;
+        var all = store ? store.list() : [];
+        var builtin = all.filter(function (item) { return item.kind === 'builtin'; }).length;
+        var custom = all.filter(function (item) { return item.kind === 'custom'; }).length;
+        els.subtitle.textContent = builtin + ' 个内置 · ' + custom + ' 个自定义';
     }
 
     function renderList() {
         if (!els.list) return;
+        renderHeaderMeta();
         els.list.textContent = '';
         var items = groupedItems();
-        var groups = [
-            { key: 'builtin', label: '内置', list: items.filter(function (item) { return item.kind === 'builtin'; }) },
-            { key: 'custom', label: '自定义', list: items.filter(function (item) { return item.kind === 'custom'; }) }
-        ];
+        var free = items.filter(function (item) { return !item.pinned; });
+        var groups = [];
+        var pinned = items.filter(function (item) { return item.pinned; });
+        if (pinned.length) groups.push({ key: 'pinned', label: '置顶', list: pinned });
+        groups.push(
+            { key: 'office', label: '办公实用', list: free.filter(function (item) { return item.kind === 'builtin' && item.group === 'office'; }) },
+            { key: 'fun', label: '效率趣味', list: free.filter(function (item) { return item.kind === 'builtin' && item.group === 'fun'; }) },
+            { key: 'custom', label: '自定义', list: free.filter(function (item) { return item.kind === 'custom'; }) }
+        );
         var rendered = 0;
         groups.forEach(function (group) {
             var head = document.createElement('div');
             head.className = 'ws-group';
+            head.setAttribute('role', 'presentation');
             head.textContent = group.label;
             els.list.appendChild(head);
             if (group.key === 'custom' && !group.list.length) {
@@ -236,6 +263,17 @@
             noResult.textContent = '没有匹配「' + state.filter + '」的工具';
             els.list.appendChild(noResult);
         }
+
+        // 保持当前工具在列表视野内（不滚动页面）
+        var activeRow = els.list.querySelector('.ws-item.is-active');
+        if (activeRow) {
+            var top = activeRow.offsetTop;
+            var bottom = top + activeRow.offsetHeight;
+            if (top < els.list.scrollTop) els.list.scrollTop = Math.max(0, top - 8);
+            else if (bottom > els.list.scrollTop + els.list.clientHeight) {
+                els.list.scrollTop = bottom - els.list.clientHeight + 8;
+            }
+        }
     }
 
     /* ------------------------------------------------------------------ *
@@ -254,6 +292,9 @@
         els.frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-same-origin');
         var src = item.file + '?theme=' + currentTheme() + '&lite=' + (isLite() ? '1' : '0');
         setHidden(els.frame, false);
+        els.frame.style.height = '';
+        els.frame.style.width = '';
+        els.frame.title = (item.title || '工具') + ' · 预览';
         els.frame.src = src;
         setHidden(els.empty, true);
     }
@@ -268,6 +309,9 @@
             title: item.title
         });
         setHidden(els.frame, false);
+        els.frame.style.height = '';
+        els.frame.style.width = '';
+        els.frame.title = (item.title || '工具') + ' · 预览';
         els.frame.srcdoc = html;
         setHidden(els.empty, true);
     }
@@ -282,7 +326,7 @@
     function renderActive() {
         if (draft.active) return;
         var item = currentItem();
-        if (els.title) els.title.textContent = item ? item.title : '创意工坊';
+        if (els.title) els.title.textContent = item ? item.title : '选择一个工具';
         if (els.kind) {
             if (item) {
                 els.kind.hidden = false;
@@ -366,6 +410,14 @@
     function toggleSide(force) {
         state.sideOpen = typeof force === 'boolean' ? force : !state.sideOpen;
         if (els.shell) els.shell.classList.toggle('is-side-open', state.sideOpen);
+        if (els.scrim) els.scrim.hidden = !state.sideOpen;
+        if (els.sideOpen) els.sideOpen.setAttribute('aria-expanded', state.sideOpen ? 'true' : 'false');
+        if (state.sideOpen) {
+            sideRelease = NC.ui.trapFocus(els.side);
+        } else if (sideRelease) {
+            sideRelease();
+            sideRelease = null;
+        }
     }
 
     function openItemMenu(item, anchor) {
@@ -434,9 +486,8 @@
             if (!data || typeof data !== 'object') return;
             if (!els.frame || event.source !== els.frame.contentWindow) return;
             if (data.type === 'nc-ws-height') {
-                var h = Math.max(120, Math.min(4000, Number(data.h) || 0));
-                if (h) els.frame.style.height = h + 'px';
-                els.frame.style.width = '100%';
+                // v8：预览恒为 100% 视口，工具内部滚动；不再按内容高度撑开
+                return;
             } else if (data.type === 'nc-ws-error') {
                 var message = String(data.message || '页面脚本错误');
                 if (message && message !== state.lastError) {
@@ -588,6 +639,7 @@
 
     function setLoading(show, text) {
         if (!els.loading) return;
+        if (els.stage) els.stage.setAttribute('aria-busy', show ? 'true' : 'false');
         if (show) {
             els.loading.hidden = false;
             if (text && els.loadingText) els.loadingText.textContent = text;
@@ -888,10 +940,14 @@
         }
         if (els.pin) els.pin.addEventListener('click', togglePin);
         if (els.reloadBtn) els.reloadBtn.addEventListener('click', reloadFrame);
+        if (els.focusToggle) els.focusToggle.addEventListener('click', function () { toggleFocus(); });
+        if (els.emptyNew) els.emptyNew.addEventListener('click', function () { if (els.newBtn) els.newBtn.click(); });
+        if (els.emptyImport) els.emptyImport.addEventListener('click', function () { if (els.importFile) els.importFile.click(); });
         if (els.sideOpen) els.sideOpen.addEventListener('click', onSideToggle);
         if (els.exportBtn) els.exportBtn.addEventListener('click', exportHtml);
         if (els.importFile) els.importFile.addEventListener('change', importHtml);
         if (els.sideClose) els.sideClose.addEventListener('click', function () { toggleSide(false); });
+        if (els.scrim) els.scrim.addEventListener('click', function () { toggleSide(false); });
         if (els.moreBtn) {
             els.moreBtn.addEventListener('click', function () {
                 NC.ui.openMenu(els.moreBtn, [
@@ -916,7 +972,11 @@
         document.addEventListener('keydown', function (event) {
             var page = document.getElementById('page-workshop');
             if (!page || page.hasAttribute('hidden')) return;
-            if (event.key === 'Escape' && state.sideOpen) {
+            if (event.key !== 'Escape') return;
+            if (els.shell && els.shell.classList.contains('is-focus')) {
+                event.preventDefault();
+                toggleFocus(false);
+            } else if (state.sideOpen) {
                 event.preventDefault();
                 toggleSide(false);
             }
@@ -927,18 +987,31 @@
         }
     }
 
+    function toggleFocus(force) {
+        if (!els.shell) return;
+        var next = force == null ? !els.shell.classList.contains('is-focus') : !!force;
+        els.shell.classList.toggle('is-focus', next);
+        if (els.focusToggle) {
+            els.focusToggle.setAttribute('aria-pressed', next ? 'true' : 'false');
+            els.focusToggle.setAttribute('aria-label', next ? '退出聚焦' : '聚焦预览');
+            els.focusToggle.setAttribute('title', next ? '退出聚焦' : '聚焦预览');
+        }
+    }
+
     /* ------------------------------------------------------------------ *
      * 对外
      * ------------------------------------------------------------------ */
     function init() {
         if (state.initialized) return view.workshop;
         els = {
-            shell: $('ws-shell'), side: null, list: $('ws-list'), filter: $('ws-filter'),
+            shell: $('ws-shell'), side: document.querySelector('.ws-side'), list: $('ws-list'), filter: $('ws-filter'),
             newBtn: $('ws-new-btn'), moreBtn: $('ws-more-btn'),
             sideOpen: $('ws-side-open'), sideClose: $('ws-side-close'),
-            title: $('ws-title'), kind: $('ws-kind'),
-            reloadBtn: $('ws-reload-btn'), pin: $('ws-pin-btn'),
+            title: $('ws-title'), kind: $('ws-kind'), subtitle: $('ws-subtitle'),
+            reloadBtn: $('ws-reload-btn'), pin: $('ws-pin-btn'), focusToggle: $('ws-focus-toggle'),
+            emptyNew: $('ws-empty-new'), emptyImport: $('ws-empty-import'),
             frame: $('ws-frame'), empty: $('ws-empty'), moduleNote: $('ws-module-note'),
+            stage: $('ws-stage'), scrim: $('ws-scrim'),
             save: $('ws-save-btn'), exportBtn: $('ws-export-btn'), importFile: $('ws-import-file'),
             loading: $('ws-loading'), loadingText: $('ws-loading-text'),
             stopBtn: $('ws-stop-btn'), chat: $('ws-chat'), chatLog: $('ws-chat-log'),
