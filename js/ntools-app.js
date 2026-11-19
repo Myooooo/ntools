@@ -204,7 +204,8 @@
         if (!raw) return null;
         var value = String(raw).replace(/^#/, '').toLowerCase();
         if (value === 'markdown') value = 'md';
-        if (value === 'img' || value === 'image-tool') value = 'image';
+        /* 旧的 #image / #qr 深链合并到创意工坊 */
+        if (value === 'img' || value === 'image-tool' || value === 'image' || value === 'qr') value = 'workshop';
         if (value === 'chat') value = 'nchat';
         return TABS.indexOf(value) > -1 ? value : null;
     }

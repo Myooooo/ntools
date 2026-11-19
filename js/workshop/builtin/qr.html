@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>二维码生成</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+  .layout { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 640px) { .layout { grid-template-columns: 1fr; } }
+
+  .stage {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 280px; padding: 18px;
+    border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-panel);
+  }
+  .stage canvas, .stage img { width: 100%; max-width: 280px; height: auto; border-radius: 8px; image-rendering: pixelated; display: block; }
+  .placeholder { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--ws-text-3); font-size: 12.5px; text-align: center; }
+  .placeholder svg { opacity: .7; }
+
+  .form { display: flex; flex-direction: column; gap: 12px; }
+  .size-row { display: flex; gap: 8px; }
+  .size-row .btn { flex: 1; }
+</style>
+</head>
+<body>
+  <header class="head rise">
+    <div>
+      <h1 class="title">二维码生成</h1>
+      <p class="sub">本地离线生成，内容不会上传；支持下载 PNG。</p>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div class="stage rise rise-2">
+      <div class="placeholder" id="placeholder">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14h1M20 20h1M14 20h3"/></svg>
+        <span>输入内容后自动生成</span>
+      </div>
+      <div id="qrbox" class="qrcode-box" hidden></div>
+    </div>
+
+    <div class="card rise rise-3">
+      <div class="form">
+        <div class="field">
+          <label for="text">网址或文本</label>
+          <textarea class="textarea" id="text" rows="4" spellcheck="false" placeholder="https://example.com">https://example.com</textarea>
+        </div>
+        <div class="field">
+          <span class="field__label">尺寸</span>
+          <div class="size-row" id="sizes">
+            <button type="button" class="btn" data-size="192">192 px</button>
+            <button type="button" class="btn btn--primary" data-size="320">320 px</button>
+            <button type="button" class="btn" data-size="480">480 px</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn--primary" id="generate">生成二维码</button>
+          <button type="button" class="btn" id="download">下载 PNG</button>
+          <button type="button" class="btn btn--ghost" id="copy">复制内容</button>
+        </div>
+        <p class="hint">二维码由本页脚本生成；内容过长或含特殊字符时，适当降低尺寸可提升识别率。</p>
+      </div>
+    </div>
+  </div>
+
+<script src="../../qrcode.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  function sendHeight() {
+    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
+  }
+  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
+
+  var els = {
+    text: document.getElementById('text'), box: document.getElementById('qrbox'),
+    placeholder: document.getElementById('placeholder'), sizes: document.getElementById('sizes'),
+    generate: document.getElementById('generate'), download: document.getElementById('download'),
+    copy: document.getElementById('copy')
+  };
+  var state = { size: 320, ready: false };
+  var timer = null;
+
+  function toast(text, kind) {
+    var tip = document.getElementById('__tip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = '__tip';
+      tip.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translate(-50%,8px);padding:8px 14px;border-radius:9px;background:var(--ws-panel);border:1px solid var(--ws-line);color:var(--ws-text);font-size:12.5px;box-shadow:var(--ws-shadow);opacity:0;transition:opacity .18s ease,transform .18s cubic-bezier(.23,1,.32,1);z-index:9;pointer-events:none';
+      document.body.appendChild(tip);
+    }
+    tip.textContent = text;
+    tip.style.opacity = '1';
+    tip.style.transform = 'translate(-50%,0)';
+    clearTimeout(tip.__timer);
+    tip.__timer = setTimeout(function () { tip.style.opacity = '0'; tip.style.transform = 'translate(-50%,8px)'; }, 1600);
+  }
+
+  function generate() {
+    var text = els.text.value.trim();
+    if (!text) {
+      els.box.hidden = true;
+      els.placeholder.hidden = false;
+      state.ready = false;
+      return;
+    }
+    if (typeof window.QRCode === 'undefined') {
+      toast('二维码库未加载', 'error');
+      return;
+    }
+    els.box.textContent = '';
+    try {
+      new window.QRCode(els.box, {
+        text: text,
+        width: state.size,
+        height: state.size,
+        colorDark: '#0f172a',
+        colorLight: '#ffffff',
+        correctLevel: window.QRCode.CorrectLevel ? window.QRCode.CorrectLevel.M : 1
+      });
+      els.box.hidden = false;
+      els.placeholder.hidden = true;
+      state.ready = true;
+    } catch (err) {
+      toast('生成失败：内容可能过长', 'error');
+      els.box.hidden = true;
+      els.placeholder.hidden = false;
+      state.ready = false;
+    }
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(generate, 320);
+  }
+
+  els.text.addEventListener('input', schedule);
+  els.sizes.addEventListener('click', function (event) {
+    var btn = event.target.closest('button[data-size]');
+    if (!btn) return;
+    state.size = Number(btn.getAttribute('data-size'));
+    els.sizes.querySelectorAll('button').forEach(function (item) {
+      item.classList.toggle('btn--primary', item === btn);
+    });
+    generate();
+  });
+  els.generate.addEventListener('click', generate);
+  els.download.addEventListener('click', function () {
+    if (!state.ready) { toast('先生成二维码'); return; }
+    try {
+      var canvas = els.box.querySelector('canvas');
+      var img = els.box.querySelector('img');
+      var url = canvas ? canvas.toDataURL('image/png') : (img ? img.src : '');
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = 'qrcode-' + Date.now() + '.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast('已下载 PNG');
+    } catch (err) { toast('下载失败', 'error'); }
+  });
+  els.copy.addEventListener('click', function () {
+    var text = els.text.value;
+    if (!text) return;
+    var done = function () { toast('已复制'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { toast('复制失败'); });
+    else { els.text.select(); try { document.execCommand('copy'); done(); } catch (err) { toast('复制失败'); } }
+  });
+
+  generate();
+})();
+</script>
+</body>
+</html>

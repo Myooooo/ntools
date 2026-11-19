@@ -3,154 +3,336 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>随机点名 / 抽签</title>
+<title>随机抽签</title>
+<link rel="stylesheet" href="_shared.css">
 <style>
-  :root{--bg:#0b0e13;--panel:#131922;--text:#edf1f7;--text2:#9aa7b8;--line:rgba(255,255,255,.1);
-    --accent:#6ea8fe;--warn:#e8b45a;--ok:#45d6a0;--soft:rgba(110,168,254,.14)}
-  html[data-theme="light"]{--bg:#f4f5f7;--panel:#fff;--text:#15181d;--text2:#56616f;--line:rgba(0,0,0,.1);
-    --accent:#2a63c8;--warn:#8a5c12;--ok:#0e9a6a;--soft:rgba(47,111,219,.1)}
-  *{box-sizing:border-box}
-  html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
-  body{padding:20px 22px 26px;max-width:760px;margin:0 auto}
-  .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-  .title{font-size:16px;font-weight:650}
-  .sub{font-size:11.5px;color:var(--text2);margin-top:3px}
-  .stage{position:relative;display:flex;align-items:center;justify-content:center;min-height:150px;
-    border-radius:16px;background:var(--panel);border:1px solid var(--line);overflow:hidden}
-  .result{font-size:34px;font-weight:750;letter-spacing:-.02em;text-align:center;padding:16px;
-    transition:transform .12s ease,opacity .12s ease}
-  .result.rolling{opacity:.65}
-  .result small{display:block;font-size:12px;font-weight:500;color:var(--text2);margin-top:6px;letter-spacing:.08em}
-  .bar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
-  button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;padding:8px 14px;font:inherit;font-size:12.5px;cursor:pointer}
-  button:hover{border-color:var(--accent)}
-  button.primary{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
-  button.ghost{background:transparent}
-  button:disabled{opacity:.5;cursor:not-allowed}
-  textarea{width:100%;min-height:120px;background:var(--panel);border:1px solid var(--line);color:var(--text);
-    border-radius:10px;padding:10px 12px;font:inherit;font-size:12.5px;line-height:1.7;resize:vertical}
-  textarea:focus{outline:none;border-color:var(--accent)}
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-  .card h2{margin:0 0 8px;font-size:12px;color:var(--text2);letter-spacing:.08em;font-weight:600}
-  .hist{display:flex;flex-wrap:wrap;gap:6px;min-height:24px}
-  .tag{font-size:11.5px;padding:2px 8px;border-radius:99px;background:var(--soft);color:var(--accent)}
-  .hint{margin-top:12px;font-size:11.5px;color:var(--text2);line-height:1.6}
-  @media (max-width:560px){.two{grid-template-columns:1fr}}
+  .stage {
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 190px; padding: 22px;
+    border: 1px solid var(--ws-line); border-radius: 18px;
+    background:
+      radial-gradient(120% 90% at 50% 0%, var(--ws-accent-soft), transparent 64%),
+      var(--ws-panel);
+    overflow: hidden;
+  }
+
+  .result {
+    position: relative;
+    font-size: clamp(30px, 6vw, 46px);
+    font-weight: 760;
+    letter-spacing: -.03em;
+    text-align: center;
+    line-height: 1.15;
+    transition: filter var(--ws-dur-fast) var(--ws-ease-out), transform var(--ws-dur) var(--ws-ease-out), opacity var(--ws-dur-fast) var(--ws-ease-out);
+  }
+  .result small { display: block; margin-top: 6px; font-size: 12px; font-weight: 500; color: var(--ws-text-2); letter-spacing: .06em; }
+  .result.is-rolling { filter: blur(1.5px); opacity: .78; transform: scale(.985); }
+  .result.is-win { animation: win 520ms var(--ws-ease-out); }
+  @keyframes win { 0% { transform: scale(.94); } 55% { transform: scale(1.04); } 100% { transform: scale(1); } }
+  html[data-lite="1"] .result { transition: none; }
+  html[data-lite="1"] .result.is-rolling { filter: none; transform: none; }
+  html[data-lite="1"] .result.is-win { animation: none; }
+
+  .sparks { position: absolute; inset: 0; pointer-events: none; }
+  .spark {
+    position: absolute; top: 50%; left: 50%;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--ws-accent);
+    opacity: 0;
+    animation: spark 760ms var(--ws-ease-out) forwards;
+  }
+  @keyframes spark {
+    0% { opacity: .9; transform: translate(-50%, -50%) scale(.6); }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.2); }
+  }
+  html[data-lite="1"] .spark { display: none; }
+
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+
+  .name-area { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 14px; }
+  @media (max-width: 720px) { .name-area { grid-template-columns: 1fr; } }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 9px; border-radius: 99px;
+    border: 1px solid var(--ws-line); background: var(--ws-panel-2);
+    color: var(--ws-text-2); font-size: 11.5px;
+  }
+  .chip.is-used { opacity: .42; text-decoration: line-through; }
+
+  .history { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 160px; overflow: auto; }
+  .history__row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 8px; border-radius: 7px; background: var(--ws-panel-2); font-size: 11.5px; color: var(--ws-text-2); }
+  .history__row b { color: var(--ws-text); font-weight: 600; }
+
+  .num-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 420px; }
 </style>
 </head>
 <body>
-  <div class="head">
-    <div><div class="title">随机点名 / 抽签</div><div class="sub" id="count">0 位候选</div></div>
+  <header class="head rise">
+    <div>
+      <h1 class="title">随机抽签</h1>
+      <p class="sub" id="subLabel">输入候选名单，抽到的人不会重复。</p>
+    </div>
+    <div class="seg" role="group" aria-label="模式">
+      <button type="button" data-mode="names" aria-pressed="true">名单抽签</button>
+      <button type="button" data-mode="number" aria-pressed="false">随机数字</button>
+    </div>
+  </header>
+
+  <section class="stage rise rise-2">
+    <div class="sparks" id="sparks" aria-hidden="true"></div>
+    <div class="result" id="result">准备好了吗<small>点击「开始抽取」</small></div>
+  </section>
+
+  <div class="actions">
+    <button type="button" class="btn btn--primary" id="draw">开始抽取</button>
+    <button type="button" class="btn btn--ghost" id="reset">重置已抽</button>
+    <button type="button" class="btn btn--ghost" id="exportBtn">导出名单</button>
+    <button type="button" class="btn btn--ghost" id="importBtn">导入名单</button>
+    <input type="file" id="file" accept=".txt,.csv,.json" hidden>
   </div>
-  <div class="stage"><div class="result" id="result">准备好了吗<small>点击「开始抽取」</small></div></div>
-  <div class="bar">
-    <button type="button" class="primary" id="draw">开始抽取</button>
-    <button type="button" id="again" disabled>再抽一次</button>
-    <button type="button" class="ghost" id="reset">重置已抽</button>
-    <button type="button" class="ghost" id="export">导出名单</button>
-    <button type="button" class="ghost" id="import">导入名单</button>
-  </div>
-  <textarea id="names" spellcheck="false" placeholder="每行一个候选，也可以在行内用逗号分隔&#10;例如：&#10;张三&#10;李四&#10;王五"></textarea>
-  <div class="two">
-    <div class="card"><h2>已抽中</h2><div class="hist" id="history"></div></div>
-    <div class="card"><h2>说明</h2><div style="font-size:12px;color:var(--text2);line-height:1.7">默认抽过的人不再重复；「重置已抽」清空记录；名单只在本地保存。</div></div>
-  </div>
-  <input type="file" id="file" accept=".txt,.csv,.json" hidden>
-  <p class="hint">支持导入 txt / csv（逗号或换行分隔）与 JSON 数组；导出为 txt。</p>
+
+  <section id="namesPane" class="name-area rise rise-3">
+    <div class="card">
+      <div class="section-label" style="margin-top:0">候选名单 <span id="count" style="font-weight:400;color:var(--ws-text-3)"></span></div>
+      <textarea class="textarea" id="names" spellcheck="false" placeholder="每行一个候选，也支持逗号分隔&#10;张三&#10;李四&#10;王五"></textarea>
+      <p class="hint">抽过的人会标记并在「重置已抽」后恢复；名单仅保存在本机。</p>
+    </div>
+    <div class="card">
+      <div class="section-label" style="margin-top:0">已抽中</div>
+      <div class="history" id="history"></div>
+    </div>
+  </section>
+
+  <section id="numberPane" hidden class="rise rise-3">
+    <div class="card">
+      <div class="section-label" style="margin-top:0">范围</div>
+      <div class="num-inputs">
+        <label class="field">最小值<input class="input num" id="min" type="number" value="1"></label>
+        <label class="field">最大值<input class="input num" id="max" type="number" value="100"></label>
+      </div>
+      <p class="hint">在闭区间内等概率抽取一个整数；每次结果独立，可连续抽。</p>
+      <div class="history" id="numberHistory"></div>
+    </div>
+  </section>
+
 <script>
-(function(){
+(function () {
   'use strict';
-  var params=new URLSearchParams(location.search);
-  if(params.get('theme')==='light')document.documentElement.setAttribute('data-theme','light');
-  function sendHeight(){try{parent.postMessage({type:'nc-ws-height',h:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)},'*');}catch(e){}}
-  try{new ResizeObserver(sendHeight).observe(document.documentElement);}catch(e){setInterval(sendHeight,900);}
-  var KEY='ws-picker', current=null, history=[], timer=null;
-  var els={names:document.getElementById('names'),result:document.getElementById('result'),draw:document.getElementById('draw'),
-    again:document.getElementById('again'),reset:document.getElementById('reset'),exportBtn:document.getElementById('export'),
-    importBtn:document.getElementById('import'),file:document.getElementById('file'),history:document.getElementById('history'),
-    count:document.getElementById('count')};
-  function save(){try{localStorage.setItem(KEY,JSON.stringify({names:els.names.value,history:history}));}catch(e){}}
-  function load(){
-    try{var data=JSON.parse(localStorage.getItem(KEY)||'null');
-      if(data&&typeof data.names==='string')els.names.value=data.names;
-      if(data&&Array.isArray(data.history))history=data.history;
-    }catch(e){}
+  var params = new URLSearchParams(location.search);
+  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  function sendHeight() {
+    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
   }
-  function parseNames(){
-    return els.names.value.split(/[\n,，;；、]+/).map(function(s){return s.trim();}).filter(Boolean);
+  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
+
+  var KEY = 'ws-picker-v2';
+  var state = { mode: 'names', drawn: [], numbers: [], rolling: null };
+  var els = {
+    result: document.getElementById('result'), sparks: document.getElementById('sparks'),
+    draw: document.getElementById('draw'), reset: document.getElementById('reset'),
+    exportBtn: document.getElementById('exportBtn'), importBtn: document.getElementById('importBtn'),
+    file: document.getElementById('file'), names: document.getElementById('names'),
+    count: document.getElementById('count'), history: document.getElementById('history'),
+    numberHistory: document.getElementById('numberHistory'), namesPane: document.getElementById('namesPane'),
+    numberPane: document.getElementById('numberPane'), min: document.getElementById('min'),
+    max: document.getElementById('max'), subLabel: document.getElementById('subLabel')
+  };
+
+  function save() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ names: els.names.value, drawn: state.drawn, numbers: state.numbers }));
+    } catch (err) {}
   }
-  function refresh(){
-    var names=parseNames();
-    els.count.textContent=names.length+' 位候选';
-    var left=names.filter(function(n){return history.indexOf(n)===-1;});
-    els.draw.disabled=left.length===0;
-    els.draw.textContent=left.length? '开始抽取' : '都抽过啦';
-    els.again.disabled=left.length===0;
-    els.history.textContent='';
-    history.forEach(function(n,i){
-      var tag=document.createElement('span');tag.className='tag';tag.textContent=(i+1)+'. '+n;els.history.appendChild(tag);
+  function load() {
+    try {
+      var data = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (!data) return;
+      if (typeof data.names === 'string') els.names.value = data.names;
+      if (Array.isArray(data.drawn)) state.drawn = data.drawn;
+      if (Array.isArray(data.numbers)) state.numbers = data.numbers;
+    } catch (err) {}
+  }
+
+  function parseNames() {
+    return els.names.value.split(/[\n,，;；、\t]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+
+  function renderChips() {
+    var names = parseNames();
+    els.count.textContent = '（' + names.length + ' 人）';
+    els.history.textContent = '';
+    state.drawn.forEach(function (name, index) {
+      var row = document.createElement('div');
+      row.className = 'history__row';
+      var label = document.createElement('b');
+      label.textContent = name;
+      var no = document.createElement('span');
+      no.textContent = '#' + (index + 1);
+      row.appendChild(label); row.appendChild(no);
+      els.history.appendChild(row);
+    });
+    if (!state.drawn.length) {
+      var empty = document.createElement('div');
+      empty.className = 'hint';
+      empty.textContent = '还没有抽过';
+      els.history.appendChild(empty);
+    }
+    sendHeight();
+  }
+
+  function renderNumbers() {
+    els.numberHistory.textContent = '';
+    state.numbers.slice().reverse().forEach(function (value) {
+      var row = document.createElement('div');
+      row.className = 'history__row';
+      var label = document.createElement('b');
+      label.textContent = value;
+      var time = document.createElement('span');
+      time.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+      row.appendChild(label); row.appendChild(time);
+      els.numberHistory.appendChild(row);
     });
     sendHeight();
   }
-  function pickLeft(){
-    var names=parseNames();
-    var left=names.filter(function(n){return history.indexOf(n)===-1;});
-    return left;
+
+  function setMode(mode) {
+    state.mode = mode;
+    document.querySelectorAll('.seg > button').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', btn.getAttribute('data-mode') === mode ? 'true' : 'false');
+    });
+    els.namesPane.hidden = mode !== 'names';
+    els.numberPane.hidden = mode !== 'number';
+    els.subLabel.textContent = mode === 'names' ? '输入候选名单，抽到的人不会重复。' : '输入范围，随机抽一个整数。';
+    els.result.innerHTML = '准备好了吗<small>点击「开始抽取」</small>';
+    renderChips();
+    renderNumbers();
+    sendHeight();
   }
-  function draw(){
-    var left=pickLeft();
-    if(!left.length){refresh();return;}
-    if(timer)clearInterval(timer);
-    els.result.classList.add('rolling');
-    var ticks=0;
-    timer=setInterval(function(){
-      var pool=parseNames();
-      if(!pool.length)return;
-      els.result.textContent=pool[Math.floor(Math.random()*pool.length)];
-      ticks+=1;
-      if(ticks>12){
-        clearInterval(timer);timer=null;
-        var winner=left[Math.floor(Math.random()*left.length)];
-        history.push(winner);
-        els.result.innerHTML='';
-        els.result.appendChild(document.createTextNode(winner));
-        var small=document.createElement('small');small.textContent='恭喜！';els.result.appendChild(small);
-        els.result.classList.remove('rolling');
-        save();refresh();
+
+  function burst() {
+    if (!els.sparks) return;
+    els.sparks.textContent = '';
+    if (document.documentElement.getAttribute('data-lite') === '1') return;
+    for (var i = 0; i < 10; i += 1) {
+      var spark = document.createElement('span');
+      spark.className = 'spark';
+      var angle = (Math.PI * 2 * i) / 10;
+      spark.style.setProperty('--dx', Math.round(Math.cos(angle) * (60 + Math.random() * 40)) + 'px');
+      spark.style.setProperty('--dy', Math.round(Math.sin(angle) * (40 + Math.random() * 30)) + 'px');
+      spark.style.animationDelay = (Math.random() * 60) + 'ms';
+      els.sparks.appendChild(spark);
+    }
+    setTimeout(function () { els.sparks.textContent = ''; }, 900);
+  }
+
+  function win(text, sub) {
+    els.result.classList.remove('is-rolling', 'is-win');
+    els.result.textContent = text;
+    var small = document.createElement('small');
+    small.textContent = sub;
+    els.result.appendChild(small);
+    void els.result.offsetWidth;
+    els.result.classList.add('is-win');
+    burst();
+  }
+
+  function draw() {
+    if (state.rolling) return;
+    if (state.mode === 'names') {
+      var names = parseNames();
+      var left = names.filter(function (name) { return state.drawn.indexOf(name) === -1; });
+      if (!left.length) {
+        win('都抽过了', '点「重置已抽」重新开始');
+        return;
       }
-    },70);
+      var winner = left[Math.floor(Math.random() * left.length)];
+      roll(function () {
+        var pool = names.length ? names : ['—'];
+        return pool[Math.floor(Math.random() * pool.length)];
+      }, function () {
+        state.drawn.push(winner);
+        save(); renderChips();
+        win(winner, '第 ' + state.drawn.length + ' 位');
+      });
+    } else {
+      var min = Math.floor(Number(els.min.value));
+      var max = Math.floor(Number(els.max.value));
+      if (!isFinite(min) || !isFinite(max) || max < min) {
+        win('范围不对', '请让最大值不小于最小值');
+        return;
+      }
+      var pick = min + Math.floor(Math.random() * (max - min + 1));
+      roll(function () { return String(min + Math.floor(Math.random() * (max - min + 1))); }, function () {
+        state.numbers.push(pick);
+        state.numbers = state.numbers.slice(-20);
+        save(); renderNumbers();
+        win(String(pick), min + ' — ' + max);
+      });
+    }
   }
-  els.draw.addEventListener('click',draw);
-  els.again.addEventListener('click',draw);
-  els.reset.addEventListener('click',function(){history=[];save();refresh();els.result.textContent='准备好了吗';});
-  els.names.addEventListener('input',function(){save();refresh();});
-  els.exportBtn.addEventListener('click',function(){
-    try{
-      var blob=new Blob([parseNames().join('\n')],{type:'text/plain;charset=utf-8'});
-      var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='candidates.txt';
-      document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},800);
-    }catch(e){}
+
+  function roll(show, done) {
+    els.result.classList.add('is-rolling');
+    els.result.innerHTML = '';
+    var ticks = 0;
+    state.rolling = setInterval(function () {
+      els.result.textContent = show();
+      ticks += 1;
+      if (ticks >= 16) {
+        clearInterval(state.rolling);
+        state.rolling = null;
+        done();
+      }
+    }, 55);
+  }
+
+  document.querySelectorAll('.seg > button').forEach(function (btn) {
+    btn.addEventListener('click', function () { setMode(btn.getAttribute('data-mode')); });
   });
-  els.importBtn.addEventListener('click',function(){els.file.click();});
-  els.file.addEventListener('change',function(){
-    var file=els.file.files&&els.file.files[0];
-    els.file.value='';
-    if(!file)return;
-    var reader=new FileReader();
-    reader.onload=function(){
-      var text=String(reader.result||'');
-      var list=[];
-      try{var json=JSON.parse(text);if(Array.isArray(json))list=json.map(String);}catch(e){}
-      if(!list.length)list=text.split(/[\n,，;；、\t]+/);
-      list=list.map(function(s){return String(s).trim();}).filter(Boolean);
-      if(!list.length)return;
-      els.names.value=list.join('\n');
-      save();refresh();
+  els.draw.addEventListener('click', draw);
+  els.reset.addEventListener('click', function () {
+    state.drawn = [];
+    state.numbers = [];
+    save(); renderChips(); renderNumbers();
+    els.result.innerHTML = '准备好了吗<small>点击「开始抽取」</small>';
+  });
+  els.names.addEventListener('input', function () { save(); renderChips(); });
+  els.exportBtn.addEventListener('click', function () {
+    var blob = new Blob([parseNames().join('\n')], { type: 'text/plain;charset=utf-8' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'candidates.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 800);
+  });
+  els.importBtn.addEventListener('click', function () { els.file.click(); });
+  els.file.addEventListener('change', function () {
+    var file = els.file.files && els.file.files[0];
+    els.file.value = '';
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var text = String(reader.result || '');
+      var list = [];
+      try { var json = JSON.parse(text); if (Array.isArray(json)) list = json.map(String); } catch (err) {}
+      if (!list.length) list = text.split(/[\n,，;；、\t]+/);
+      list = list.map(function (item) { return String(item).trim(); }).filter(Boolean);
+      if (!list.length) return;
+      els.names.value = list.join('\n');
+      save(); renderChips();
     };
     reader.readAsText(file);
   });
-  load();refresh();
+
+  load();
+  setMode('names');
+  renderNumbers();
 })();
 </script>
 </body>

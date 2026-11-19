@@ -74,6 +74,7 @@
   'use strict';
   var params=new URLSearchParams(location.search);
   if(params.get('theme')==='light')document.documentElement.setAttribute('data-theme','light');
+  if(params.get('lite')==='1')document.documentElement.setAttribute('data-lite','1');
   function sendHeight(){try{parent.postMessage({type:'nc-ws-height',h:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)},'*');}catch(e){}}
   try{new ResizeObserver(sendHeight).observe(document.documentElement);}catch(e){setInterval(sendHeight,900);}
 

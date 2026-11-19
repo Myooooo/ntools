@@ -776,19 +776,58 @@
             eq(list[1].id, 'b2', 'b2 顺序被覆盖为 5');
             eq(list[2].id, 'b1');
         });
-        t('workshop', '内置工具注册表：8 个、两类', function () {
+        t('workshop', '内置工具注册表：12 个、统一内置分类', function () {
             var items = NC.workshopBuiltin.ITEMS;
-            eq(items.length, 8);
-            var office = items.filter(function (i) { return i.category === 'office'; });
-            var fun = items.filter(function (i) { return i.category === 'fun'; });
-            eq(office.length, 4);
-            eq(fun.length, 4);
+            eq(items.length, 12);
             items.forEach(function (item) {
+                eq(item.category, 'builtin');
                 assert(item.file.indexOf('js/workshop/builtin/') === 0, item.id + ' 路径');
                 assert(!!NC.workshopBuiltin.byId(item.id), item.id + ' 可按 id 查');
             });
         });
-
+        t('workshop', 'wrapHtml 保留完整文档的 head 样式与脚本', function () {
+            var w = NC.schema.workshop.wrapHtml(
+                '<!DOCTYPE html><html><head><title>T</title><style>.a{color:red}</style><script>window.x=1<\/script></head><body><div class="a">hi</div></body></html>',
+                { theme: 'dark' });
+            assert(w.indexOf('.a{color:red}') > -1, 'head 里的 style 不能丢');
+            assert(w.indexOf('window.x=1') > -1, 'head 里的 script 不能丢');
+            assert(w.indexOf('<div class="a">hi</div>') > -1, 'body 内容保留');
+            assert(w.indexOf('Content-Security-Policy') > -1, '仍注入 CSP');
+            assert(w.indexOf('nc-ws-height') > -1, '仍注入高度桥');
+            assert(w.indexOf('<title>T</title>') > -1, '原 title 保留');
+        });
+        t('workshop', 'buildSystemPrompt：网络策略随开关变化', function () {
+            var on = NC.schema.workshop.buildSystemPrompt({ allowNetwork: true });
+            var off = NC.schema.workshop.buildSystemPrompt({ allowNetwork: false });
+            assert(on.indexOf('单页 HTML') > -1 || on.indexOf('单页') > -1);
+            assert(on.indexOf('http/https') > -1);
+            assert(off.indexOf('不得发起任何网络请求') > -1);
+        });
+        t('workshop', 'normalizeApp / normalizeVersion 形状', function () {
+            var s = NC.schema.workshop;
+            var app = s.normalizeApp({ title: '  测试  ', code: 'x' }, { now: 1000 });
+            eq(app.title, '测试');
+            eq(app.createdAt, 1000);
+            eq(app.pinned, false);
+            assert(app.id.length > 0);
+            var ver = s.normalizeVersion({ appId: app.id, code: 'c' });
+            eq(ver.appId, app.id);
+            eq(ver.code, 'c');
+            assert(ver.id.length > 0);
+        });
+        t('workshop', 'mergeList：置顶优先、自定义归入 custom、顺序可覆盖', function () {
+            var builtins = [
+                { id: 'b1', category: 'office', title: 'B1', order: 10 },
+                { id: 'b2', category: 'fun', title: 'B2', order: 20 }
+            ];
+            var apps = [{ id: 'a1', title: 'A1', code: '', updatedAt: 1 }];
+            var list = NC.schema.workshop.mergeList(builtins, apps, { order: { b2: 5 }, pinned: { a1: true } });
+            eq(list.length, 3);
+            eq(list[0].id, 'a1', '置顶排第一');
+            eq(list[0].category, 'custom');
+            eq(list[1].id, 'b2', 'b2 顺序被覆盖为 5');
+            eq(list[2].id, 'b1');
+        });
         /* ---------------- storage ---------------- */
         t('storage', 'available 与 memoryMode 一致', function () {
             eq(typeof NC.storage.available, 'boolean');

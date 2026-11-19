@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>倒数日 / 纪念日</title>
+<title>倒数日</title>
 <style>
   :root{--bg:#0b0e13;--panel:#131922;--text:#edf1f7;--text2:#9aa7b8;--line:rgba(255,255,255,.1);
     --accent:#6ea8fe;--warn:#e8b45a;--soft:rgba(110,168,254,.14);--hero:linear-gradient(135deg,#5b8cff,#8b5cf6)}
@@ -36,7 +36,7 @@
 </style>
 </head>
 <body>
-  <div class="head"><div class="title">倒数日 / 纪念日</div><span style="font-size:11.5px;color:var(--text2)" id="today"></span></div>
+  <div class="head"><div class="title">倒数日</div><span style="font-size:11.5px;color:var(--text2)" id="today"></span></div>
   <div class="form">
     <input id="name" placeholder="事件名称，如：项目上线" maxlength="40" style="flex:1;min-width:160px">
     <input id="date" type="date">
@@ -49,6 +49,7 @@
   'use strict';
   var params=new URLSearchParams(location.search);
   if(params.get('theme')==='light')document.documentElement.setAttribute('data-theme','light');
+  if(params.get('lite')==='1')document.documentElement.setAttribute('data-lite','1');
   function sendHeight(){try{parent.postMessage({type:'nc-ws-height',h:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)},'*');}catch(e){}}
   try{new ResizeObserver(sendHeight).observe(document.documentElement);}catch(e){setInterval(sendHeight,900);}
   var KEY='ws-countdown';

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>图片处理</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+  .drop {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 26px 18px; margin-bottom: 14px;
+    border: 1px dashed var(--ws-line-strong); border-radius: 14px;
+    background: var(--ws-panel-2); color: var(--ws-text-2);
+    text-align: center; cursor: pointer;
+    transition: border-color var(--ws-dur) var(--ws-ease-out), background-color var(--ws-dur) var(--ws-ease-out), transform var(--ws-dur) var(--ws-ease-out);
+  }
+  .drop.is-over { border-color: var(--ws-accent); background: var(--ws-accent-soft); }
+  .drop strong { color: var(--ws-text); font-size: 13px; font-weight: 600; }
+  .drop span { font-size: 11.5px; }
+  html[data-lite="1"] .drop { transition: none; }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+
+  .preview {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    min-height: 220px; border: 1px solid var(--ws-line); border-radius: 12px;
+    background: repeating-conic-gradient(var(--ws-panel-2) 0% 25%, var(--ws-panel) 0% 50%) 50% / 18px 18px;
+    overflow: hidden;
+  }
+  .preview img { max-width: 100%; max-height: 300px; display: block; }
+  .preview__ph { color: var(--ws-text-3); font-size: 12px; }
+
+  .controls { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .range-line { display: grid; grid-template-columns: 76px 1fr 52px; gap: 10px; align-items: center; font-size: 11.5px; color: var(--ws-text-2); }
+  .range-line input[type="range"] { width: 100%; accent-color: var(--ws-accent); }
+  .meta { font-size: 11.5px; color: var(--ws-text-2); display: flex; justify-content: space-between; gap: 10px; }
+
+  .out { width: 100%; min-height: 130px; max-height: 220px; }
+  .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <header class="head rise">
+    <div>
+      <h1 class="title">图片处理</h1>
+      <p class="sub">图片转 Base64、反向还原与缩放，全部在本页完成。</p>
+    </div>
+    <span class="tag" id="modeTag">图片 → Base64</span>
+  </header>
+
+  <div class="drop rise rise-2" id="drop" role="button" tabindex="0" aria-label="选择图片或将图片拖拽到此处">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.2-4.2a2 2 0 0 0-2.8 0L4 21"/></svg>
+    <strong>点击选择图片，或拖拽到这里</strong>
+    <span>支持 PNG / JPEG / WebP / GIF / BMP，单张 ≤ 20MB</span>
+    <input type="file" id="file" accept="image/*" hidden>
+  </div>
+
+  <div class="layout">
+    <section class="card rise rise-2">
+      <div class="section-label" style="margin-top:0">预览</div>
+      <div class="preview" id="preview">
+        <span class="preview__ph" id="ph">尚未选择图片</span>
+        <img id="img" alt="" hidden>
+      </div>
+      <div class="controls">
+        <div class="range-line">
+          <label for="scale">缩放</label>
+          <input type="range" id="scale" min="10" max="100" value="100">
+          <span class="num" id="scaleLabel">100%</span>
+        </div>
+        <div class="meta"><span>原始：<span id="srcSize">—</span></span><span>目标：<span id="dstSize">—</span></span></div>
+        <button type="button" class="btn btn--primary btn--block" id="convert">转换为 Base64</button>
+      </div>
+    </section>
+
+    <section class="card rise rise-3">
+      <div class="section-label" style="margin-top:0">Base64 结果</div>
+      <textarea class="textarea out" id="output" spellcheck="false" placeholder="结果显示在这里；也可以粘贴 data:image/... 后点「还原图片」"></textarea>
+      <div class="meta" style="margin-top:8px"><span id="outMeta">—</span></div>
+      <div class="row-actions">
+        <button type="button" class="btn" id="copy">复制</button>
+        <button type="button" class="btn" id="download">下载图片</button>
+        <button type="button" class="btn btn--ghost" id="restore">还原图片</button>
+      </div>
+      <p class="hint">转为 Base64 后体积约增加 33%；JPEG 质量越高文件越大。所有处理都在本页内存中完成。</p>
+    </section>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  function sendHeight() {
+    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
+  }
+  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
+
+  var els = {
+    drop: document.getElementById('drop'), file: document.getElementById('file'),
+    img: document.getElementById('img'), ph: document.getElementById('ph'),
+    scale: document.getElementById('scale'), scaleLabel: document.getElementById('scaleLabel'),
+    srcSize: document.getElementById('srcSize'), dstSize: document.getElementById('dstSize'),
+    convert: document.getElementById('convert'), output: document.getElementById('output'),
+    outMeta: document.getElementById('outMeta'), copy: document.getElementById('copy'),
+    download: document.getElementById('download'), restore: document.getElementById('restore'),
+    modeTag: document.getElementById('modeTag')
+  };
+  var state = { file: null, image: null, dataUrl: '' };
+
+  function human(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  }
+  function toast(text) {
+    els.outMeta.textContent = text;
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { toast('请选择图片文件'); return; }
+    if (file.size > 20 * 1024 * 1024) { toast('图片超过 20MB'); return; }
+    state.file = file;
+    els.srcSize.textContent = human(file.size);
+    var reader = new FileReader();
+    reader.onload = function () {
+      state.dataUrl = String(reader.result || '');
+      els.img.src = state.dataUrl;
+      els.img.hidden = false;
+      els.ph.hidden = true;
+      updateTarget();
+      sendHeight();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function updateTarget() {
+    if (!els.img.naturalWidth) { els.dstSize.textContent = '—'; return; }
+    var ratio = Number(els.scale.value) / 100;
+    els.scaleLabel.textContent = Math.round(ratio * 100) + '%';
+    els.dstSize.textContent = Math.round(els.img.naturalWidth * ratio) + ' × ' + Math.round(els.img.naturalHeight * ratio);
+  }
+
+  function convert() {
+    if (!state.dataUrl) { toast('先选择一张图片'); return; }
+    var image = new Image();
+    image.onload = function () {
+      var ratio = Number(els.scale.value) / 100;
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * ratio));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * ratio));
+      var ctx = canvas.getContext('2d');
+      var isJpeg = /jpe?g/i.test(state.file ? state.file.type : '');
+      if (isJpeg) { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      var out = isJpeg ? canvas.toDataURL('image/jpeg', 0.92) : canvas.toDataURL('image/png');
+      els.output.value = out;
+      els.outMeta.textContent = canvas.width + ' × ' + canvas.height + ' · ' + human(out.length);
+      els.modeTag.textContent = 'Base64 结果';
+      toast('已生成 Base64');
+      sendHeight();
+    };
+    image.onerror = function () { toast('图片读取失败'); };
+    image.src = state.dataUrl;
+  }
+
+  function restore() {
+    var text = els.output.value.trim();
+    if (!text) { toast('先粘贴 Base64 或 data URL'); return; }
+    if (!/^data:image\//.test(text)) {
+      if (/^[A-Za-z0-9+/=\s]+$/.test(text)) text = 'data:image/png;base64,' + text.replace(/\s+/g, '');
+      else { toast('不是有效的图片 Base64'); return; }
+    }
+    els.img.src = text;
+    els.img.hidden = false;
+    els.ph.hidden = true;
+    state.dataUrl = text;
+    els.modeTag.textContent = 'Base64 → 图片';
+    els.outMeta.textContent = '已还原预览，可下载';
+    sendHeight();
+  }
+
+  els.drop.addEventListener('click', function () { els.file.click(); });
+  els.drop.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); els.file.click(); }
+  });
+  els.file.addEventListener('change', function () {
+    loadFile(els.file.files && els.file.files[0]);
+    els.file.value = '';
+  });
+  ['dragenter', 'dragover'].forEach(function (type) {
+    els.drop.addEventListener(type, function (event) { event.preventDefault(); els.drop.classList.add('is-over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (type) {
+    els.drop.addEventListener(type, function (event) { event.preventDefault(); els.drop.classList.remove('is-over'); });
+  });
+  els.drop.addEventListener('drop', function (event) {
+    var file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+    loadFile(file);
+  });
+  els.img.addEventListener('load', updateTarget);
+  els.scale.addEventListener('input', updateTarget);
+  els.convert.addEventListener('click', convert);
+  els.restore.addEventListener('click', restore);
+  els.copy.addEventListener('click', function () {
+    var text = els.output.value;
+    if (!text) { toast('没有可复制的内容'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast('已复制'); }, function () { toast('复制失败'); });
+    else { els.output.select(); try { document.execCommand('copy'); toast('已复制'); } catch (err) { toast('复制失败'); } }
+  });
+  els.download.addEventListener('click', function () {
+    var src = els.output.value.trim() || els.img.src;
+    if (!src) { toast('没有可下载的图片'); return; }
+    var link = document.createElement('a');
+    link.href = src;
+    link.download = 'image-' + Date.now() + (/^data:image\/jpeg/.test(src) ? '.jpg' : '.png');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast('已下载');
+  });
+})();
+</script>
+</body>
+</html>

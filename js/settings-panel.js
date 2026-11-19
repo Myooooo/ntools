@@ -866,7 +866,7 @@
         startRow.appendChild(util.e('span', { class: 'sp-row__label', text: '启动时默认页面' }));
         var startSelect = util.e('select', { class: 'nc-select sp-select--start' });
         var tabTitles = (typeof NC.tabTitles === 'function' ? NC.tabTitles() : null) || {
-            todo: '待办事项', email: '邮箱维护', nchat: 'nChat', md: '笔记本', qr: '二维码生成', image: '图片处理'
+            todo: '待办事项', email: '邮箱维护', nchat: 'nChat', md: '笔记本', workshop: '创意工坊'
         };
         var currentStart = typeof NC.getStartTab === 'function' ? NC.getStartTab() : 'todo';
         ['todo', 'email', 'md', 'nchat', 'workshop'].forEach(function (tab) {

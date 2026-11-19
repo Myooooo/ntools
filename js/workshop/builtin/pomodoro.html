@@ -3,124 +3,109 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>番茄钟 / 计时器</title>
+<title>番茄钟</title>
+<link rel="stylesheet" href="_shared.css">
 <style>
-  :root{
-    --bg:#0b0e13; --panel:#131922; --text:#edf1f7; --text2:#9aa7b8; --line:rgba(255,255,255,.1);
-    --accent:#6ea8fe; --danger:#ff7a72; --ok:#45d6a0; --soft:rgba(110,168,254,.14);
+  .stage {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 22px 16px 20px; border: 1px solid var(--ws-line); border-radius: 18px;
+    background: radial-gradient(120% 90% at 50% 0%, var(--ws-accent-soft), transparent 66%), var(--ws-panel);
+    overflow: hidden;
   }
-  html[data-theme="light"]{
-    --bg:#f4f5f7; --panel:#ffffff; --text:#15181d; --text2:#56616f; --line:rgba(0,0,0,.1);
-    --accent:#2a63c8; --danger:#c53b3b; --ok:#0e9a6a; --soft:rgba(47,111,219,.1);
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;background:var(--bg);color:var(--text);
-    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;}
-  body{padding:20px 22px 26px;max-width:720px;margin:0 auto}
-  .head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
-  .title{font-size:16px;font-weight:650;letter-spacing:-.01em}
-  .modes{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
-  .modes button{border:0;background:transparent;color:var(--text2);padding:5px 11px;font-size:12.5px;cursor:pointer}
-  .modes button.on{background:var(--soft);color:var(--text)}
-  .stage{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 0 6px}
-  .ring{position:relative;width:220px;height:220px}
-  .ring svg{transform:rotate(-90deg)}
-  .ring circle{fill:none;stroke-width:8}
-  .ring .track{stroke:var(--line)}
-  .ring .bar{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .35s linear}
-  .ring .time{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
-  .clock{font-size:44px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-  .phase{font-size:12px;color:var(--text2);letter-spacing:.08em}
-  .actions{display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;justify-content:center}
-  button.btn{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:9px;
-    padding:8px 16px;font-size:13px;cursor:pointer;transition:background .15s,border-color .15s}
-  button.btn:hover{border-color:var(--accent)}
-  button.btn.primary{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
-  button.btn.ghost{background:transparent}
-  .settings{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
-  .field{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--text2)}
-  .field input{width:74px;background:var(--panel);border:1px solid var(--line);color:var(--text);
-    border-radius:7px;padding:5px 8px;font-size:12.5px;text-align:right}
-  .stat{display:flex;justify-content:center;gap:22px;margin-top:16px;font-size:12.5px;color:var(--text2)}
-  .stat b{color:var(--text);font-size:15px;margin-left:4px}
-  .hint{margin-top:14px;font-size:11.5px;color:var(--text2);text-align:center;line-height:1.6}
-  @media (prefers-reduced-motion: reduce){ .ring .bar{transition:none} }
+  .ring { position: relative; width: 208px; height: 208px; }
+  .ring svg { transform: rotate(-90deg); display: block; }
+  .ring circle { fill: none; stroke-width: 7; }
+  .ring .track { stroke: var(--ws-line); }
+  .ring .bar { stroke: var(--ws-accent); stroke-linecap: round; transition: stroke-dashoffset 300ms linear, stroke var(--ws-dur) var(--ws-ease-out); }
+  .ring.is-break .bar { stroke: var(--ws-ok); }
+  .ring .inner { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .clock { font-size: 42px; font-weight: 720; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .phase { color: var(--ws-text-2); font-size: 11.5px; letter-spacing: .05em; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .rounds { display: flex; gap: 14px; color: var(--ws-text-2); font-size: 11.5px; }
+  .rounds b { color: var(--ws-text); font-size: 14px; margin-left: 3px; font-variant-numeric: tabular-nums; }
+  .setup { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .setup .field input { text-align: center; font-variant-numeric: tabular-nums; }
+  .switch { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--ws-text-2); font-size: 12px; }
+  .switch input { accent-color: var(--ws-accent); }
+  html[data-lite="1"] .ring .bar { transition: none; }
 </style>
 </head>
 <body>
-  <div class="head">
-    <div class="title">番茄钟 / 计时器</div>
-    <div class="modes" role="group" aria-label="模式">
-      <button type="button" data-mode="focus" class="on">专注</button>
-      <button type="button" data-mode="break">休息</button>
+  <header class="head rise">
+    <div>
+      <h1 class="title">番茄钟</h1>
+      <p class="sub">专注 25 分钟，休息 5 分钟；到点提示，循环进行。</p>
     </div>
-  </div>
+    <div class="seg" role="group" aria-label="模式">
+      <button type="button" data-mode="focus" aria-pressed="true">专注</button>
+      <button type="button" data-mode="break" aria-pressed="false">休息</button>
+    </div>
+  </header>
 
-  <div class="stage">
-    <div class="ring">
-      <svg width="220" height="220" viewBox="0 0 220 220">
-        <circle class="track" cx="110" cy="110" r="100"></circle>
-        <circle class="bar" cx="110" cy="110" r="100" stroke-dasharray="628.3" stroke-dashoffset="0"></circle>
+  <section class="stage rise rise-2">
+    <div class="ring" id="ring">
+      <svg width="208" height="208" viewBox="0 0 208 208">
+        <circle class="track" cx="104" cy="104" r="92"></circle>
+        <circle class="bar" id="bar" cx="104" cy="104" r="92" stroke-dasharray="578.1" stroke-dashoffset="0"></circle>
       </svg>
-      <div class="time">
-        <div class="clock" id="clock">25:00</div>
+      <div class="inner">
+        <div class="clock num" id="clock">25:00</div>
         <div class="phase" id="phase">准备开始</div>
       </div>
     </div>
     <div class="actions">
-      <button type="button" class="btn primary" id="start">开始</button>
-      <button type="button" class="btn ghost" id="reset">重置</button>
-      <button type="button" class="btn ghost" id="skip">跳过本轮</button>
+      <button type="button" class="btn btn--primary" id="start">开始</button>
+      <button type="button" class="btn btn--ghost" id="reset">重置</button>
+      <button type="button" class="btn btn--ghost" id="skip">跳过本轮</button>
     </div>
-    <div class="stat">
-      <span>本轮完成 <b id="done">0</b></span>
-      <span>专注时长 <b id="total">0</b> 分钟</span>
+    <div class="rounds">
+      <span>完成番茄<b id="done">0</b></span>
+      <span>专注累计<b id="total">0</b> 分钟</span>
     </div>
-  </div>
+  </section>
 
-  <div class="settings">
-    <label class="field">专注（分钟）<input id="focusMin" type="number" min="1" max="180" value="25"></label>
-    <label class="field">休息（分钟）<input id="breakMin" type="number" min="1" max="60" value="5"></label>
-    <label class="field">提示音
-      <input id="sound" type="checkbox" checked style="width:auto">
-    </label>
-    <label class="field">自动进入下一轮
-      <input id="auto" type="checkbox" style="width:auto">
-    </label>
+  <div class="setup rise rise-3">
+    <label class="field">专注时长（分钟）<input class="input num" id="focusMin" type="number" min="1" max="180" value="25"></label>
+    <label class="field">休息时长（分钟）<input class="input num" id="breakMin" type="number" min="1" max="60" value="5"></label>
   </div>
-  <p class="hint">空格：开始 / 暂停 · R：重置。计时在页面打开期间有效，关闭即结束。</p>
+  <div style="display:flex;gap:16px;flex-wrap:wrap">
+    <label class="switch"><input type="checkbox" id="sound" checked> 结束提示音</label>
+    <label class="switch"><input type="checkbox" id="auto"> 自动进入下一轮</label>
+  </div>
+  <p class="hint">空格：开始 / 暂停 · R：重置。计时仅在页面打开期间有效。</p>
 
 <script>
 (function () {
   'use strict';
   var params = new URLSearchParams(location.search);
   if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
   function sendHeight() {
-    try {
-      parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*');
-    } catch (err) { /* ignore */ }
+    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
   }
-  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 600); }
-  window.addEventListener('load', sendHeight);
-  setTimeout(sendHeight, 80);
+  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
 
   var els = {
-    clock: document.getElementById('clock'),
-    phase: document.getElementById('phase'),
-    start: document.getElementById('start'),
-    reset: document.getElementById('reset'),
-    skip: document.getElementById('skip'),
-    done: document.getElementById('done'),
-    total: document.getElementById('total'),
-    focusMin: document.getElementById('focusMin'),
-    breakMin: document.getElementById('breakMin'),
-    sound: document.getElementById('sound'),
-    auto: document.getElementById('auto'),
-    bar: document.querySelector('.ring .bar')
+    ring: document.getElementById('ring'), clock: document.getElementById('clock'),
+    phase: document.getElementById('phase'), bar: document.getElementById('bar'),
+    start: document.getElementById('start'), reset: document.getElementById('reset'),
+    skip: document.getElementById('skip'), done: document.getElementById('done'),
+    total: document.getElementById('total'), focusMin: document.getElementById('focusMin'),
+    breakMin: document.getElementById('breakMin'), sound: document.getElementById('sound'),
+    auto: document.getElementById('auto')
   };
-  var CIRC = 2 * Math.PI * 100;
-  var state = { mode: 'focus', running: false, remain: 25 * 60, total: 25 * 60, done: 0, focused: 0, tick: null };
+  var CIRC = 2 * Math.PI * 92;
+  var state = { mode: 'focus', running: false, remain: 1500, total: 1500, done: 0, focused: 0, tick: null, endAt: 0 };
+
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
+
+  function minutes(mode) {
+    var value = Number(mode === 'focus' ? els.focusMin.value : els.breakMin.value);
+    if (!isFinite(value) || value < 1) value = mode === 'focus' ? 25 : 5;
+    return Math.min(180, Math.max(1, Math.round(value)));
+  }
 
   function beep() {
     if (!els.sound.checked) return;
@@ -128,102 +113,98 @@
       var Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
       var ctx = new Ctx();
-      var osc = ctx.createOscillator();
-      var gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.9);
-      osc.connect(gain).connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.95);
-    } catch (err) { /* ignore */ }
-  }
-
-  function minutes(mode) {
-    var value = mode === 'focus' ? Number(els.focusMin.value) : Number(els.breakMin.value);
-    if (!isFinite(value) || value < 1) value = mode === 'focus' ? 25 : 5;
-    return Math.min(180, Math.max(1, Math.round(value)));
+      [0, 0.24].forEach(function (offset, index) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = index ? 1046 : 880;
+        var start = ctx.currentTime + offset;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.55);
+      });
+    } catch (err) {}
   }
 
   function render() {
-    var m = Math.floor(state.remain / 60);
-    var s = state.remain % 60;
-    els.clock.textContent = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
-    els.phase.textContent = state.running
-      ? (state.mode === 'focus' ? '专注中' : '休息中')
-      : (state.mode === 'focus' ? '准备开始' : '休息一下');
+    var remain = Math.max(0, Math.ceil(state.remain));
+    els.clock.textContent = pad(Math.floor(remain / 60)) + ':' + pad(remain % 60);
+    els.phase.textContent = state.running ? (state.mode === 'focus' ? '专注中' : '休息中') : (state.mode === 'focus' ? '准备开始' : '休息一下');
     els.start.textContent = state.running ? '暂停' : '开始';
     var ratio = state.total ? state.remain / state.total : 0;
-    els.bar.style.strokeDasharray = String(CIRC);
     els.bar.style.strokeDashoffset = String(CIRC * (1 - ratio));
-    els.bar.style.stroke = state.mode === 'focus' ? 'var(--accent)' : 'var(--ok)';
+    els.bar.style.strokeDasharray = String(CIRC);
+    els.ring.classList.toggle('is-break', state.mode === 'break');
     els.done.textContent = String(state.done);
     els.total.textContent = String(Math.round(state.focused / 60));
     sendHeight();
   }
 
-  function stateReset() {
-    state.remain = state.total = minutes(state.mode) * 60;
+  function resetRound() {
+    state.total = minutes(state.mode) * 60;
+    state.remain = state.total;
     render();
   }
-  function stateStart() {
+
+  function start() {
     if (state.running) { pause(); return; }
+    if (state.remain <= 0) resetRound();
+    state.endAt = Date.now() + state.remain * 1000;
     state.running = true;
     state.tick = setInterval(function () {
-      state.remain -= 1;
+      state.remain = (state.endAt - Date.now()) / 1000;
       if (state.mode === 'focus') state.focused += 1;
-      if (state.remain <= 0) finishRound();
+      if (state.remain <= 0) { finish(); return; }
       render();
-    }, 1000);
+    }, 250);
     render();
   }
+
   function pause() {
     state.running = false;
     clearInterval(state.tick);
     state.tick = null;
     render();
   }
-  function finishRound() {
+
+  function finish() {
     beep();
-    clearInterval(state.tick);
-    state.tick = null;
-    state.running = false;
+    pause();
     if (state.mode === 'focus') state.done += 1;
-    var nextMode = state.mode === 'focus' ? 'break' : 'focus';
-    state.mode = nextMode;
-    state.remain = state.total = minutes(nextMode) * 60;
-    document.querySelectorAll('.modes button').forEach(function (b) {
-      b.classList.toggle('on', b.getAttribute('data-mode') === nextMode);
+    state.mode = state.mode === 'focus' ? 'break' : 'focus';
+    document.querySelectorAll('.seg > button').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', btn.getAttribute('data-mode') === state.mode ? 'true' : 'false');
     });
-    if (els.auto.checked) setTimeout(stateStart, 600);
-    render();
+    resetRound();
+    if (els.auto.checked) setTimeout(start, 700);
   }
 
-  els.start.addEventListener('click', stateStart);
-  els.reset.addEventListener('click', function () { pause(); stateReset(); });
-  els.skip.addEventListener('click', function () { finishRound(); });
+  els.start.addEventListener('click', start);
+  els.reset.addEventListener('click', function () { pause(); resetRound(); });
+  els.skip.addEventListener('click', finish);
   [els.focusMin, els.breakMin].forEach(function (input) {
-    input.addEventListener('change', function () {
-      if (!state.running) stateReset();
-    });
+    input.addEventListener('change', function () { if (!state.running) resetRound(); });
   });
-  document.querySelectorAll('.modes button').forEach(function (btn) {
+  document.querySelectorAll('.seg > button').forEach(function (btn) {
     btn.addEventListener('click', function () {
       pause();
-      document.querySelectorAll('.modes button').forEach(function (b) { b.classList.remove('on'); });
-      btn.classList.add('on');
+      document.querySelectorAll('.seg > button').forEach(function (item) {
+        item.setAttribute('aria-pressed', item === btn ? 'true' : 'false');
+      });
       state.mode = btn.getAttribute('data-mode');
-      stateReset();
+      resetRound();
     });
   });
   document.addEventListener('keydown', function (event) {
-    if (event.key === ' ') { event.preventDefault(); stateStart(); }
-    else if (event.key === 'r' || event.key === 'R') { pause(); stateReset(); }
+    if (event.target && /input|textarea/i.test(event.target.tagName)) return;
+    if (event.key === ' ') { event.preventDefault(); start(); }
+    else if (event.key === 'r' || event.key === 'R') { pause(); resetRound(); }
   });
 
-  stateReset();
+  resetRound();
 })();
 </script>
 </body>

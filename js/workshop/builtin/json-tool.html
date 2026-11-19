@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>JSON 格式化 / 校验</title>
+<title>JSON 助手</title>
 <style>
   :root{
     --bg:#0b0e13; --panel:#131922; --text:#edf1f7; --text2:#9aa7b8; --line:rgba(255,255,255,.1);
@@ -40,7 +40,7 @@
 </head>
 <body>
   <div class="head">
-    <div class="title">JSON 格式化 / 校验</div>
+    <div class="title">JSON 助手</div>
     <div class="status" id="status">等待输入</div>
   </div>
   <div class="bar">
@@ -64,6 +64,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
   function sendHeight() {
     try {
       parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*');

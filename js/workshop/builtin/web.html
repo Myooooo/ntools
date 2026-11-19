@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web 助手</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+  .urlbar { display: grid; grid-template-columns: 116px minmax(0, 1fr) auto; gap: 8px; }
+  @media (max-width: 700px) { .urlbar { grid-template-columns: 1fr; } }
+
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .cardtight { padding: 14px; }
+  .tabs { display: flex; gap: 4px; margin: 12px 0 10px; border-bottom: 1px solid var(--ws-line); }
+  .tabs button {
+    border: 0; background: transparent; color: var(--ws-text-2);
+    font: inherit; font-size: 12.5px; padding: 7px 10px 8px; cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color var(--ws-dur-fast) var(--ws-ease-out), border-color var(--ws-dur-fast) var(--ws-ease-out);
+  }
+  .tabs button[aria-selected="true"] { color: var(--ws-text); border-bottom-color: var(--ws-accent); }
+
+  .kv { display: flex; flex-direction: column; gap: 6px; }
+  .kv-row { display: grid; grid-template-columns: 1fr 1.4fr 28px; gap: 6px; align-items: center; }
+  .kv-row input { min-width: 0; }
+  .kv-remove {
+    border: 0; background: transparent; color: var(--ws-text-3); cursor: pointer;
+    font-size: 15px; line-height: 1; padding: 4px; border-radius: 6px;
+  }
+  .kv-remove:hover { color: var(--ws-danger); background: var(--ws-danger-soft); }
+  .kv-add { align-self: flex-start; margin-top: 2px; }
+
+  .resp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .status { font-size: 12.5px; font-weight: 650; }
+  .status.ok { color: var(--ws-ok); }
+  .status.warn { color: var(--ws-warn); }
+  .status.bad { color: var(--ws-danger); }
+  .resp-meta { color: var(--ws-text-2); font-size: 11.5px; }
+  .resp-body {
+    width: 100%; min-height: 240px; max-height: 420px;
+    border: 1px solid var(--ws-line); border-radius: 10px;
+    background: var(--ws-panel-2); color: var(--ws-text);
+    font-family: var(--ws-mono); font-size: 12px; line-height: 1.6;
+    padding: 10px 12px; resize: vertical; white-space: pre;
+  }
+  .resp-tabs { display: flex; gap: 6px; margin-top: 8px; }
+  .hint-inline { color: var(--ws-text-3); font-size: 11px; margin-top: 6px; }
+  .history { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+  .history button {
+    text-align: left; border: 0; background: transparent; color: var(--ws-text-2);
+    font: inherit; font-size: 11.5px; padding: 5px 8px; border-radius: 6px; cursor: pointer;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .history button:hover { background: var(--ws-panel-2); color: var(--ws-text); }
+  .flag { font-size: 13px; }
+</style>
+</head>
+<body>
+  <header class="head rise">
+    <div>
+      <h1 class="title">Web 助手</h1>
+      <p class="sub">构造并发送 HTTP 请求，格式化查看响应；适合联调内网接口。</p>
+    </div>
+    <span class="tag" id="netTag">可联网</span>
+  </header>
+
+  <div class="urlbar rise rise-2">
+    <select class="select" id="method" aria-label="请求方法">
+      <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option>
+      <option>DELETE</option><option>HEAD</option>
+    </select>
+    <input class="input" id="url" spellcheck="false" placeholder="https://api.example.com/v1/items">
+    <button type="button" class="btn btn--primary" id="send">发送</button>
+  </div>
+
+  <div class="layout" style="margin-top:14px">
+    <section class="card cardtight rise rise-2">
+      <div class="row-line">
+        <div class="section-label" style="margin:0">请求</div>
+        <button type="button" class="btn btn--ghost btn--icon" id="clear" title="清空请求">清空</button>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="params" aria-selected="true">参数</button>
+        <button type="button" role="tab" data-tab="headers" aria-selected="false">请求头</button>
+        <button type="button" role="tab" data-tab="body" aria-selected="false">Body</button>
+      </div>
+
+      <div id="pane-params">
+        <div class="kv" id="params"></div>
+        <button type="button" class="btn btn--ghost kv-add" data-add="params">+ 添加参数</button>
+        <p class="hint-inline">会被拼到 URL 查询串上，自动 URL 编码。</p>
+      </div>
+
+      <div id="pane-headers" hidden>
+        <div class="kv" id="headers"></div>
+        <button type="button" class="btn btn--ghost kv-add" data-add="headers">+ 添加请求头</button>
+        <label class="hint-inline" style="display:flex;gap:6px;align-items:center;margin-top:8px">
+          <input type="checkbox" id="withAuth" checked> 发送 Authorization 头（Bearer）
+        </label>
+        <input class="input" id="token" placeholder="粘贴 Token（仅本次请求使用）" style="margin-top:6px">
+      </div>
+
+      <div id="pane-body" hidden>
+        <textarea class="textarea" id="body" rows="8" spellcheck="false" placeholder='{"name":"nTools"}'></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button type="button" class="btn" id="formatBody">格式化 JSON</button>
+          <span class="hint-inline" id="bodyHint">JSON 会在发送前校验</span>
+        </div>
+      </div>
+
+      <div class="section-label">最近请求</div>
+      <div class="history" id="history"></div>
+    </section>
+
+    <section class="card cardtight rise rise-3">
+      <div class="row-line">
+        <div class="section-label" style="margin:0">响应</div>
+        <div class="resp-tabs">
+          <button type="button" class="btn btn--ghost" id="copyResp">复制</button>
+          <button type="button" class="btn btn--ghost" id="downloadResp">下载</button>
+        </div>
+      </div>
+      <div class="resp-head" style="margin-top:10px">
+        <span class="status" id="status">等待发送</span>
+        <span class="resp-meta" id="meta"></span>
+      </div>
+      <pre class="resp-body" id="respBody">响应内容会显示在这里。</pre>
+      <div class="resp-head" style="margin-top:8px">
+        <span class="resp-meta" id="respHeaders"></span>
+      </div>
+      <p class="hint">直接双击打开（file://）时，受浏览器同源策略限制，目标接口需允许跨域；内网网关请放行 CORS 或通过反向代理访问。</p>
+    </section>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  function sendHeight() {
+    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
+  }
+  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
+
+  var els = {
+    method: document.getElementById('method'), url: document.getElementById('url'),
+    send: document.getElementById('send'), clear: document.getElementById('clear'),
+    params: document.getElementById('params'), headers: document.getElementById('headers'),
+    body: document.getElementById('body'), withAuth: document.getElementById('withAuth'),
+    token: document.getElementById('token'), formatBody: document.getElementById('formatBody'),
+    bodyHint: document.getElementById('bodyHint'), status: document.getElementById('status'),
+    meta: document.getElementById('meta'), respBody: document.getElementById('respBody'),
+    respHeaders: document.getElementById('respHeaders'), copyResp: document.getElementById('copyResp'),
+    downloadResp: document.getElementById('downloadResp'), history: document.getElementById('history'),
+    netTag: document.getElementById('netTag')
+  };
+
+  var state = { running: false, controller: null, last: '', history: [] };
+
+  function kvRow(container, key, value) {
+    var row = document.createElement('div');
+    row.className = 'kv-row';
+    var k = document.createElement('input');
+    k.className = 'input';
+    k.placeholder = '名称';
+    k.value = key || '';
+    var v = document.createElement('input');
+    v.className = 'input';
+    v.placeholder = '值';
+    v.value = value || '';
+    var remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'kv-remove';
+    remove.setAttribute('aria-label', '删除这一行');
+    remove.textContent = '×';
+    remove.addEventListener('click', function () { row.remove(); sendHeight(); });
+    row.appendChild(k); row.appendChild(v); row.appendChild(remove);
+    container.appendChild(row);
+    return row;
+  }
+
+  function readRows(container) {
+    var out = {};
+    Array.prototype.forEach.call(container.querySelectorAll('.kv-row'), function (row) {
+      var inputs = row.querySelectorAll('input');
+      var key = (inputs[0].value || '').trim();
+      var value = (inputs[1].value || '').trim();
+      if (key) out[key] = value;
+    });
+    return out;
+  }
+
+  function activeTab(tab) {
+    document.querySelectorAll('.tabs button').forEach(function (btn) {
+      btn.setAttribute('aria-selected', btn.getAttribute('data-tab') === tab ? 'true' : 'false');
+    });
+    ['params', 'headers', 'body'].forEach(function (name) {
+      document.getElementById('pane-' + name).hidden = name !== tab;
+    });
+    sendHeight();
+  }
+
+  document.querySelectorAll('.tabs button').forEach(function (btn) {
+    btn.addEventListener('click', function () { activeTab(btn.getAttribute('data-tab')); });
+  });
+  document.querySelectorAll('[data-add]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      kvRow(els[btn.getAttribute('data-add')], '', '');
+      sendHeight();
+    });
+  });
+
+  function buildUrl() {
+    var raw = els.url.value.trim();
+    if (!raw) return '';
+    var query = readRows(els.params);
+    var pairs = Object.keys(query).map(function (key) { return encodeURIComponent(key) + '=' + encodeURIComponent(query[key]); });
+    if (!pairs.length) return raw;
+    return raw + (raw.indexOf('?') > -1 ? '&' : '?') + pairs.join('&');
+  }
+
+  function setStatus(text, kind) {
+    els.status.textContent = text;
+    els.status.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function pretty(text) {
+    try { return JSON.stringify(JSON.parse(text), null, 2); } catch (err) { return text; }
+  }
+
+  function sizeText(text) {
+    try { return new Blob([text]).size; } catch (err) { return text.length; }
+  }
+
+  function human(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  }
+
+  function send() {
+    if (state.running) { if (state.controller) state.controller.abort(); return; }
+    var url = buildUrl();
+    if (!url) { els.url.focus(); setStatus('请填写 URL', 'bad'); return; }
+    var method = els.method.value;
+    var headers = readRows(els.headers);
+    var body = els.body.value;
+    if (method !== 'GET' && method !== 'HEAD' && els.body.value.trim()) {
+      try {
+        JSON.parse(body);
+        if (!/^application\/json/i.test(headers['Content-Type'] || '')) headers['Content-Type'] = 'application/json';
+      } catch (err) {
+        if (!headers['Content-Type']) headers['Content-Type'] = 'text/plain';
+      }
+    }
+    if (els.withAuth.checked && els.token.value.trim()) headers.Authorization = 'Bearer ' + els.token.value.trim();
+
+    state.running = true;
+    els.send.textContent = '停止';
+    els.send.classList.add('btn--danger');
+    setStatus('请求中…');
+    els.meta.textContent = '';
+    var started = performance.now();
+    var controller = window.AbortController ? new AbortController() : null;
+    state.controller = controller;
+    var options = { method: method, headers: headers, cache: 'no-store' };
+    if (method !== 'GET' && method !== 'HEAD' && body.trim()) options.body = body;
+    if (controller) options.signal = controller.signal;
+
+    fetch(url, options).then(function (response) {
+      var requestId = response.headers.get('x-request-id') || '';
+      return response.text().then(function (text) {
+        var elapsed = Math.round(performance.now() - started);
+        var formatted = /json/i.test(response.headers.get('content-type') || '') ? pretty(text) : text;
+        state.last = formatted;
+        els.respBody.textContent = formatted || '（空响应）';
+        els.meta.textContent = elapsed + ' ms · ' + human(sizeText(text)) + (requestId ? ' · ' + requestId : '');
+        var headerText = [];
+        response.headers.forEach(function (value, key) { headerText.push(key + ': ' + value); });
+        els.respHeaders.textContent = headerText.join('  ·  ');
+        var ok = response.ok;
+        setStatus(response.status + ' ' + (response.statusText || ''), ok ? 'ok' : (response.status < 500 ? 'warn' : 'bad'));
+        remember(method, url, response.status);
+        sendHeight();
+      });
+    }).catch(function (error) {
+      var elapsed = Math.round(performance.now() - started);
+      var aborted = error && error.name === 'AbortError';
+      setStatus(aborted ? '已取消' : '请求失败', aborted ? 'warn' : 'bad');
+      els.meta.textContent = elapsed + ' ms';
+      els.respBody.textContent = aborted
+        ? '请求已取消。'
+        : '请求失败：' + (error && error.message ? error.message : error) + '\n\n常见原因：\n1. 目标接口未允许跨域（CORS），file:// 页面会被浏览器拦截；\n2. 地址写错或网关不可达；\n3. 自签名证书不被信任。';
+      els.respHeaders.textContent = '';
+      sendHeight();
+    }).then(function () {
+      state.running = false;
+      state.controller = null;
+      els.send.textContent = '发送';
+      els.send.classList.remove('btn--danger');
+    });
+  }
+
+  function remember(method, url, status) {
+    state.history.unshift({ method: method, url: url, status: status, at: Date.now() });
+    state.history = state.history.slice(0, 8);
+    renderHistory();
+  }
+
+  function renderHistory() {
+    els.history.textContent = '';
+    if (!state.history.length) {
+      var empty = document.createElement('div');
+      empty.className = 'hint-inline';
+      empty.textContent = '还没有发送过请求';
+      els.history.appendChild(empty);
+      return;
+    }
+    state.history.forEach(function (item) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = item.method + '  ' + item.url + '  · ' + item.status;
+      btn.title = item.url;
+      btn.addEventListener('click', function () {
+        els.method.value = item.method;
+        els.url.value = item.url;
+        setStatus('已填入历史请求');
+      });
+      els.history.appendChild(btn);
+    });
+    sendHeight();
+  }
+
+  els.send.addEventListener('click', send);
+  els.clear.addEventListener('click', function () {
+    els.url.value = '';
+    els.body.value = '';
+    els.params.textContent = '';
+    els.headers.textContent = '';
+    els.respBody.textContent = '响应内容会显示在这里。';
+    els.meta.textContent = '';
+    els.respHeaders.textContent = '';
+    setStatus('等待发送');
+    kvRow(els.params, '', '');
+    kvRow(els.headers, 'Content-Type', 'application/json');
+    sendHeight();
+  });
+  els.formatBody.addEventListener('click', function () {
+    try {
+      els.body.value = JSON.stringify(JSON.parse(els.body.value), null, 2);
+      els.bodyHint.textContent = 'JSON 已格式化';
+    } catch (err) {
+      els.bodyHint.textContent = 'JSON 不合法：' + err.message;
+    }
+  });
+  els.copyResp.addEventListener('click', function () {
+    if (!state.last) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(state.last);
+    else { var area = document.createElement('textarea'); area.value = state.last; document.body.appendChild(area); area.select(); document.execCommand('copy'); document.body.removeChild(area); }
+    setStatus('已复制响应');
+  });
+  els.downloadResp.addEventListener('click', function () {
+    if (!state.last) return;
+    var blob = new Blob([state.last], { type: 'application/json;charset=utf-8' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'response-' + Date.now() + '.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 800);
+  });
+  els.url.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') { event.preventDefault(); send(); }
+  });
+  els.body.addEventListener('input', function () { els.bodyHint.textContent = 'JSON 会在发送前校验'; });
+
+  kvRow(els.params, '', '');
+  kvRow(els.headers, 'Content-Type', 'application/json');
+  renderHistory();
+})();
+</script>
+</body>
+</html>

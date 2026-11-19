@@ -12,7 +12,6 @@
     var view = NC.view = NC.view || {};
 
     var ACTIVE_KEY = 'ntools.workshop.active';
-    var CATEGORY_ORDER = ['office', 'fun', 'custom'];
 
     var els = {};
     var store = null;
@@ -66,6 +65,10 @@
      * ------------------------------------------------------------------ */
     function currentTheme() {
         return NC.theme && NC.theme.isLight && NC.theme.isLight() ? 'light' : 'dark';
+    }
+
+    function isLite() {
+        return !!(NC.theme && NC.theme.isLite && NC.theme.isLite());
     }
 
     function groupedItems() {
@@ -127,11 +130,11 @@
     /** 同分类内拖拽排序；写入 order 后按「分类顺序 + 组内顺序」落库 */
     function reorderWithin(category, fromId, toId, before) {
         var all = store.list();
-        var groups = ['office', 'fun', 'custom'];
+        var groups = ['builtin', 'custom'];
         var ordered = [];
-        groups.forEach(function (cat) {
-            var list = all.filter(function (entry) { return (entry.category || 'custom') === cat; });
-            if (cat === category) {
+        groups.forEach(function (groupKey) {
+            var list = all.filter(function (entry) { return (entry.kind || 'custom') === groupKey; });
+            if (groupKey === category) {
                 var fromIndex = -1;
                 var toIndex = -1;
                 list.forEach(function (entry, index) {
@@ -249,7 +252,7 @@
         if (!els.frame) return;
         els.frame.removeAttribute('srcdoc');
         els.frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-same-origin');
-        var src = item.file + '?theme=' + currentTheme();
+        var src = item.file + '?theme=' + currentTheme() + '&lite=' + (isLite() ? '1' : '0');
         setHidden(els.frame, false);
         els.frame.src = src;
         setHidden(els.empty, true);

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>计时器</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+
+  .stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 16px 20px;
+    border: 1px solid var(--ws-line);
+    border-radius: 16px;
+    background: var(--ws-panel);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .clock {
+    font-size: clamp(44px, 10vw, 64px);
+    font-weight: 700;
+    letter-spacing: -.03em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.05;
+  }
+
+  .clock small { font-size: 20px; font-weight: 600; color: var(--ws-text-2); margin-left: 2px; }
+
+  .sub-clock { color: var(--ws-text-2); font-size: 11.5px; letter-spacing: .04em; }
+
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+
+  .inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+  .inputs .field { align-items: stretch; }
+  .inputs input { text-align: center; font-variant-numeric: tabular-nums; font-size: 16px; }
+
+  .quick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .quick button {
+    border: 1px solid var(--ws-line);
+    background: transparent;
+    color: var(--ws-text-2);
+    border-radius: 99px;
+    padding: 3px 10px;
+    font: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: color var(--ws-dur-fast) var(--ws-ease-out), border-color var(--ws-dur-fast) var(--ws-ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) { .quick button:hover { color: var(--ws-text); border-color: var(--ws-accent); } }
+
+  .laps {
+    margin-top: 16px;
+    border: 1px solid var(--ws-line);
+    border-radius: 12px;
+    max-height: 220px;
+    overflow: auto;
+  }
+
+  .lap {
+    display: grid;
+    grid-template-columns: 40px 1fr 1fr;
+    gap: 8px;
+    padding: 7px 12px;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    color: var(--ws-text-2);
+  }
+  .lap + .lap { border-top: 1px solid var(--ws-line); }
+  .lap:nth-child(odd) { background: var(--ws-panel-2); }
+  .lap b { color: var(--ws-text); font-weight: 600; }
+  .lap .delta { color: var(--ws-text-3); }
+
+  .pulse { position: absolute; inset: 0; pointer-events: none; }
+  .pulse::after {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background: radial-gradient(circle at 50% 50%, var(--ws-accent-soft), transparent 62%);
+    opacity: 0;
+    transition: opacity var(--ws-dur-slow) var(--ws-ease-out);
+  }
+  .is-running .pulse::after { opacity: 1; }
+  html[data-lite="1"] .pulse::after { display: none; }
+
+  .ring { position: relative; width: 190px; height: 190px; }
+  .ring svg { transform: rotate(-90deg); display: block; }
+  .ring circle { fill: none; stroke-width: 6; }
+  .ring .track { stroke: var(--ws-line); }
+  .ring .bar {
+    stroke: var(--ws-accent);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 240ms linear, stroke var(--ws-dur) var(--ws-ease-out);
+  }
+  .ring .clock-wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+  .ring .clock { font-size: 34px; }
+  .ring .sub-clock { margin-top: 2px; }
+  html[data-lite="1"] .ring .bar { transition: none; }
+</style>
+</head>
+<body>
+  <header class="head rise">
+    <div>
+      <h1 class="title">计时器</h1>
+      <p class="sub">倒计时提醒与秒表计时，都在本页完成。</p>
+    </div>
+    <div class="seg" role="group" aria-label="模式">
+      <button type="button" data-mode="timer" aria-pressed="true">倒计时</button>
+      <button type="button" data-mode="stopwatch" aria-pressed="false">秒表</button>
+    </div>
+  </header>
+
+  <section class="stage rise rise-2" id="stage" aria-live="off">
+    <div class="pulse" aria-hidden="true"></div>
+    <svg width="190" height="190" viewBox="0 0 190 190" class="ring" id="ring">
+      <circle class="track" cx="95" cy="95" r="84"></circle>
+      <circle class="bar" id="bar" cx="95" cy="95" r="84" stroke-dasharray="527.8" stroke-dashoffset="0"></circle>
+      <foreignObject x="0" y="0" width="190" height="190">
+        <div xmlns="http://www.w3.org/1999/xhtml" class="clock-wrap">
+          <div class="clock num" id="clock">05:00</div>
+          <div class="sub-clock" id="phase">准备开始</div>
+        </div>
+      </foreignObject>
+    </svg>
+    <div class="actions">
+      <button type="button" class="btn btn--primary" id="start">开始</button>
+      <button type="button" class="btn btn--ghost" id="lap">计次</button>
+      <button type="button" class="btn btn--ghost" id="reset">重置</button>
+    </div>
+  </section>
+
+  <section id="timerSetup" class="rise rise-3">
+    <div class="section-label">倒计时时长</div>
+    <div class="inputs">
+      <div class="field"><label for="hh">时</label><input class="input num" id="hh" type="number" min="0" max="23" value="0"></div>
+      <div class="field"><label for="mm">分</label><input class="input num" id="mm" type="number" min="0" max="59" value="5"></div>
+      <div class="field"><label for="ss">秒</label><input class="input num" id="ss" type="number" min="0" max="59" value="0"></div>
+    </div>
+    <div class="quick" id="quick">
+      <button type="button" data-sec="60">1 分钟</button>
+      <button type="button" data-sec="300">5 分钟</button>
+      <button type="button" data-sec="600">10 分钟</button>
+      <button type="button" data-sec="1500">25 分钟</button>
+      <button type="button" data-sec="2700">45 分钟</button>
+    </div>
+  </section>
+
+  <section id="lapsBox" hidden>
+    <div class="section-label">分段记录</div>
+    <div class="laps" id="laps"></div>
+  </section>
+
+  <p class="hint">空格：开始 / 暂停 · R：重置 · L：计次。提示音由浏览器实时合成；页面关闭后计时不会继续。</p>
+
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+
+  function sendHeight() {
+    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) { /* ignore */ }
+  }
+  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
+  window.addEventListener('load', sendHeight);
+
+  var els = {
+    stage: document.getElementById('stage'), clock: document.getElementById('clock'),
+    phase: document.getElementById('phase'), bar: document.getElementById('bar'),
+    start: document.getElementById('start'), lapBtn: document.getElementById('lap'),
+    reset: document.getElementById('reset'), hh: document.getElementById('hh'),
+    mm: document.getElementById('mm'), ss: document.getElementById('ss'),
+    timerSetup: document.getElementById('timerSetup'), quick: document.getElementById('quick'),
+    lapsBox: document.getElementById('lapsBox'), laps: document.getElementById('laps')
+  };
+
+  var CIRC = 2 * Math.PI * 84;
+  var state = {
+    mode: 'timer',
+    running: false,
+    remain: 300,
+    total: 300,
+    elapsed: 0,
+    baseElapsed: 0,
+    startedAt: 0,
+    laps: [],
+    lastLapAt: 0,
+    tick: null,
+    startedAt: 0
+  };
+
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
+
+  function formatClock(ms) {
+    var total = Math.max(0, Math.round(ms / 1000));
+    var h = Math.floor(total / 3600);
+    var m = Math.floor((total % 3600) / 60);
+    var s = total % 60;
+    return h > 0 ? h + ':' + pad(m) + ':' + pad(s) : pad(m) + ':' + pad(s);
+  }
+
+  function formatStopwatch(ms) {
+    var total = Math.max(0, ms);
+    var m = Math.floor(total / 60000);
+    var s = Math.floor((total % 60000) / 1000);
+    var cs = Math.floor((total % 1000) / 10);
+    return pad(m) + ':' + pad(s) + '.' + pad(cs);
+  }
+
+  function beep() {
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = new Ctx();
+      [0, 0.22].forEach(function (offset) {
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = offset ? 1046 : 880;
+        var start = ctx.currentTime + offset;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.2, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.55);
+      });
+    } catch (err) { /* ignore */ }
+  }
+
+  function setMode(mode) {
+    if (state.running) pause();
+    state.mode = mode;
+    document.querySelectorAll('.seg > button').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', btn.getAttribute('data-mode') === mode ? 'true' : 'false');
+    });
+    els.timerSetup.hidden = mode !== 'timer';
+    els.lapsBox.hidden = mode !== 'stopwatch' || !state.laps.length;
+    els.lapBtn.hidden = mode !== 'stopwatch';
+    state.laps = [];
+    state.lastLapAt = 0;
+    state.elapsed = 0;
+    if (mode === 'timer') readInputs();
+    els.laps.textContent = '';
+    render();
+    sendHeight();
+  }
+
+  function readInputs() {
+    var h = Math.max(0, Math.min(23, Number(els.hh.value) || 0));
+    var m = Math.max(0, Math.min(59, Number(els.mm.value) || 0));
+    var s = Math.max(0, Math.min(59, Number(els.ss.value) || 0));
+    var total = (h * 3600 + m * 60 + s) * 1000;
+    if (total <= 0) total = 60000;
+    state.total = total;
+    state.remain = total;
+    render();
+  }
+
+  function setRemain(ms) {
+    var total = Math.max(0, ms);
+    els.hh.value = String(Math.floor(total / 3600000));
+    els.mm.value = String(Math.floor((total % 3600000) / 60000));
+    els.ss.value = String(Math.floor((total % 60000) / 1000));
+    state.total = ms;
+    state.remain = ms;
+    render();
+  }
+
+  function render() {
+    if (state.mode === 'timer') {
+      els.clock.textContent = formatClock(state.remain);
+      var ratio = state.total ? state.remain / state.total : 0;
+      els.bar.style.strokeDasharray = String(CIRC);
+      els.bar.style.strokeDashoffset = String(CIRC * (1 - ratio));
+      els.phase.textContent = state.running ? '倒计时中' : (state.remain >= state.total ? '准备开始' : '已暂停');
+    } else {
+      els.clock.textContent = formatStopwatch(state.elapsed);
+      els.bar.style.strokeDasharray = String(CIRC);
+      els.bar.style.strokeDashoffset = '0';
+      els.bar.style.stroke = 'var(--ws-ok)';
+      els.phase.textContent = state.running ? '计时中' : '秒表';
+    }
+    els.start.textContent = state.running ? '暂停' : (state.elapsed || state.remain < state.total ? '继续' : '开始');
+    els.stage.classList.toggle('is-running', state.running);
+    sendHeight();
+  }
+
+  function tick() {
+    if (!state.running) return;
+    var now = Date.now();
+    if (state.mode === 'timer') {
+      state.remain = Math.max(0, state.total - (now - state.startedAt));
+      if (state.remain <= 0) {
+        beep();
+        pause();
+        state.remain = 0;
+        els.phase.textContent = '时间到';
+        render();
+        return;
+      }
+    } else {
+      state.elapsed = state.baseElapsed + (now - state.startedAt);
+    }
+    render();
+  }
+
+  function start() {
+    if (state.running) { pause(); return; }
+    if (state.mode === 'timer') {
+      if (state.remain <= 0) readInputs();
+      state.startedAt = Date.now() - (state.total - state.remain);
+    } else {
+      state.startedAt = Date.now();
+    }
+    state.running = true;
+    state.tick = setInterval(tick, state.mode === 'timer' ? 200 : 33);
+    if (state.mode === 'stopwatch' && !state.lastLapAt) state.lastLapAt = 0;
+    render();
+  }
+
+  function pause() {
+    if (state.mode === 'stopwatch' && state.running) {
+      state.baseElapsed += Date.now() - state.startedAt;
+      state.elapsed = state.baseElapsed;
+    }
+    state.running = false;
+    clearInterval(state.tick);
+    state.tick = null;
+    render();
+  }
+
+  function reset() {
+    pause();
+    if (state.mode === 'timer') readInputs();
+    else { state.elapsed = 0; state.baseElapsed = 0; state.startedAt = 0; state.laps = []; state.lastLapAt = 0; els.laps.textContent = ''; els.lapsBox.hidden = true; }
+    render();
+  }
+
+  function lap() {
+    if (state.mode !== 'stopwatch') return;
+    var at = state.elapsed;
+    var delta = at - state.lastLapAt;
+    state.lastLapAt = at;
+    state.laps.push({ at: at, delta: delta });
+    els.lapsBox.hidden = false;
+    var row = document.createElement('div');
+    row.className = 'lap';
+    var index = document.createElement('span');
+    index.textContent = '#' + state.laps.length;
+    var total = document.createElement('b');
+    total.textContent = formatStopwatch(at);
+    var split = document.createElement('span');
+    split.className = 'delta';
+    split.textContent = '+' + formatStopwatch(delta);
+    row.appendChild(index); row.appendChild(total); row.appendChild(split);
+    els.laps.insertBefore(row, els.laps.firstChild);
+    sendHeight();
+  }
+
+  document.querySelectorAll('.seg > button').forEach(function (btn) {
+    btn.addEventListener('click', function () { setMode(btn.getAttribute('data-mode')); });
+  });
+  els.start.addEventListener('click', start);
+  els.reset.addEventListener('click', reset);
+  els.lapBtn.addEventListener('click', lap);
+  [els.hh, els.mm, els.ss].forEach(function (input) {
+    input.addEventListener('change', function () { if (!state.running) readInputs(); });
+  });
+  els.quick.addEventListener('click', function (event) {
+    var btn = event.target.closest('button[data-sec]');
+    if (!btn) return;
+    setRemain(Number(btn.getAttribute('data-sec')) * 1000);
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.target && /input|textarea/i.test(event.target.tagName)) return;
+    if (event.key === ' ') { event.preventDefault(); start(); }
+    else if (event.key === 'r' || event.key === 'R') { pause(); reset(); }
+    else if (event.key === 'l' || event.key === 'L') { lap(); }
+  });
+
+  els.lapBtn.hidden = true;
+  readInputs();
+})();
+</script>
+</body>
+</html>
