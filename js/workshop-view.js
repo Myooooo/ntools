@@ -286,6 +286,30 @@
         setHidden(els.frame, true);
     }
 
+    var themeSeq = 0;
+
+    /** 主题/ Lite 变化：内置工具只发消息（不重载），自定义应用仍重载 */
+    function syncFrameTheme(fromLoad) {
+        var item = currentItem();
+        if (!item || !els.frame || els.frame.hidden) return;
+        if (item.kind !== 'builtin') {
+            // 自定义应用的主题在 wrapHtml 时烘焙；只有主题变化才 reload，
+            // 不能在 iframe load 时 reload（会无限循环）
+            if (!fromLoad) reloadFrame();
+            return;
+        }
+        try {
+            els.frame.contentWindow.postMessage({
+                type: 'nc-ws-theme',
+                theme: currentTheme(),
+                lite: isLite(),
+                requestId: String(++themeSeq)
+            }, '*');
+        } catch (err) {
+            reloadFrame();
+        }
+    }
+
     function openBuiltin(item) {
         if (!els.frame) return;
         els.frame.removeAttribute('srcdoc');
@@ -982,8 +1006,8 @@
             }
         });
         if (NC.events && NC.events.on) {
-            NC.events.on('theme:changed', function () { reloadFrame(); });
-            NC.events.on('lite:changed', function () { reloadFrame(); });
+            NC.events.on('theme:changed', function () { syncFrameTheme(); });
+            NC.events.on('lite:changed', function () { syncFrameTheme(); });
         }
     }
 
@@ -1037,6 +1061,7 @@
         });
         bind();
         bindFrameMessages();
+        if (els.frame) els.frame.addEventListener('load', function () { syncFrameTheme(true); });
         applySideCollapsed(readSideCollapsed());
         state.initialized = true;
         store.init().then(function () {

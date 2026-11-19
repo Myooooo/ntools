@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Web 助手</title>
+<link rel="stylesheet" href="../../../css/tokens.css">
 <link rel="stylesheet" href="_shared.css">
 <style>
   .urlbar { display: grid; grid-template-columns: 116px minmax(0, 1fr) auto; gap: 8px; }
@@ -57,6 +58,7 @@
   .history button:hover { background: var(--ws-panel-2); color: var(--ws-text); }
   .flag { font-size: 13px; }
 </style>
+<script src="_shared.js"></script>
 </head>
 <body>
   <header class="head rise">
@@ -84,18 +86,18 @@
       </div>
 
       <div class="tabs" role="tablist">
-        <button type="button" role="tab" data-tab="params" aria-selected="true">参数</button>
-        <button type="button" role="tab" data-tab="headers" aria-selected="false">请求头</button>
-        <button type="button" role="tab" data-tab="body" aria-selected="false">Body</button>
+        <button type="button" role="tab" id="tab-params" data-tab="params" aria-controls="pane-params" aria-selected="true" tabindex="0">参数</button>
+        <button type="button" role="tab" id="tab-headers" data-tab="headers" aria-controls="pane-headers" aria-selected="false" tabindex="-1">请求头</button>
+        <button type="button" role="tab" id="tab-body" data-tab="body" aria-controls="pane-body" aria-selected="false" tabindex="-1">Body</button>
       </div>
 
-      <div id="pane-params">
+      <div id="pane-params" role="tabpanel" aria-labelledby="tab-params" tabindex="0">
         <div class="kv" id="params"></div>
         <button type="button" class="btn btn--ghost kv-add" data-add="params">+ 添加参数</button>
         <p class="hint-inline">会被拼到 URL 查询串上，自动 URL 编码。</p>
       </div>
 
-      <div id="pane-headers" hidden>
+      <div id="pane-headers" role="tabpanel" aria-labelledby="tab-headers" tabindex="0" hidden>
         <div class="kv" id="headers"></div>
         <button type="button" class="btn btn--ghost kv-add" data-add="headers">+ 添加请求头</button>
         <label class="hint-inline" style="display:flex;gap:6px;align-items:center;margin-top:8px">
@@ -104,7 +106,7 @@
         <input class="input" id="token" placeholder="粘贴 Token（仅本次请求使用）" style="margin-top:6px">
       </div>
 
-      <div id="pane-body" hidden>
+      <div id="pane-body" role="tabpanel" aria-labelledby="tab-body" tabindex="0" hidden>
         <textarea class="textarea" id="body" rows="8" spellcheck="false" placeholder='{"name":"nTools"}'></textarea>
         <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
           <button type="button" class="btn" id="formatBody">格式化 JSON</button>
@@ -141,7 +143,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
   function sendHeight() {
     try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
   }
@@ -204,7 +206,9 @@
 
   function activeTab(tab) {
     document.querySelectorAll('.tabs button').forEach(function (btn) {
-      btn.setAttribute('aria-selected', btn.getAttribute('data-tab') === tab ? 'true' : 'false');
+      var on = btn.getAttribute('data-tab') === tab;
+      btn.setAttribute('aria-selected', on ? 'true' : 'false');
+      btn.setAttribute('tabindex', on ? '0' : '-1');
     });
     ['params', 'headers', 'body'].forEach(function (name) {
       document.getElementById('pane-' + name).hidden = name !== tab;
@@ -212,8 +216,20 @@
     sendHeight();
   }
 
-  document.querySelectorAll('.tabs button').forEach(function (btn) {
+  var tabButtons = Array.prototype.slice.call(document.querySelectorAll('.tabs button'));
+  tabButtons.forEach(function (btn, index) {
     btn.addEventListener('click', function () { activeTab(btn.getAttribute('data-tab')); });
+    btn.addEventListener('keydown', function (event) {
+      var next = -1;
+      if (event.key === 'ArrowRight') next = (index + 1) % tabButtons.length;
+      else if (event.key === 'ArrowLeft') next = (index - 1 + tabButtons.length) % tabButtons.length;
+      else if (event.key === 'Home') next = 0;
+      else if (event.key === 'End') next = tabButtons.length - 1;
+      if (next < 0) return;
+      event.preventDefault();
+      tabButtons[next].focus();
+      activeTab(tabButtons[next].getAttribute('data-tab'));
+    });
   });
   document.querySelectorAll('[data-add]').forEach(function (btn) {
     btn.addEventListener('click', function () {

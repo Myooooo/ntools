@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>二维码生成</title>
+<link rel="stylesheet" href="../../../css/tokens.css">
 <link rel="stylesheet" href="_shared.css">
 <style>
   .layout { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -22,6 +23,7 @@
   .size-row { display: flex; gap: 8px; }
   .size-row .btn { flex: 1; }
 </style>
+<script src="_shared.js"></script>
 </head>
 <body>
   <header class="head rise">
@@ -70,7 +72,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
   function sendHeight() {
     try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
   }

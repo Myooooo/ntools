@@ -4,10 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>世界时钟</title>
+<link rel="stylesheet" href="../../../css/tokens.css">
 <link rel="stylesheet" href="_shared.css">
 <style>
-  .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .bar .select { max-width: 300px; }
+  .bar { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
+  .bar .select { flex: 0 1 240px; max-width: 240px; }
+  .bar .btn { flex: 0 0 auto; white-space: nowrap; }
+  @media (max-width: 560px) { .bar { flex-wrap: wrap; justify-content: flex-end; } .bar .select { max-width: 100%; } }
 
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 
@@ -26,7 +29,7 @@
   .clock-card.is-drop-before { box-shadow: inset 0 2px 0 var(--ws-accent); }
   .clock-card.is-drop-after { box-shadow: inset 0 -2px 0 var(--ws-accent); }
   .clock-card.is-night { background: linear-gradient(165deg, var(--ws-accent-soft), transparent 62%), var(--ws-panel); }
-  html[data-lite="1"] .clock-card { transition: none; }
+  html[data-lite="true"] .clock-card { transition: none; }
 
   .clock-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   .city { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; }
@@ -44,8 +47,36 @@
     color: var(--ws-text-3); cursor: pointer; font-size: 14px; line-height: 1;
   }
   .rm:hover { color: var(--ws-text); background: var(--ws-panel-2); }
+
+  @media (hover: hover) and (pointer: fine) {
+    .rm { opacity: 0; transition: opacity 120ms var(--ws-ease-out); }
+    .clock-card:hover .rm,
+    .rm:focus-visible { opacity: 1; }
+  }
+
+  @media (pointer: coarse) {
+    .rm { width: 32px; height: 32px; opacity: .8; }
+  }
+
+  .empty {
+    grid-column: 1 / -1;
+    align-items: center;
+    padding: 42px 16px;
+  }
+
+  .empty strong {
+    color: var(--ws-text);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .empty span {
+    color: var(--ws-text-3);
+    font-size: 12px;
+  }
   .add-wrap { display: flex; gap: 8px; }
 </style>
+<script src="_shared.js"></script>
 </head>
 <body>
   <header class="head rise">
@@ -68,7 +99,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
   function sendHeight() {
     try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
   }
@@ -131,8 +162,8 @@
     try {
       var raw = JSON.parse(localStorage.getItem(KEY) || 'null');
       if (Array.isArray(raw)) {
-        var list = raw.filter(function (id) { return !!byId(id); });
-        if (list.length) return list;
+        // 允许空数组：用户主动删空后显示空态，而不是悄悄恢复默认城市
+        return raw.filter(function (id) { return !!byId(id); });
       }
     } catch (err) { /* ignore */ }
     return DEFAULTS.slice();
@@ -318,6 +349,19 @@
     }
     els.grid.textContent = '';
     refs = [];
+    if (!selected.length) {
+      var empty = document.createElement('div');
+      empty.className = 'empty';
+      var emptyTitle = document.createElement('strong');
+      emptyTitle.textContent = '还没有添加城市';
+      var emptyHint = document.createElement('span');
+      emptyHint.textContent = '从上方选择城市，或点「恢复默认」。';
+      empty.appendChild(emptyTitle);
+      empty.appendChild(emptyHint);
+      els.grid.appendChild(empty);
+      sendHeight();
+      return;
+    }
     selected.forEach(function (id) {
       var city = byId(id);
       if (!city) return;

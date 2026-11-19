@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>图片处理</title>
+<link rel="stylesheet" href="../../../css/tokens.css">
 <link rel="stylesheet" href="_shared.css">
 <style>
   .drop {
@@ -17,7 +18,7 @@
   .drop.is-over { border-color: var(--ws-accent); background: var(--ws-accent-soft); }
   .drop strong { color: var(--ws-text); font-size: 13px; font-weight: 600; }
   .drop span { font-size: 11.5px; }
-  html[data-lite="1"] .drop { transition: none; }
+  html[data-lite="true"] .drop { transition: none; }
 
   .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
   @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
@@ -39,6 +40,7 @@
   .out { width: 100%; min-height: 130px; max-height: 220px; }
   .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 </style>
+<script src="_shared.js"></script>
 </head>
 <body>
   <header class="head rise">
@@ -78,6 +80,7 @@
       <div class="section-label" style="margin-top:0">Base64 结果</div>
       <textarea class="textarea out" id="output" spellcheck="false" placeholder="结果显示在这里；也可以粘贴 data:image/... 后点「还原图片」"></textarea>
       <div class="meta" style="margin-top:8px"><span id="outMeta">—</span></div>
+      <p class="hint" id="toastLine" role="status" aria-live="polite" style="margin-top:4px;min-height:18px"></p>
       <div class="row-actions">
         <button type="button" class="btn" id="copy">复制</button>
         <button type="button" class="btn" id="download">下载图片</button>
@@ -92,7 +95,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
   function sendHeight() {
     try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
   }
@@ -104,7 +107,7 @@
     scale: document.getElementById('scale'), scaleLabel: document.getElementById('scaleLabel'),
     srcSize: document.getElementById('srcSize'), dstSize: document.getElementById('dstSize'),
     convert: document.getElementById('convert'), output: document.getElementById('output'),
-    outMeta: document.getElementById('outMeta'), copy: document.getElementById('copy'),
+    outMeta: document.getElementById('outMeta'), toastLine: document.getElementById('toastLine'), copy: document.getElementById('copy'),
     download: document.getElementById('download'), restore: document.getElementById('restore'),
     modeTag: document.getElementById('modeTag')
   };
@@ -115,8 +118,12 @@
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / 1024 / 1024).toFixed(2) + ' MB';
   }
+  var toastTimer = null;
   function toast(text) {
-    els.outMeta.textContent = text;
+    if (!els.toastLine) return;
+    els.toastLine.textContent = text;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { if (els.toastLine) els.toastLine.textContent = ''; }, 2200);
   }
 
   function loadFile(file) {

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JSON 助手</title>
+<link rel="stylesheet" href="../../../css/tokens.css">
 <style>
   :root{
     --bg:#0b0e13; --panel:#131922; --text:#edf1f7; --text2:#9aa7b8; --line:rgba(255,255,255,.1);
@@ -36,7 +37,17 @@
   .errbox{margin-top:8px;padding:8px 12px;border-radius:8px;background:rgba(255,122,114,.1);
     color:var(--bad);font-size:12px;font-family:var(--mono);display:none;white-space:pre-wrap}
   .errbox.show{display:block}
+
+  /* v8：跟随主应用令牌 */
+  :root,html[data-theme="light"]{
+    --bg:var(--nc-bg);--panel:var(--nc-surface);--text:var(--nc-text);
+    --text2:var(--nc-text-2);--line:var(--nc-border);--accent:var(--nc-accent);
+    --ok:var(--nc-success);--bad:var(--nc-danger);--warn:var(--nc-warning);
+    --soft:var(--nc-accent-soft);
+  }
+  html,body{font-family:var(--nc-font-sans)}
 </style>
+<script src="_shared.js"></script>
 </head>
 <body>
   <div class="head">
@@ -64,7 +75,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
   function sendHeight() {
     try {
       parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*');

@@ -4,52 +4,36 @@
  * ========================================================================== */
 
 :root {
-    --ws-bg: #0b0e13;
-    --ws-panel: #131922;
-    --ws-panel-2: #0f141b;
-    --ws-text: #edf1f7;
-    --ws-text-2: #9aa7b8;
-    --ws-text-3: #6b7687;
-    --ws-line: rgba(255, 255, 255, .1);
-    --ws-line-strong: rgba(255, 255, 255, .18);
-    --ws-accent: #6ea8fe;
-    --ws-accent-soft: rgba(110, 168, 254, .14);
-    --ws-ok: #45d6a0;
-    --ws-ok-soft: rgba(69, 214, 160, .14);
-    --ws-warn: #e8b45a;
-    --ws-warn-soft: rgba(232, 180, 90, .14);
-    --ws-danger: #ff7a72;
-    --ws-danger-soft: rgba(255, 122, 114, .14);
-    --ws-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-    --ws-ease-out: cubic-bezier(.23, 1, .32, 1);
-    --ws-ease-in-out: cubic-bezier(.77, 0, .175, 1);
-    --ws-dur-fast: 140ms;
-    --ws-dur: 200ms;
-    --ws-dur-slow: 320ms;
-    --ws-radius: 12px;
-    --ws-radius-sm: 8px;
-    --ws-shadow: 0 18px 40px -28px rgba(0, 0, 0, .7);
+    /* v8：只做别名，色值/字阶/动效全部来自主应用 tokens.css */
+    --ws-bg: var(--nc-bg, #0b0e13);
+    --ws-panel: var(--nc-surface, #131922);
+    --ws-panel-2: var(--nc-surface-2, #18212c);
+    --ws-text: var(--nc-text, #edf1f7);
+    --ws-text-2: var(--nc-text-2, #9aa7b8);
+    --ws-text-3: var(--nc-text-3, #8b98a8);
+    --ws-line: var(--nc-border, rgba(255, 255, 255, .075));
+    --ws-line-strong: var(--nc-border-strong, rgba(255, 255, 255, .14));
+    --ws-accent: var(--nc-accent, #6ea8fe);
+    --ws-accent-soft: var(--nc-accent-soft, rgba(110, 168, 254, .13));
+    --ws-ok: var(--nc-success, #45d6a0);
+    --ws-ok-soft: var(--nc-success-soft, rgba(69, 214, 160, .12));
+    --ws-warn: var(--nc-warning, #e8b45a);
+    --ws-warn-soft: var(--nc-warning-soft, rgba(232, 180, 90, .12));
+    --ws-danger: var(--nc-danger, #ff7a72);
+    --ws-danger-soft: var(--nc-danger-soft, rgba(255, 122, 114, .12));
+    --ws-mono: var(--nc-font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);
+    --ws-ease-out: var(--nc-ease-out, cubic-bezier(.23, 1, .32, 1));
+    --ws-ease-in-out: var(--nc-ease-in-out, cubic-bezier(.77, 0, .175, 1));
+    --ws-dur-fast: var(--nc-dur-fast, 120ms);
+    --ws-dur: var(--nc-dur, 160ms);
+    --ws-dur-slow: var(--nc-dur-slow, 220ms);
+    --ws-radius: var(--nc-radius-lg, 12px);
+    --ws-radius-sm: var(--nc-radius-md, 8px);
+    --ws-shadow: var(--nc-shadow-1, 0 1px 2px rgba(0, 0, 0, .22));
     color-scheme: dark;
 }
 
 html[data-theme="light"] {
-    --ws-bg: #f4f5f7;
-    --ws-panel: #ffffff;
-    --ws-panel-2: #f8f9fb;
-    --ws-text: #15181d;
-    --ws-text-2: #56616f;
-    --ws-text-3: #7b8794;
-    --ws-line: rgba(0, 0, 0, .1);
-    --ws-line-strong: rgba(0, 0, 0, .18);
-    --ws-accent: #2a63c8;
-    --ws-accent-soft: rgba(47, 111, 219, .1);
-    --ws-ok: #0e9a6a;
-    --ws-ok-soft: rgba(14, 154, 106, .1);
-    --ws-warn: #8a5c12;
-    --ws-warn-soft: rgba(138, 92, 18, .1);
-    --ws-danger: #c53b3b;
-    --ws-danger-soft: rgba(197, 59, 59, .1);
-    --ws-shadow: 0 16px 34px -30px rgba(20, 32, 56, .4);
     color-scheme: light;
 }
 
@@ -62,7 +46,7 @@ html, body {
     padding: 0;
     background: var(--ws-bg);
     color: var(--ws-text);
-    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: var(--nc-font-sans, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif);
     -webkit-font-smoothing: antialiased;
 }
 
@@ -286,9 +270,9 @@ body {
 .rise-3 { animation-delay: 120ms; }
 
 /* ---------- Lite：去掉位移与模糊，保留颜色反馈 ---------- */
-html[data-lite="1"] .rise { animation: none; }
-html[data-lite="1"] .btn { transition: background-color var(--ws-dur-fast) linear, border-color var(--ws-dur-fast) linear; }
-html[data-lite="1"] .btn:active { transform: none; }
+html[data-lite="true"] .rise { animation: none; }
+html[data-lite="true"] .btn { transition: background-color var(--ws-dur-fast) linear, border-color var(--ws-dur-fast) linear; }
+html[data-lite="true"] .btn:active { transform: none; }
 
 @media (prefers-reduced-motion: reduce) {
     .rise { animation: none; }

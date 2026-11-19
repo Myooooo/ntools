@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>实时薪资</title>
+<link rel="stylesheet" href="../../../css/tokens.css">
 <link rel="stylesheet" href="_shared.css">
 <style>
   .hero {
@@ -29,7 +30,7 @@
     from { transform: translate3d(-3%, -2%, 0) scale(1); }
     to { transform: translate3d(4%, 3%, 0) scale(1.08); }
   }
-  html[data-lite="1"] .hero__aurora { animation: none; }
+  html[data-lite="true"] .hero__aurora { animation: none; }
 
   .hero__label { position: relative; font-size: 12px; font-weight: 600; letter-spacing: .08em; opacity: .85; }
   .hero__amount { position: relative; display: flex; align-items: baseline; gap: 4px; margin-top: 4px; font-variant-numeric: tabular-nums; }
@@ -50,8 +51,8 @@
     animation: shimmer 2.6s linear infinite;
   }
   @keyframes shimmer { to { transform: translateX(100%); } }
-  html[data-lite="1"] .hero__bar i::after { animation: none; display: none; }
-  html[data-lite="1"] .hero__bar i { transition: none; }
+  html[data-lite="true"] .hero__bar i::after { animation: none; display: none; }
+  html[data-lite="true"] .hero__bar i { transition: none; }
 
   .hero__meta { position: relative; display: flex; justify-content: space-between; margin-top: 8px; font-size: 11.5px; opacity: .9; }
 
@@ -66,8 +67,32 @@
 
   .milestone { animation: pop 900ms var(--ws-ease-out); }
   @keyframes pop { 0% { transform: scale(1); } 28% { transform: scale(1.012); } 100% { transform: scale(1); } }
-  html[data-lite="1"] .milestone { animation: none; }
+  html[data-lite="true"] .milestone { animation: none; }
+  /* v8：石墨舞台 + 铜色数字；去掉紫色渐变/极光/流光 */
+  .hero {
+    background: var(--ws-panel);
+    color: var(--ws-text);
+    border: 1px solid var(--ws-line);
+    box-shadow: none;
+  }
+  .hero__aurora { display: none; }
+  .hero__label { color: var(--ws-text-2); opacity: 1; }
+  .hero__amount .num { color: var(--nc-time); }
+  .hero__amount .cur, .hero__amount .dec { color: var(--nc-time); opacity: 1; }
+  .hero__mood { color: var(--ws-text-2); opacity: 1; }
+  .hero__bar { background: var(--ws-line); }
+  .hero__bar i {
+    width: 100%;
+    transform: scaleX(0);
+    transform-origin: left center;
+    background: var(--nc-time);
+    box-shadow: none;
+    transition: transform 240ms var(--ws-ease-out);
+  }
+  .hero__bar i::after { display: none; }
+  .hero__meta { color: var(--ws-text-3); opacity: 1; }
 </style>
+<script src="_shared.js"></script>
 </head>
 <body>
   <header class="head rise">
@@ -122,7 +147,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
   function sendHeight() {
     try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
   }
@@ -208,7 +233,7 @@
     els.earned.textContent = whole.toLocaleString('zh-CN');
     els.dec.textContent = '.' + (dec < 10 ? '0' + dec : dec);
 
-    els.bar.style.width = (ratio * 100).toFixed(1) + '%';
+    els.bar.style.transform = 'scaleX(' + ratio.toFixed(4) + ')';
     els.range.textContent = pad2(Math.floor(cfg.start / 60)) + ':' + pad2(cfg.start % 60) + ' — ' +
       pad2(Math.floor(cfg.end / 60)) + ':' + pad2(cfg.end % 60);
 
@@ -235,7 +260,6 @@
       void els.hero.offsetWidth;
       els.hero.classList.add('milestone');
     }
-    sendHeight();
   }
 
   function save() {
@@ -267,13 +291,10 @@
   els.autoSave.addEventListener('change', save);
 
   load();
-  var raf = null;
-  function loop() {
-    render();
-    raf = requestAnimationFrame(loop);
-  }
-  if (window.requestAnimationFrame) loop(); else setInterval(render, 1000);
-  window.addEventListener('pagehide', function () { if (raf) cancelAnimationFrame(raf); });
+  // v8：4fps 足够读数字，避免每帧 4 次 innerHTML + 布局
+  render();
+  var tickTimer = setInterval(render, 250);
+  window.addEventListener('pagehide', function () { clearInterval(tickTimer); });
 })();
 </script>
 </body>

@@ -161,13 +161,16 @@
     function themeCss(theme) {
         var dark = theme !== 'light';
         var vars = dark
-            ? { bg: '#0b0e13', panel: '#131922', text: '#edf1f7', text2: '#9aa7b8', line: 'rgba(255,255,255,.12)', accent: '#6ea8fe' }
-            : { bg: '#f4f5f7', panel: '#ffffff', text: '#15181d', text2: '#56616f', line: 'rgba(0,0,0,.12)', accent: '#2a63c8' };
+            ? { bg: '#0b0e13', panel: '#131922', panel2: '#18212c', text: '#edf1f7', text2: '#9aa7b8', text3: '#8b98a8', line: 'rgba(255,255,255,.075)', accent: '#6ea8fe', soft: 'rgba(110,168,254,.13)' }
+            : { bg: '#f4f5f7', panel: '#ffffff', panel2: '#f7f8fa', text: '#15181d', text2: '#56616f', text3: '#5c6a7a', line: 'rgba(20,24,32,.09)', accent: '#2a63c8', soft: 'rgba(47,111,219,.1)' };
         return ':root{color-scheme:' + (dark ? 'dark' : 'light') + ';' +
-            '--ws-bg:' + vars.bg + ';--ws-panel:' + vars.panel + ';--ws-text:' + vars.text + ';' +
-            '--ws-text-2:' + vars.text2 + ';--ws-line:' + vars.line + ';--ws-accent:' + vars.accent + ';}' +
+            '--ws-bg:' + vars.bg + ';--ws-panel:' + vars.panel + ';--ws-panel-2:' + vars.panel2 + ';' +
+            '--ws-text:' + vars.text + ';--ws-text-2:' + vars.text2 + ';--ws-text-3:' + vars.text3 + ';' +
+            '--ws-line:' + vars.line + ';--ws-line-strong:' + (dark ? 'rgba(255,255,255,.14)' : 'rgba(20,24,32,.17)') + ';' +
+            '--ws-accent:' + vars.accent + ';--ws-accent-soft:' + vars.soft + ';' +
+            '--ws-radius:12px;--ws-radius-sm:8px;}' +
             'html,body{margin:0;padding:0;background:var(--ws-bg);color:var(--ws-text);' +
-            "font-family:system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;}";
+            "font-family:var(--nc-font-sans,-apple-system,'Segoe UI','PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif);}";
     }
 
     /** 高度 / 错误回传桥（注入到每个沙箱文档末尾） */

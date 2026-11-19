@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>计时器</title>
+<link rel="stylesheet" href="../../../css/tokens.css">
 <link rel="stylesheet" href="_shared.css">
 <style>
   .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
@@ -85,10 +86,10 @@
     transition: opacity var(--ws-dur-slow) var(--ws-ease-out);
   }
   .is-running .pulse::after { opacity: 1; }
-  html[data-lite="1"] .pulse::after { display: none; }
+  html[data-lite="true"] .pulse::after { display: none; }
 
   .ring { position: relative; width: 190px; height: 190px; }
-  .ring svg { transform: rotate(-90deg); display: block; }
+  .ring svg { display: block; }
   .ring circle { fill: none; stroke-width: 6; }
   .ring .track { stroke: var(--ws-line); }
   .ring .bar {
@@ -99,8 +100,9 @@
   .ring .clock-wrap { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
   .ring .clock { font-size: 34px; }
   .ring .sub-clock { margin-top: 2px; }
-  html[data-lite="1"] .ring .bar { transition: none; }
+  html[data-lite="true"] .ring .bar { transition: none; }
 </style>
+<script src="_shared.js"></script>
 </head>
 <body>
   <header class="head rise">
@@ -117,8 +119,10 @@
   <section class="stage rise rise-2" id="stage" aria-live="off">
     <div class="pulse" aria-hidden="true"></div>
     <svg width="190" height="190" viewBox="0 0 190 190" class="ring" id="ring">
-      <circle class="track" cx="95" cy="95" r="84"></circle>
-      <circle class="bar" id="bar" cx="95" cy="95" r="84" stroke-dasharray="527.8" stroke-dashoffset="0"></circle>
+      <g transform="rotate(-90 95 95)">
+        <circle class="track" cx="95" cy="95" r="84"></circle>
+        <circle class="bar" id="bar" cx="95" cy="95" r="84" stroke-dasharray="527.8" stroke-dashoffset="0"></circle>
+      </g>
       <foreignObject x="0" y="0" width="190" height="190">
         <div xmlns="http://www.w3.org/1999/xhtml" class="clock-wrap">
           <div class="clock num" id="clock">05:00</div>
@@ -161,7 +165,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', '1');
+  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
 
   function sendHeight() {
     try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) { /* ignore */ }
@@ -319,7 +323,7 @@
       state.startedAt = Date.now();
     }
     state.running = true;
-    state.tick = setInterval(tick, state.mode === 'timer' ? 200 : 33);
+    state.tick = setInterval(tick, state.mode === 'timer' ? 200 : 100);
     if (state.mode === 'stopwatch' && !state.lastLapAt) state.lastLapAt = 0;
     render();
   }
