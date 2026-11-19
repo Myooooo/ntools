@@ -172,6 +172,18 @@
       return name.replace('GMT', 'UTC');
     } catch (err) { return ''; }
   }
+  function offsetMinutes(date, zone) {
+    try {
+      var fmt = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' });
+      var name = '';
+      fmt.formatToParts(date).forEach(function (part) { if (part.type === 'timeZoneName') name = part.value; });
+      var m = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
+      if (!m) return 0;
+      var minutes = Number(m[2]) * 60 + Number(m[3]);
+      return m[1] === '-' ? -minutes : minutes;
+    } catch (err) { return 0; }
+  }
+
   function dayText(hour) {
     if (hour >= 6 && hour < 12) return '上午';
     if (hour >= 12 && hour < 18) return '下午';
@@ -227,9 +239,15 @@
     var offText = offsetLabel(now, city.id);
     var off = document.createElement('span');
     off.textContent = offText;
-    var localOff = offsetLabel(now, Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai');
+    var localZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai';
+    var diffMinutes = offsetMinutes(now, city.id) - offsetMinutes(now, localZone);
     var diff = document.createElement('span');
-    diff.textContent = offText === localOff ? '与本地同时' : '时差 ' + offText;
+    if (!diffMinutes) diff.textContent = '与本地同时';
+    else {
+      var hours = Math.abs(diffMinutes) / 60;
+      diff.textContent = (diffMinutes > 0 ? '快 ' : '慢 ') +
+        (hours % 1 === 0 ? hours : hours.toFixed(1)) + ' 小时';
+    }
     footer.appendChild(off); footer.appendChild(diff);
     card.appendChild(footer);
 

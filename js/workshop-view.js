@@ -923,6 +923,7 @@
         });
         if (NC.events && NC.events.on) {
             NC.events.on('theme:changed', function () { reloadFrame(); });
+            NC.events.on('lite:changed', function () { reloadFrame(); });
         }
     }
 

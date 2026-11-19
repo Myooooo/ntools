@@ -199,7 +199,7 @@
         var csp = '<meta http-equiv="Content-Security-Policy" content="default-src ' + "'none'" + '; ' +
             'img-src data: blob: http: https:; media-src data: blob: http: https:; ' +
             'style-src ' + "'unsafe-inline'" + ' http: https:; ' +
-            'script-src ' + "'unsafe-inline'" + '; font-src data: http: https:; ' +
+            'script-src ' + "'unsafe-inline'" + ' http: https:; font-src data: http: https:; ' +
             'connect-src ' + connect + ';' + '">';
         var viewport = '<meta name="viewport" content="width=device-width,initial-scale=1">';
         var theme = '<style>' + themeCss(opts.theme) + '</style>';
