@@ -75,7 +75,7 @@
     justify-content: space-between;
     gap: var(--nc-space-3);
     flex: 0 0 auto;
-    height: 48px;
+    height: 56px;
     padding: 0 var(--nc-space-4);
     background: var(--nc-glass-bg);
     -webkit-backdrop-filter: var(--nc-glass-blur);
@@ -963,9 +963,9 @@ html[data-lite="true"] .chat-msg__actions {
 
 .chat-welcome__title {
     margin: 0;
-    font-size: clamp(26px, 2.2vw, 32px);
-    font-weight: 600;
-    letter-spacing: -0.022em;
+    font-size: var(--nc-fs-2xl);
+    font-weight: 650;
+    letter-spacing: var(--nc-track-display);
     line-height: 1.2;
     color: var(--nc-text);
 }
@@ -1595,8 +1595,10 @@ html[data-lite="true"] .chat-msg__actions {
     }
 
     .chat-welcome__inner {
+        width: auto;
         max-width: none;
         margin-left: calc(28px + 9px);
+        margin-right: 0;
     }
 
     .chat-lightbox {

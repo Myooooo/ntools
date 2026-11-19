@@ -993,3 +993,75 @@
   html[data-lite="true"] .msel-trigger__chev {
     transition: none;
   }
+
+
+/* ==========================================================================
+ * v8：邮件页与主应用令牌对齐（iframe 内独立加载 tokens.css）
+ * ========================================================================== */
+:root,
+html[data-theme="dark"],
+html[data-theme="light"] {
+  --bg-app: var(--nc-bg);
+  --panel-bg: var(--nc-surface);
+  --surface-subtle: var(--nc-surface-2);
+  --surface-hover: var(--nc-surface-hover);
+  --ink-primary: var(--nc-text);
+  --ink-secondary: var(--nc-text-2);
+  --ink-muted: var(--nc-text-3);
+  --brand: var(--nc-accent);
+  --brand-hover: var(--nc-accent-hover);
+  --brand-soft: var(--nc-accent-soft);
+  --brand-border: var(--nc-accent-ring);
+  --brand-ink: var(--nc-accent);
+  --brand-faint: var(--nc-accent-faint);
+  --on-brand: var(--nc-text-on-accent);
+  --focus-ring: var(--nc-accent-ring);
+  --ok: var(--nc-success);
+  --ok-soft: var(--nc-success-soft);
+  --warn: var(--nc-warning);
+  --warn-soft: var(--nc-warning-soft);
+  --bad: var(--nc-danger);
+  --bad-soft: var(--nc-danger-soft);
+  --input-bg: var(--nc-input-bg);
+  --input-border: var(--nc-border);
+  --overlay: var(--nc-overlay);
+  --border-color: var(--nc-border);
+  --border-subtle: var(--nc-border-faint);
+  --radius-sm: var(--nc-radius-sm);
+  --radius-md: var(--nc-radius-md);
+  --radius-lg: var(--nc-radius-lg);
+  --shadow-sm: var(--nc-shadow-1);
+  --shadow-md: var(--nc-shadow-2);
+  --shadow-lg: var(--nc-shadow-3);
+}
+
+html[data-theme="dark"] { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
+
+html, body {
+  font-family: var(--nc-font-sans);
+}
+
+/* 滚动条与主应用同规格：10px 轨道 + 3px 内缩 */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--nc-scrollbar); border: 3px solid transparent; border-radius: 999px; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--nc-scrollbar-hover); border: 2px solid transparent; background-clip: content-box; }
+
+@media (min-width: 961px) {
+  .app-bar {
+    height: 56px;
+    align-items: center;
+    padding: 0 20px;
+    background: var(--bg-app);
+  }
+
+  .bar-inner {
+    align-items: center;
+  }
+
+  .bar-title {
+    font-size: var(--nc-fs-2xl);
+    font-weight: 650;
+    letter-spacing: var(--nc-track-display);
+  }
+}

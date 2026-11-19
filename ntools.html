@@ -344,7 +344,10 @@
                             <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost notes-head__toggle" id="notes-side-open" aria-label="打开笔记列表" title="笔记列表">
                                 <span data-icon="panel-left" data-icon-size="16"></span>
                             </button>
-                            <input type="text" id="notes-title" class="notes-title" placeholder="未命名笔记" aria-label="笔记标题" maxlength="200" spellcheck="false">
+                            <div class="notes-title-wrap">
+                                <input type="text" id="notes-title" class="notes-title" placeholder="未命名笔记" aria-label="笔记标题" maxlength="200" spellcheck="false">
+                                <span class="notes-subtitle">本地 Markdown 库</span>
+                            </div>
                             <div class="notes-head__actions">
                                 <div class="nc-seg notes-mode-seg" id="notes-mode-seg" role="group" aria-label="笔记模式">
                                     <button type="button" class="nc-seg__btn is-active" data-mode="edit" aria-pressed="true" title="编辑（Ctrl+E）">编辑</button>

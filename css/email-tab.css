@@ -14,7 +14,7 @@
     height: 100%;
     min-height: 0;
     border: 0;
-    background: #ffffff;
+    background: var(--nc-bg);
 }
 
 /* 邮件页未加载时的部署引导（替代一整片空白 iframe） */

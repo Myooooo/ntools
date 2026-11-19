@@ -1683,3 +1683,18 @@ html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
         transition: opacity 120ms linear;
     }
 }
+
+
+/* v8：设置导航单行化，避免两行描述把行高撑到 60px */
+@media (min-width: 901px) {
+    .settings-sheet__layout {
+        grid-template-columns: 224px minmax(0, 1fr);
+    }
+}
+
+.sp-nav__desc {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}

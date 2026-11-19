@@ -818,9 +818,29 @@
     flex: 0 0 auto;
     align-items: center;
     gap: 8px;
-    height: 52px;
-    padding: 0 12px 0 16px;
+    height: 56px;
+    padding: 0 12px 0 20px;
     border-bottom: 1px solid var(--nc-border-faint);
+}
+
+.notes-title-wrap {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0;
+    min-width: 0;
+}
+
+.notes-subtitle {
+    padding-left: 8px;
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    line-height: 1.35;
+    letter-spacing: var(--nc-track-meta);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .notes-head__toggle {
@@ -828,17 +848,19 @@
 }
 
 .notes-title {
-    flex: 1;
+    flex: 0 0 auto;
+    width: 100%;
     min-width: 0;
-    height: 34px;
+    height: 32px;
     padding: 0 8px;
     border: 0;
     border-radius: var(--nc-radius-sm);
     background: transparent;
     color: var(--nc-text);
-    font-size: var(--nc-fs-xl);
-    font-weight: 600;
-    letter-spacing: var(--nc-track-title, -0.01em);
+    font-size: var(--nc-fs-2xl);
+    font-weight: 650;
+    letter-spacing: var(--nc-track-display);
+    line-height: 1.2;
     outline: none;
 }
 
@@ -5144,5 +5166,23 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
 
     .tools-nav__label {
         font-size: 10px;
+    }
+}
+
+
+/* v8：笔记页头与主模板对齐（24px 标题 + 12px 副标题） */
+@media (max-width: 560px) {
+    .notes-head {
+        height: 52px;
+        padding-left: 12px;
+    }
+
+    .notes-subtitle {
+        display: none;
+    }
+
+    .notes-title {
+        font-size: var(--nc-fs-xl);
+        height: 30px;
     }
 }
