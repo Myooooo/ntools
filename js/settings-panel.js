@@ -53,8 +53,8 @@
 
     function sectionMeta() {
         return [
-            { id: 'general', title: '通用', desc: '主题、Light 性能模式、上下班时间', icon: 'settings', group: 'core' },
-            { id: 'profiles', title: 'AI 端点', desc: '聊天与 Todo AI 共用的 OpenAI 兼容端点', icon: 'layers', group: 'core' },
+            { id: 'general', title: '通用', desc: '主题、模式等基础设置', icon: 'settings', group: 'core' },
+            { id: 'profiles', title: 'AI 端点', desc: 'OpenAI 或 BOCAI 兼容端点', icon: 'layers', group: 'core' },
             { id: 'todo', title: '待办事项', desc: 'Todo AI 识别与列表行为', icon: 'check-circle', group: 'modules' },
             { id: 'email', title: '邮箱维护', desc: '邮箱数据用量与备份入口', icon: 'mail', group: 'modules' },
             { id: 'notes', title: '笔记本', desc: '笔记库状态、默认视图与导出', icon: 'notebook-text', group: 'modules' },
@@ -62,7 +62,7 @@
             { id: 'workshop', title: '创意工坊', desc: '生成参数、内置工具与库用量', icon: 'wand', group: 'modules' },
             { id: 'qr', title: '二维码生成', desc: '默认生成尺寸', icon: 'qr-code', group: 'modules' },
             { id: 'image', title: '图片处理', desc: 'Base64 导出的 JPEG 质量', icon: 'image', group: 'modules' },
-            { id: 'data', title: '数据', desc: '导入导出与本地数据清理', icon: 'download', group: 'system' },
+            { id: 'data', title: '数据', desc: '备份、导入导出与清理', icon: 'download', group: 'system' },
             { id: 'about', title: '关于', desc: '版本、兼容性与快捷键', icon: 'info', group: 'system' }
         ].concat(sections.map(function (section) {
             section.group = section.group || 'modules';
@@ -233,7 +233,7 @@
         var currentProfile = doc.profiles.filter(function (item) { return item.id === doc.currentProfileId; })[0];
         info.appendChild(util.e('p', {
             class: 'sp-section-desc',
-            text: '所有端点保存在本机；聊天与 Todo AI 共用，支持 OpenAI 与 bocai 两种 API 格式。共 ' + doc.profiles.length + ' 个端点' +
+            text: '所有端点保存在本机，支持 OpenAI 与 BOCAI 两种 API 格式。共 ' + doc.profiles.length + ' 个端点' +
                 (currentProfile ? '，当前使用「' + currentProfile.name + '」' : '') + '。'
         }));
         head.appendChild(info);
