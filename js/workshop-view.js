@@ -215,17 +215,8 @@
         return row;
     }
 
-    function renderHeaderMeta() {
-        if (!els.subtitle) return;
-        var all = store ? store.list() : [];
-        var builtin = all.filter(function (item) { return item.kind === 'builtin'; }).length;
-        var custom = all.filter(function (item) { return item.kind === 'custom'; }).length;
-        els.subtitle.textContent = builtin + ' 内置 · ' + custom + ' 自定义';
-    }
-
     function renderList() {
         if (!els.list) return;
-        renderHeaderMeta();
         els.list.textContent = '';
         var items = groupedItems();
         var free = items.filter(function (item) { return !item.pinned; });
@@ -233,18 +224,18 @@
         var pinned = items.filter(function (item) { return item.pinned; });
         if (pinned.length) groups.push({ key: 'pinned', label: '置顶', list: pinned });
         groups.push(
-            { key: 'office', label: '办公实用', list: free.filter(function (item) { return item.kind === 'builtin' && item.group === 'office'; }) },
-            { key: 'fun', label: '效率趣味', list: free.filter(function (item) { return item.kind === 'builtin' && item.group === 'fun'; }) },
+            { key: 'builtin', label: '内置', list: free.filter(function (item) { return item.kind === 'builtin'; }) },
             { key: 'custom', label: '自定义', list: free.filter(function (item) { return item.kind === 'custom'; }) }
         );
         var rendered = 0;
         groups.forEach(function (group) {
+            if (state.filter && !group.list.length) return;
             var head = document.createElement('div');
             head.className = 'ws-group';
             head.setAttribute('role', 'presentation');
             head.textContent = group.label;
             els.list.appendChild(head);
-            if (group.key === 'custom' && !group.list.length) {
+            if (group.key === 'custom' && !group.list.length && !state.filter) {
                 var empty = document.createElement('div');
                 empty.className = 'ws-empty-list';
                 empty.textContent = '还没有自定义应用。点「新建」生成，或从菜单导入 HTML。';
@@ -964,7 +955,6 @@
         }
         if (els.pin) els.pin.addEventListener('click', togglePin);
         if (els.reloadBtn) els.reloadBtn.addEventListener('click', reloadFrame);
-        if (els.focusToggle) els.focusToggle.addEventListener('click', function () { toggleFocus(); });
         if (els.emptyNew) els.emptyNew.addEventListener('click', function () { if (els.newBtn) els.newBtn.click(); });
         if (els.emptyImport) els.emptyImport.addEventListener('click', function () { if (els.importFile) els.importFile.click(); });
         if (els.sideOpen) els.sideOpen.addEventListener('click', onSideToggle);
@@ -997,10 +987,7 @@
             var page = document.getElementById('page-workshop');
             if (!page || page.hasAttribute('hidden')) return;
             if (event.key !== 'Escape') return;
-            if (els.shell && els.shell.classList.contains('is-focus')) {
-                event.preventDefault();
-                toggleFocus(false);
-            } else if (state.sideOpen) {
+            if (state.sideOpen) {
                 event.preventDefault();
                 toggleSide(false);
             }
@@ -1008,17 +995,6 @@
         if (NC.events && NC.events.on) {
             NC.events.on('theme:changed', function () { syncFrameTheme(); });
             NC.events.on('lite:changed', function () { syncFrameTheme(); });
-        }
-    }
-
-    function toggleFocus(force) {
-        if (!els.shell) return;
-        var next = force == null ? !els.shell.classList.contains('is-focus') : !!force;
-        els.shell.classList.toggle('is-focus', next);
-        if (els.focusToggle) {
-            els.focusToggle.setAttribute('aria-pressed', next ? 'true' : 'false');
-            els.focusToggle.setAttribute('aria-label', next ? '退出聚焦' : '聚焦预览');
-            els.focusToggle.setAttribute('title', next ? '退出聚焦' : '聚焦预览');
         }
     }
 
@@ -1031,8 +1007,8 @@
             shell: $('ws-shell'), side: document.querySelector('.ws-side'), list: $('ws-list'), filter: $('ws-filter'),
             newBtn: $('ws-new-btn'), moreBtn: $('ws-more-btn'),
             sideOpen: $('ws-side-open'), sideClose: $('ws-side-close'),
-            title: $('ws-title'), kind: $('ws-kind'), subtitle: $('ws-subtitle'),
-            reloadBtn: $('ws-reload-btn'), pin: $('ws-pin-btn'), focusToggle: $('ws-focus-toggle'),
+            title: $('ws-title'), kind: $('ws-kind'),
+            reloadBtn: $('ws-reload-btn'), pin: $('ws-pin-btn'),
             emptyNew: $('ws-empty-new'), emptyImport: $('ws-empty-import'),
             frame: $('ws-frame'), empty: $('ws-empty'), moduleNote: $('ws-module-note'),
             stage: $('ws-stage'), scrim: $('ws-scrim'),

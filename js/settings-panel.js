@@ -29,6 +29,7 @@
     var open = false;
     var pickerBtn = null;
     var pickerLabel = null;
+    var settleTimer = null;
 
     function store() { return NC.store && NC.store.llm; }
     function ai() { return NC.ai; }
@@ -2245,17 +2246,25 @@
                 try { closeBtn.focus({ preventScroll: true }); } catch (err) { closeBtn.focus(); }
             }
         }, 120);
+        // 等面板落位后再加一层柔和模糊，避免 transform 动画期间逐帧重算
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(function () {
+            settleTimer = null;
+            if (open) sheet.classList.add('is-settled');
+        }, 360);
     }
 
     function finishClose() {
         if (open) return;
         sheet.hidden = true;
-        sheet.classList.remove('is-closing');
+        sheet.classList.remove('is-closing', 'is-settled');
     }
 
     function close() {
         if (!built || !open) return;
         open = false;
+        if (settleTimer) { clearTimeout(settleTimer); settleTimer = null; }
+        sheet.classList.remove('is-settled');
         sheet.classList.add('is-closing');
         sheet.classList.remove('is-open');
         if (releaseTrap) { releaseTrap(); releaseTrap = null; }

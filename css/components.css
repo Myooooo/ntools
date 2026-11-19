@@ -2497,6 +2497,17 @@ html[data-lite="true"] .nc-modal-overlay {
 }
 
 
+/* v8.1：确认框使用小面积液态玻璃；区域小，标准模式可接受 */
+.nc-modal {
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
+    backdrop-filter: blur(14px) saturate(150%);
+}
+
+html[data-lite="true"] .nc-modal {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
 /* ==========================================================================
  * v8 Lite：保留透明度/颜色反馈，去掉位移与布局动画
  * ========================================================================== */

@@ -154,13 +154,16 @@
 
     /* ---------- 材质档位（v8） ---------- */
     --nc-material-chrome-bg: rgba(15, 20, 27, 0.86);
-    --nc-material-float-bg: rgba(22, 29, 40, 0.84);
-    --nc-material-sheet-bg: rgba(19, 26, 35, 0.94);
+    --nc-material-float-bg: rgba(22, 29, 40, 0.80);
+    --nc-material-sheet-bg: rgba(19, 26, 35, 0.88);
+    --nc-material-modal-bg: rgba(24, 32, 44, 0.76);
     --nc-material-scrim: var(--nc-overlay);
-    --nc-material-edge: rgba(255, 255, 255, 0.08);
+    --nc-material-edge: rgba(255, 255, 255, 0.10);
+    --nc-material-rim: rgba(255, 255, 255, 0.16);
+    --nc-material-sheen: linear-gradient(160deg, rgba(255, 255, 255, 0.07), transparent 42%);
     --nc-material-saturate: 160%;
     --nc-blur-chrome: 10px;
-    --nc-blur-float: 14px;
+    --nc-blur-float: 18px;
     --nc-blur-sheet: 0px; /* 面板由 scrim 提供模糊，避免玻璃叠玻璃 */
     --nc-blur-scrim: 8px;
     --nc-elev-border: var(--nc-border-strong);
@@ -259,10 +262,13 @@ html[data-theme="light"] {
     --nc-overlay: rgba(15, 18, 24, 0.3);
 
     --nc-material-chrome-bg: rgba(250, 251, 252, 0.92);
-    --nc-material-float-bg: rgba(255, 255, 255, 0.92);
-    --nc-material-sheet-bg: rgba(252, 252, 253, 0.97);
+    --nc-material-float-bg: rgba(255, 255, 255, 0.88);
+    --nc-material-sheet-bg: rgba(252, 252, 253, 0.92);
+    --nc-material-modal-bg: rgba(255, 255, 255, 0.90);
     --nc-material-scrim: var(--nc-overlay);
     --nc-material-edge: rgba(255, 255, 255, 0.9);
+    --nc-material-rim: rgba(255, 255, 255, 0.95);
+    --nc-material-sheen: linear-gradient(160deg, rgba(255, 255, 255, 0.55), transparent 46%);
     --nc-elev-border: var(--nc-border);
     --nc-ambient:
         repeating-linear-gradient(0deg, transparent 0 31px, rgba(20, 24, 32, 0.022) 31px 32px),
@@ -317,8 +323,11 @@ html[data-lite="true"] {
     --nc-material-chrome-bg: var(--nc-surface);
     --nc-material-float-bg: var(--nc-elevated);
     --nc-material-sheet-bg: var(--nc-bg-soft);
+    --nc-material-modal-bg: var(--nc-elevated);
     --nc-material-scrim: var(--nc-overlay);
     --nc-material-edge: transparent;
+    --nc-material-rim: transparent;
+    --nc-material-sheen: none;
     --nc-blur-chrome: 0px;
     --nc-blur-float: 0px;
     --nc-blur-sheet: 0px;

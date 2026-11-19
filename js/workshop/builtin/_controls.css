@@ -354,10 +354,16 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    border: 1px solid var(--nc-border-strong);
+    border: 1px solid var(--nc-elev-border);
+    border-top-color: var(--nc-material-rim);
     border-radius: var(--nc-radius-md);
-    background: var(--nc-elevated);
-    box-shadow: var(--nc-shadow-3);
+    background-color: var(--nc-material-float-bg);
+    background-image: var(--nc-material-sheen);
+    -webkit-backdrop-filter: blur(var(--nc-blur-float)) saturate(var(--nc-material-saturate));
+    backdrop-filter: blur(var(--nc-blur-float)) saturate(var(--nc-material-saturate));
+    box-shadow:
+        var(--nc-shadow-float),
+        inset 0 1px 0 var(--nc-material-edge);
     opacity: 0;
     transform: translateY(-4px);
     transition:
@@ -411,6 +417,14 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
     flex: 0 1 240px;
 }
 
+html[data-lite="true"] .tselect__list {
+    background-color: var(--nc-elevated);
+    background-image: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+}
+
 /* 主按钮文字色：与主应用 on-accent 一致，避免白字落在浅蓝上 */
 .btn--primary,
 button.primary {
@@ -427,4 +441,14 @@ html[data-lite="true"] input[type="radio"],
 html[data-lite="true"] input[type="range"]::-webkit-slider-thumb {
     transition: none;
     box-shadow: none;
+}
+
+
+@media (prefers-reduced-transparency: reduce) {
+    .tselect__list {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background-color: var(--nc-elevated);
+        background-image: none;
+    }
 }

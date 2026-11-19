@@ -6,11 +6,18 @@
 
 /* ---------- 浮层：菜单 / 下拉 / Toast / 小面板 ---------- */
 .nc-material-float {
-    background: var(--nc-material-float-bg);
+    background-color: var(--nc-material-float-bg);
+    background-image:
+        radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.055), transparent 56%),
+        var(--nc-material-sheen);
     -webkit-backdrop-filter: blur(var(--nc-blur-float)) saturate(var(--nc-material-saturate));
     backdrop-filter: blur(var(--nc-blur-float)) saturate(var(--nc-material-saturate));
     border: 1px solid var(--nc-elev-border);
-    box-shadow: var(--nc-shadow-float), inset 0 1px 0 var(--nc-material-edge);
+    border-top-color: var(--nc-material-rim);
+    box-shadow:
+        var(--nc-shadow-float),
+        inset 0 1px 0 var(--nc-material-edge),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.18);
 }
 
 /* ---------- 页头 / 导轨 / 状态栏：静态 chrome ---------- */
@@ -22,9 +29,26 @@
 
 /* ---------- 模态 / 设置面板：厚材质（不叠模糊） ---------- */
 .nc-material-sheet {
-    background: var(--nc-material-sheet-bg);
+    background-color: var(--nc-material-sheet-bg);
+    background-image: var(--nc-material-sheen);
     border: 1px solid var(--nc-elev-border);
-    box-shadow: var(--nc-shadow-sheet), inset 0 1px 0 var(--nc-material-edge);
+    border-top-color: var(--nc-material-rim);
+    box-shadow:
+        var(--nc-shadow-sheet),
+        inset 0 1px 0 var(--nc-material-edge),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+}
+
+/* 确认框：比大面板更透一点，小面积玻璃感更明显 */
+.nc-modal {
+    background-color: var(--nc-material-modal-bg);
+    background-image:
+        radial-gradient(120% 90% at 18% 0%, rgba(255, 255, 255, 0.09), transparent 56%),
+        var(--nc-material-sheen);
+    box-shadow:
+        var(--nc-shadow-sheet),
+        inset 0 1px 0 rgba(255, 255, 255, 0.16),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.24);
 }
 
 /* ---------- 遮罩：模糊由这一层负责，面板不要再叠 ---------- */
@@ -71,7 +95,8 @@
     .nc-material-scrim {
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
-        background: var(--nc-elevated);
+        background-color: var(--nc-elevated);
+        background-image: none;
     }
 
     .nc-material-scrim {
@@ -80,12 +105,19 @@
 }
 
 /* ---------- Lite：全部转实色，不叠模糊与阴影 ---------- */
+html[data-lite="true"] .nc-modal {
+    background-color: var(--nc-elevated);
+    background-image: none;
+    box-shadow: none;
+}
+
 html[data-lite="true"] .nc-material-float,
 html[data-lite="true"] .nc-material-scrim,
 html[data-lite="true"] .nc-material-sheet {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    background: var(--nc-elevated);
+    background-color: var(--nc-elevated);
+    background-image: none;
     box-shadow: none;
     border-color: var(--nc-border-strong);
 }
@@ -115,11 +147,25 @@ html[data-lite="true"] .nc-liquid::before {
     .nc-material-chrome {
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
-        background: var(--nc-elevated);
+        background-color: var(--nc-elevated);
+        background-image: none;
         border-color: var(--nc-border-strong);
     }
 
     .nc-material-scrim {
         background: rgba(0, 0, 0, .72);
+    }
+}
+
+
+/* 系统要求降低透明度时，玻璃转为实色，文字优先 */
+@media (prefers-reduced-transparency: reduce) {
+    .nc-material-float,
+    .nc-material-sheet,
+    .nc-modal {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background-color: var(--nc-elevated);
+        background-image: none;
     }
 }

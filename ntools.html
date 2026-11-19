@@ -109,7 +109,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" id="rail-version" title="版本">v8.0</span>
+            <span class="tools-rail__version" id="rail-version" title="版本">v8.2</span>
         </div>
     </aside>
 
@@ -529,24 +529,16 @@
 
             <!-- ---------------- Tab：创意工坊 ---------------- -->
             <section class="tools-page tools-page--workshop" id="page-workshop" data-panel="workshop" data-page="workshop" aria-label="创意工坊" hidden>
-                <header class="tools-head tools-head--workshop">
-                    <div class="tools-head__text">
-                        <h1 class="tools-title">创意工坊</h1>
-                        <p class="tools-subtitle" id="ws-subtitle">工具库</p>
-                    </div>
-                    <div class="tools-head__actions">
-                        <button type="button" class="nc-btn nc-btn--sm nc-btn--primary" id="ws-new-btn" title="用自然语言新建应用">
-                            <span data-icon="plus" data-icon-size="15"></span><span>新建</span>
-                        </button>
-                        <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-more-btn" aria-label="工坊操作" title="工坊操作" aria-haspopup="menu">
-                            <span data-icon="more" data-icon-size="16"></span>
-                        </button>
-                    </div>
-                </header>
+                <h1 class="nc-sr-only">创意工坊</h1>
                 <div class="ws-shell" id="ws-shell">
                     <aside class="ws-side" aria-label="工坊列表">
                         <div class="ws-side__head">
-                            <span class="ws-side__title">工具库</span>
+                            <button type="button" class="nc-btn nc-btn--sm nc-btn--primary" id="ws-new-btn" title="用自然语言新建应用">
+                                <span data-icon="plus" data-icon-size="15"></span><span>新建</span>
+                            </button>
+                            <button type="button" class="nc-btn nc-btn--sm nc-btn--ghost" id="ws-more-btn" aria-label="菜单" title="菜单" aria-haspopup="menu">
+                                <span data-icon="menu" data-icon-size="15"></span><span>菜单</span>
+                            </button>
                             <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-side-close" aria-label="关闭列表" title="关闭列表">
                                 <span data-icon="chevron-left" data-icon-size="15"></span>
                             </button>
@@ -564,17 +556,10 @@
                                 <span data-icon="panel-left" data-icon-size="16"></span>
                             </button>
                             <div class="ws-head__title">
-                                <nav class="ws-breadcrumb" aria-label="当前位置">
-                                    <span class="ws-breadcrumb__root">创意工坊</span>
-                                    <span class="ws-breadcrumb__sep" aria-hidden="true">/</span>
-                                    <span class="ws-name" id="ws-title">创意工坊</span>
-                                </nav>
+                                <span class="ws-name" id="ws-title">选择一个工具</span>
                                 <span class="ws-kind" id="ws-kind" hidden>内置</span>
                             </div>
                             <div class="ws-head__actions">
-                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-focus-toggle" aria-label="聚焦预览" title="聚焦预览" aria-pressed="false">
-                                    <span data-icon="maximize" data-icon-size="16"></span>
-                                </button>
                                 <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-reload-btn" aria-label="重新加载" title="重新加载">
                                     <span data-icon="refresh" data-icon-size="16"></span>
                                 </button>

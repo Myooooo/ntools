@@ -1572,9 +1572,14 @@ html[data-lite="true"] .settings-sheet__backdrop {
     max-height: none;
     opacity: 0;
     transform: translateY(10px) scale(0.985);
-    background: var(--nc-material-sheet-bg);
+    background-color: var(--nc-material-sheet-bg);
+    background-image: var(--nc-material-sheen);
     border: 1px solid var(--nc-elev-border);
-    box-shadow: var(--nc-shadow-sheet), inset 0 1px 0 var(--nc-material-edge);
+    border-top-color: var(--nc-material-rim);
+    box-shadow:
+        var(--nc-shadow-sheet),
+        inset 0 1px 0 var(--nc-material-edge),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.22);
     transition:
         opacity 220ms var(--nc-ease-out),
         transform var(--nc-dur-panel) var(--nc-ease-emphasized);
@@ -1630,6 +1635,18 @@ html[data-lite="true"] .settings-sheet__backdrop {
     }
 }
 
+/* 落位后再叠一层柔和模糊：避免打开动画期间逐帧重算大面板 */
+.settings-sheet.is-settled .settings-sheet__panel {
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    backdrop-filter: blur(12px) saturate(140%);
+}
+
+/* 面板内容透出玻璃底：导航与主区不再铺实色 */
+.settings-sheet__nav,
+.settings-sheet__main {
+    background: transparent;
+}
+
 /* 面板头：不再做无意义的毛玻璃（下面是不透明面板），只留发丝线与内高光 */
 .settings-sheet__head {
     background: transparent;
@@ -1647,10 +1664,14 @@ html[data-lite="true"] .settings-sheet__backdrop {
 }
 
 html[data-lite="true"] .settings-sheet__panel,
+html[data-lite="true"] .settings-sheet.is-settled .settings-sheet__panel,
 html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
     transform: none;
     transition: opacity var(--nc-dur-fast) linear;
-    background: var(--nc-bg-soft);
+    background-color: var(--nc-bg-soft);
+    background-image: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
     box-shadow: none;
 }
 
@@ -1697,4 +1718,14 @@ html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 100%;
+}
+
+
+@media (prefers-reduced-transparency: reduce) {
+    .settings-sheet.is-settled .settings-sheet__panel {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background-color: var(--nc-bg-soft);
+        background-image: none;
+    }
 }
