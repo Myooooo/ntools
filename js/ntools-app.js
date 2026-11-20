@@ -321,6 +321,8 @@
         settingsPromise = util.loadScript('js/settings-panel.js').then(function () {
             return util.loadScript('js/settings-profiles.js').catch(function () { return null; });
         }).then(function () {
+            return util.loadScript('js/settings-data.js').catch(function () { return null; });
+        }).then(function () {
             return util.loadScript('js/settings-workshop.js').catch(function () { return null; });
         }).then(function () {
             settingsLoaded = true;
