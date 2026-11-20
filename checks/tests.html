@@ -42,6 +42,7 @@
 <script defer src="../js/purify.min.js"></script>
 <script defer src="../js/core.js"></script>
 <script defer src="../js/event-names.js"></script>
+<script defer src="../js/refs.js"></script>
 <script defer src="../js/modules.js"></script>
 <script defer src="../js/compat.js"></script>
 <script defer src="../js/icons.js"></script>
@@ -831,6 +832,31 @@
             eq(list[1].id, 'b2', 'b2 顺序被覆盖为 5');
             eq(list[2].id, 'b1');
         });
+        t('refs', '引用解析：笔记 / 待办 / 别名 / 锚点', function () {
+            var a = NC.refs.parseRef('[[todo:t-1|买菜]]');
+            eq(a.type, 'todo'); eq(a.id, 't-1'); eq(a.alias, '买菜');
+            var b = NC.refs.parseRef('[[项目复盘#风险|复盘]]');
+            eq(b.type, 'note'); eq(b.title, '项目复盘'); eq(b.anchor, '风险'); eq(b.alias, '复盘');
+            var list = NC.refs.parse('前 [[笔记一]] 后 [[todo:t-2]]');
+            eq(list.length, 2); eq(list[0].type, 'note'); eq(list[1].id, 't-2');
+        });
+
+        t('refs', '引用解析与转义：缺失 / 已删除 / HTML 注入', function () {
+            var notes = {
+                resolveTitle: function (title) { return title === '存在的笔记' ? 'n-1' : null; },
+                getNote: function (id) { return id === 'n-1' ? { id: 'n-1', title: '存在的笔记' } : null; }
+            };
+            var todo = {
+                getTask: function (id) { return id === 't-1' ? { id: 't-1', title: '<b>任务</b>', completedAt: Date.now() } : null; }
+            };
+            var ref = NC.refs.parseRef('[[todo:t-1|<script>x<\/script>]]');
+            var html = NC.refs.chipHtml(ref, { notes: notes, todo: todo });
+            assert(html.indexOf('<script>') === -1, html);
+            assert(html.indexOf('checked') > -1, html);
+            var missing = NC.refs.chipHtml(NC.refs.parseRef('[[todo:nope]]'), { notes: notes, todo: todo });
+            assert(missing.indexOf('disabled') > -1 && missing.indexOf('is-missing') > -1, missing);
+        });
+
         t('events', '事件常量唯一且命名空间清晰', function () {
             var names = NC.eventNames;
             assert(names && typeof names === 'object');
