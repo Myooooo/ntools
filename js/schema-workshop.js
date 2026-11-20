@@ -186,6 +186,16 @@
             'try{if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement);}' +
             'else{setInterval(h,600);}}catch(e){setInterval(h,600);}' +
             "window.addEventListener('load',function(){h();try{parent.postMessage({type:'nc-ws-ready'},'*');}catch(e){}});" +
+            "window.addEventListener('message',function(e){" +
+            "if(e.source!==parent)return;var d=e.data;if(!d||d.type!=='nc-ws-theme')return;" +
+            "var root=document.documentElement,light=d.theme==='light';" +
+            "root.setAttribute('data-theme',light?'light':'dark');" +
+            "var p=light?{bg:'#f4f5f7',panel:'#ffffff',panel2:'#f8f9fb',text:'#15181d',text2:'#56616f',text3:'#7b8794',line:'rgba(0,0,0,.1)',lineStrong:'rgba(0,0,0,.18)',accent:'#2a63c8',accentSoft:'rgba(47,111,219,.1)'}:" +
+            "{bg:'#0b0e13',panel:'#131922',panel2:'#18212c',text:'#edf1f7',text2:'#9aa7b8',text3:'#8b98a8',line:'rgba(255,255,255,.075)',lineStrong:'rgba(255,255,255,.14)',accent:'#6ea8fe',accentSoft:'rgba(110,168,254,.14)'};" +
+            "Object.keys(p).forEach(function(k){root.style.setProperty('--ws-'+k.replace(/[A-Z]/g,function(m){return '-'+m.toLowerCase();}),p[k]);});" +
+            "root.style.colorScheme=light?'light':'dark';" +
+            "try{parent.postMessage({type:'nc-ws-theme-ack'},'*');}catch(x){}" +
+            "});" +
             "setTimeout(h,60);setTimeout(h,400);" +
             "window.addEventListener('error',function(e){try{parent.postMessage({type:'nc-ws-error',message:String(e.message||'脚本错误')},'*');}catch(x){}});" +
             "window.addEventListener('unhandledrejection',function(e){var r=e.reason;try{parent.postMessage({type:'nc-ws-error',message:String((r&&r.message)||r||'Promise 错误')},'*');}catch(x){}});" +

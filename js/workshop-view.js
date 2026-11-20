@@ -277,15 +277,18 @@
         if (host) host.clear();
     }
 
-    /** 主题/ Lite 变化：内置工具只发消息（不重载），自定义应用仍重载 */
+    /** 主题/ Lite 变化：优先 postMessage 热切换，失败才重载（避免生成页丢状态） */
     function syncFrameTheme(fromLoad) {
+        if (!els.frame || els.frame.hidden) return;
         var item = currentItem();
-        if (!item || !els.frame || els.frame.hidden) return;
-        if (item.kind !== 'builtin') {
-            if (!fromLoad) reloadFrame();
+        if (item && item.kind === 'builtin') {
+            if (!host || !host.postTheme(currentTheme(), isLite())) reloadFrame();
             return;
         }
-        if (!host || !host.postTheme(currentTheme(), isLite())) reloadFrame();
+        if (!draft.active && !item) return;
+        if (!host || !host.postTheme(currentTheme(), isLite())) {
+            if (!fromLoad) reloadFrame();
+        }
     }
 
     function showSkeleton(show) {
