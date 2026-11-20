@@ -34,6 +34,7 @@
     var detailTimers = Object.create(null);
     var detailPending = Object.create(null);
     var unsubscribe = null;
+    var timelineHost = null;
     var composerTags = [];
     var pendingPasteText = '';
     var draftActive = false;
@@ -99,6 +100,9 @@
         actions = options || {};
         cacheElements();
         if (!els.list || !store) return false;
+        timelineHost = (NC.todoTimelineHost && typeof NC.todoTimelineHost.create === 'function')
+            ? NC.todoTimelineHost.create({ els: els, node: node, toggleClass: toggleClass, store: store })
+            : null;
         /* 应用「默认视图」偏好：每次进入待办都以设置为准（页面内切换仍会持久化当前选择） */
         try {
             var prefView = NC.prefs && NC.prefs.get ? NC.prefs.get('ntools.todo.defaultView', 'list') : 'list';
@@ -376,7 +380,7 @@
         ensureDraftFields();
         ensureModeSwitch();
         ensureRecurrenceField();
-        ensureTimeline();
+        if (timelineHost) timelineHost.ensure();
         ensureTrashClearButton();
         ensureFooterHints();
         bindComposerExtras();
@@ -593,104 +597,6 @@
         setSegActive(doc.settings.viewMode === 'timeline' ? 'timeline' : 'list');
     }
 
-    /* ---- 全景模式容器与 mount/unmount 编排（时间线内部由 NC.timeline 渲染） ---- */
-    function ensureTimeline() {
-        if (!els.mainpane) return;
-        var container = document.getElementById('todo-timeline');
-        if (!container) {
-            container = node('div', 'todo-timeline');
-            container.id = 'todo-timeline';
-            container.hidden = true;
-            els.mainpane.appendChild(container);
-        }
-        els.timeline = container;
-    }
-
-    function isTimelineMode(doc) {
-        return !!(doc && doc.settings && doc.settings.viewMode === 'timeline');
-    }
-
-    function syncMode(doc, ui) {
-        if (!els.mainpane) return;
-        var mode = doc.settings.viewMode === 'timeline' ? 'timeline' : 'list';
-        var timeline = mode === 'timeline';
-        toggleClass(els.mainpane, 'is-timeline', timeline);
-        if (els.shell) toggleClass(els.shell, 'is-timeline', timeline);
-        if (!els.timeline) ensureTimeline();
-        if (!els.timeline) return;
-        els.timeline.hidden = !timeline;
-        if (!timeline) {
-            if (timelineMounted) {
-                /* 先置位再调用，避免 unmount 内部触发同步重渲染造成重复调用 */
-                timelineMounted = false;
-                try {
-                    if (NC.timeline && typeof NC.timeline.unmount === 'function') NC.timeline.unmount();
-                } catch (err) { /* ignore */ }
-            }
-            return;
-        }
-        if (timelineMounted) return;
-        var hasApi = !!(NC.timeline && typeof NC.timeline.mount === 'function');
-        if (hasApi) {
-            timelineMounted = true;
-            timelineTried = true;
-            try {
-                NC.timeline.mount(els.timeline);
-                clearTimelineFallback();
-            } catch (err) {
-                timelineMounted = false;
-                renderTimelineFallback(true);
-            }
-        } else if (!timelineAssetsFailed) {
-            ensureTimelineAssets();
-        } else {
-            renderTimelineFallback(true);
-        }
-    }
-
-    function renderTimelineNotice(text) {
-        if (!els.timeline) return;
-        var note = els.timeline.querySelector('.todo-timeline-note');
-        if (!note) {
-            note = node('div', 'todo-timeline-note');
-            els.timeline.appendChild(note);
-        }
-        note.textContent = text;
-    }
-
-    function renderTimelineFallback(failed) {
-        renderTimelineNotice(failed
-            ? '全景视图加载失败，可切回列表继续使用。'
-            : '全景视图组件尚未加载（js/todo-timeline.js），可切回列表继续使用。');
-    }
-
-    /**
-     * 全景视图的脚本与样式改为按需加载：首屏省掉 64KB JS + 24KB CSS。
-     * 首次切到全景模式时才注入，加载完自动重新同步一次模式。
-     */
-    function ensureTimelineAssets() {
-        if (timelineAssetsRequested) return;
-        timelineAssetsRequested = true;
-        var util = NC.util;
-        if (!util || typeof util.loadScript !== 'function') {
-            renderTimelineFallback(true);
-            return;
-        }
-        renderTimelineNotice('正在加载全景视图…');
-        var jobs = [util.loadScript('js/todo-timeline.js')];
-        if (typeof util.loadStyle === 'function') {
-            jobs.push(util.loadStyle('css/timeline.css').catch(function () { return null; }));
-        }
-        Promise.all(jobs).then(function () {
-            timelineAssetsFailed = false;
-            syncMode(store.getDoc(), store.getUi());
-        }).catch(function () {
-            timelineAssetsFailed = true;
-            timelineAssetsRequested = false;
-            renderTimelineFallback(true);
-        });
-    }
-
     /* ---- 回收站页头「清空回收站」按钮（有任务时显示） ---- */
     function ensureTrashClearButton() {
         if (!els.page || document.getElementById('todo-trash-clear')) {
@@ -728,12 +634,6 @@
         var show = ui.view === 'trash' && counts && counts.trash > 0;
         els.trashClear.hidden = !show;
         if (els.mainpane) toggleClass(els.mainpane, 'is-trash-view', ui.view === 'trash');
-    }
-
-    function clearTimelineFallback() {
-        if (!els.timeline) return;
-        var note = els.timeline.querySelector('.todo-timeline-note');
-        if (note && note.parentNode) note.parentNode.removeChild(note);
     }
 
     /* ---- 底部快捷键提示：把 N / 补进静态提示条 ---- */
@@ -1107,7 +1007,7 @@
         renderComposer(doc, ui);
         /* 全景模式下任务列表被 CSS 隐藏：跳过 diff，避免同一份数据渲染两遍。
          * 切回列表时 render() 会照常走一次完整 diff，数据不会过期。 */
-        if (!isTimelineMode(doc)) renderList(visible, ui, doc);
+        if (!timelineHost || !timelineHost.isMode(doc)) renderList(visible, ui, doc);
         renderDetail(ui, doc, reason);
         syncDetailAnimation(ui);
         autoCloseMissingDetail(ui);
@@ -1116,7 +1016,7 @@
         syncSearchClear();
         syncDrawer(ui);
         syncDetailColumn(ui);
-        syncMode(doc, ui);
+        if (timelineHost) timelineHost.sync(doc, ui);
         syncModeSeg(doc, ui);
         rendered.tickSig = bucketSignature(visible);
         rendered.initialized = true;
@@ -2636,7 +2536,7 @@
         flushDetailEdits: flushDetailEdits,
         toggleTaskWithFeedback: toggleTaskWithFeedback,
         setMode: setMode,
-        applyMode: function () { syncMode(store.getDoc(), store.getUi()); },
+        applyMode: function () { if (timelineHost) timelineHost.sync(store.getDoc(), store.getUi()); },
         undoWithToast: undoWithToast,
         redoWithToast: redoWithToast,
         openMoreMenu: openMoreMenu,
