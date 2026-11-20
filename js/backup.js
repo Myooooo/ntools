@@ -222,6 +222,45 @@
         });
     }
 
+    function entryBytes(entry) {
+        if (typeof entry.data === 'string') {
+            try { return new TextEncoder().encode(entry.data); } catch (err) { return null; }
+        }
+        return entry.data || null;
+    }
+
+    function sha256Hex(bytes) {
+        var subtle = global.crypto && global.crypto.subtle;
+        if (!subtle || !bytes) return Promise.resolve(null);
+        return subtle.digest('SHA-256', bytes).then(function (buffer) {
+            var view = new Uint8Array(buffer);
+            var out = '';
+            for (var i = 0; i < view.length; i += 1) out += (view[i] + 256).toString(16).slice(1);
+            return out;
+        }).catch(function () { return null; });
+    }
+
+    function buildManifest(entries, payload) {
+        return Promise.all(entries.map(function (entry) {
+            var bytes = entryBytes(entry);
+            return sha256Hex(bytes).then(function (hash) {
+                var item = { name: entry.name, size: bytes ? bytes.length : 0 };
+                if (hash) item.sha256 = hash;
+                return item;
+            });
+        })).then(function (files) {
+            var hasHash = files.some(function (item) { return !!item.sha256; });
+            return JSON.stringify({
+                app: 'nTools',
+                kind: 'backup-manifest',
+                exportedAt: payload.exportedAt,
+                version: payload.version,
+                algorithm: hasHash ? 'sha256' : 'none',
+                files: files
+            }, null, 2);
+        });
+    }
+
     function doBuildZip(bundle) {
         if (!NC.zip) return Promise.reject(new Error('zip 模块未加载'));
         var payload = bundle.payload;
@@ -252,8 +291,10 @@
             entries.push({ name: wname, data: code });
         });
 
-        entries.push({
-            name: 'README.txt',
+        return buildManifest(entries, payload).then(function (manifest) {
+            entries.push({ name: 'manifest.json', data: manifest });
+            entries.push({
+                name: 'README.txt',
             data: [
                 'nTools 全量备份',
                 '导出时间：' + payload.exportedAt,
@@ -264,21 +305,23 @@
                 '  notes/*.md          每篇笔记的纯文本副本',
                 '  files/*             笔记里的图片附件',
                 '  workshop/*.html     创意工坊里保存的自定义应用',
+                '  manifest.json       文件清单 / 大小 / SHA-256 校验和',
                 '',
                 '恢复：打开 nTools → 设置 → 数据 → 从备份恢复（选择 ntools-backup.json）。',
                 '注意：JSON 里若包含 API Key，请妥善保管该压缩包。',
                 ''
-            ].join('\n')
-        });
+                ].join('\n')
+            });
 
-        return Promise.all(files.map(function (file) {
-            if (!file.blob || !file.blob.arrayBuffer) return null;
-            return file.blob.arrayBuffer().then(function (buffer) {
-                return { name: 'files/' + safeName(file.name), data: new Uint8Array(buffer) };
-            }).catch(function () { return null; });
-        })).then(function (extra) {
-            var all = entries.concat(extra.filter(Boolean));
-            return NC.zip.build(all);
+            return Promise.all(files.map(function (file) {
+                if (!file.blob || !file.blob.arrayBuffer) return null;
+                return file.blob.arrayBuffer().then(function (buffer) {
+                    return { name: 'files/' + safeName(file.name), data: new Uint8Array(buffer) };
+                }).catch(function () { return null; });
+            })).then(function (extra) {
+                var all = entries.concat(extra.filter(Boolean));
+                return NC.zip.build(all);
+            });
         });
     }
 
