@@ -500,6 +500,15 @@
         return true;
     }
 
+    function listTrash() {
+        var out = [];
+        state.notes.forEach(function (note) {
+            if (note && note.deletedAt) out.push(note);
+        });
+        out.sort(function (a, b) { return (b.deletedAt || 0) - (a.deletedAt || 0); });
+        return out;
+    }
+
     function clearTrash() {
         if (state.readOnly) return 0;
         var ids = [];
@@ -831,6 +840,75 @@
         return note;
     }
 
+    var WELCOME_FLAG = 'ntools.notes.welcomeSeeded';
+    var WELCOME_MD = [
+        '# 欢迎使用 nTools 笔记',
+        '',
+        '这是你的第一篇笔记，也是一张可随时删掉的“使用说明”。',
+        '左侧是目录，右侧可以切换 **阅读 / 编辑**（Ctrl+E）。',
+        '',
+        '## 文本格式',
+        '',
+        '**加粗**、*斜体*、~~删除线~~、`行内代码`，以及 [外部链接](https://example.com)。',
+        '',
+        '> 引用块适合放摘录或会议结论。',
+        '',
+        '## 列表与任务',
+        '',
+        '- 无序列表',
+        '- 支持缩进',
+        '',
+        '1. 有序列表',
+        '2. 第二步',
+        '',
+        '- [ ] 待办清单（笔记里的复选框）',
+        '- [x] 已经完成的事项',
+        '',
+        '## 代码与表格',
+        '',
+        '```js',
+        'function hello(name) {',
+        '  return "你好，" + name;',
+        '}',
+        '```',
+        '',
+        '| 格式 | 写法 |',
+        '| --- | --- |',
+        '| 标题 | `## 标题` |',
+        '| 链接 | `[[笔记标题]]` |',
+        '| 标签 | `#标签` |',
+        '',
+        '## 双向链接',
+        '',
+        '用双方括号引用其他笔记：[[欢迎使用 nTools 笔记|这就是一条自链接]]。',
+        '点击链接可以跳转；标题不存在时，点击会新建同名笔记。',
+        '',
+        '## 标签',
+        '',
+        '#欢迎 #指南',
+        '',
+        '---',
+        '',
+        '更多能力在左侧：搜索、文件夹、回收站、信息面板（反链/大纲）。',
+        '这条笔记可以随时删除，不会影响其他数据。',
+        ''
+    ].join('\n');
+
+    function seedWelcomeNote() {
+        try {
+            if (NC.prefs.get(WELCOME_FLAG, '0') === '1') return;
+            if (state.readOnly || state.notes.size) {
+                NC.prefs.set(WELCOME_FLAG, '1');
+                return;
+            }
+            var note = createNote({ title: '欢迎使用 nTools 笔记', content: WELCOME_MD });
+            if (note) {
+                setActive(note.id);
+                NC.prefs.set(WELCOME_FLAG, '1');
+            }
+        } catch (err) { /* 示例笔记失败不影响笔记库 */ }
+    }
+
     function init(options) {
         if (initPromise) return initPromise;
         var opts = options || {};
@@ -871,6 +949,7 @@
                 enterReadOnly('other-window');
             }
 
+            seedWelcomeNote();
             if (Object.keys(state.dirty).length) flush();
             notify('init', { issues: issues });
             return {
@@ -925,6 +1004,7 @@
         restoreNote: restoreNote,
         purgeNote: purgeNote,
         clearTrash: clearTrash,
+        listTrash: listTrash,
         createFolder: createFolder,
         renameFolder: renameFolder,
         deleteFolder: deleteFolder,

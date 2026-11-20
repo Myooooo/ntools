@@ -111,6 +111,7 @@
         var actions = moduleCard('快捷操作');
         var bar = util.e('div', { class: 'sp-data-card__actions' });
         bar.appendChild(button('打开笔记', { small: true, icon: 'notebook-text', onClick: function () { openModule('md'); } }));
+        bar.appendChild(button('回收站', { small: true, ghost: true, icon: 'trash', onClick: openNotesTrash }));
         bar.appendChild(button('导出 JSON', {
             small: true, ghost: true, icon: 'download',
             onClick: function () { exportNotes('json'); }
@@ -121,6 +122,140 @@
         }));
         actions.appendChild(bar);
         container.appendChild(actions);
+    }
+
+    function openNotesTrash() {
+        var modal = null;
+        var list = util.e('div', { class: 'sp-trash-list' });
+        var hint = util.e('p', { class: 'sp-hint', text: '' });
+
+        function notesStore() {
+            var store = NC.store && NC.store.notes;
+            return store && store.isReady && store.isReady() ? store : null;
+        }
+
+        function ensureStore(done) {
+            if (notesStore()) { done(); return; }
+            if (typeof NC.loadNotesBundle !== 'function') { done(); return; }
+            list.textContent = '正在准备笔记数据…';
+            NC.loadNotesBundle().then(function () {
+                if (NC.store.notes && NC.store.notes.init) NC.store.notes.init();
+                var tries = 40;
+                (function wait() {
+                    if (notesStore() || tries <= 0) { done(); return; }
+                    tries -= 1;
+                    setTimeout(wait, 120);
+                })();
+            }, function () { done(); });
+        }
+
+        function trashedNotes(store) {
+            if (typeof store.listTrash === 'function') return store.listTrash();
+            var out = [];
+            store.quickSwitch('').forEach(function (item) {
+                var note = store.getNote(item.id);
+                if (note && note.deletedAt) out.push(note);
+            });
+            return out;
+        }
+
+        function buildRow(store, note) {
+            var row = util.e('div', { class: 'sp-trash-row' });
+            var body = util.e('div', { class: 'sp-trash-row__body' });
+            body.appendChild(util.e('div', { class: 'sp-trash-row__title', text: note.title || '未命名笔记' }));
+            body.appendChild(util.e('div', {
+                class: 'sp-trash-row__meta',
+                text: '删除于 ' + util.formatDateTime(note.deletedAt)
+            }));
+            row.appendChild(body);
+
+            var actions = util.e('div', { class: 'sp-trash-row__actions' });
+            var readOnly = !!(store.saveState && store.saveState().readOnly);
+            actions.appendChild(button('恢复', {
+                small: true, icon: 'rotate-ccw',
+                onClick: function () {
+                    if (store.restoreNote(note.id)) {
+                        toast('已恢复「' + (note.title || '未命名笔记') + '」', 'success');
+                        renderList();
+                    } else {
+                        toast('恢复失败', 'error');
+                    }
+                }
+            }));
+            actions.appendChild(button('彻底删除', {
+                small: true, ghost: true, danger: true, icon: 'trash',
+                onClick: function () {
+                    ui.confirm('彻底删除「' + (note.title || '未命名笔记') + '」？此操作不可恢复，删除前会自动快照。', {
+                        title: '彻底删除', confirmText: '删除', danger: true
+                    }).then(function (ok) {
+                        if (!ok) return;
+                        if (store.purgeNote(note.id)) {
+                            toast('已彻底删除', 'success');
+                            renderList();
+                        } else {
+                            toast('删除失败', 'error');
+                        }
+                    });
+                }
+            }));
+            if (readOnly) {
+                Array.prototype.forEach.call(actions.querySelectorAll('button'), function (btn) { btn.disabled = true; });
+            }
+            row.appendChild(actions);
+            return row;
+        }
+
+        function renderList() {
+            ensureStore(function () {
+                var store = notesStore();
+                list.textContent = '';
+                hint.textContent = '';
+                if (!store) {
+                    hint.textContent = '笔记模块尚未加载，请打开一次「笔记」页后重试。';
+                    return;
+                }
+                var state = store.saveState ? store.saveState() : {};
+                if (state.readOnly) hint.textContent = '当前是只读镜像，回收站不可修改。';
+                var items = trashedNotes(store);
+                if (!items.length) {
+                    list.appendChild(util.e('div', { class: 'sp-trash-empty', text: '回收站是空的' }));
+                    return;
+                }
+                list.appendChild(util.e('div', { class: 'sp-hint', text: '共 ' + items.length + ' 篇，恢复后回到原文件夹。' }));
+                items.forEach(function (note) { list.appendChild(buildRow(store, note)); });
+            });
+        }
+
+        function emptyTrash() {
+            var store = notesStore();
+            if (!store) return;
+            var count = trashedNotes(store).length;
+            if (!count) { toast('回收站是空的', 'info'); return; }
+            ui.confirm('清空回收站中的 ' + count + ' 篇笔记？此操作不可恢复，清空前会自动快照。', {
+                title: '清空回收站', confirmText: '清空', danger: true
+            }).then(function (ok) {
+                if (!ok) return;
+                var removed = store.clearTrash();
+                toast(removed ? '已清空 ' + removed + ' 篇笔记' : '回收站是空的', removed ? 'success' : 'info');
+                renderList();
+            });
+        }
+
+        modal = ui.openModal({
+            title: '笔记回收站',
+            size: 'lg',
+            content: (function () {
+                var wrap = util.e('div', {});
+                wrap.appendChild(hint);
+                wrap.appendChild(list);
+                return wrap;
+            })(),
+            actions: [
+                { label: '一键清空', kind: 'danger', close: false, onClick: emptyTrash },
+                { label: '关闭', kind: 'ghost', onClick: function () { modal.close(); } }
+            ]
+        });
+        renderList();
     }
 
     function renderEmailModule(container) {

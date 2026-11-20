@@ -1738,3 +1738,47 @@ html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
         background-image: none;
     }
 }
+
+/* 笔记回收站（设置 → 笔记本） */
+.sp-trash-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 52vh;
+    overflow: auto;
+    padding-right: 4px;
+}
+.sp-trash-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--nc-line);
+    border-radius: var(--nc-radius-sm, 8px);
+    background: var(--nc-panel-2);
+}
+.sp-trash-row__body { min-width: 0; flex: 1; }
+.sp-trash-row__title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--nc-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.sp-trash-row__meta {
+    margin-top: 2px;
+    font-size: 11.5px;
+    color: var(--nc-text-3);
+}
+.sp-trash-row__actions { display: flex; gap: 6px; flex-shrink: 0; }
+.sp-trash-empty {
+    padding: 28px 12px;
+    text-align: center;
+    color: var(--nc-text-3);
+    font-size: 12.5px;
+}
+@media (max-width: 600px) {
+    .sp-trash-row { align-items: flex-start; flex-direction: column; }
+    .sp-trash-row__actions { width: 100%; justify-content: flex-end; }
+}

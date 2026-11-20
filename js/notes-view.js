@@ -526,13 +526,12 @@
 
         var all = store.quickSwitch('');
         var live = [];
-        var trashed = [];
+        var trashed = typeof store.listTrash === 'function' ? store.listTrash() : [];
         var allowed = state.tagFilter ? new Set(store.notesWithTag(state.tagFilter)) : null;
         all.forEach(function (item) {
             var note = store.getNote(item.id);
-            if (!note) return;
-            if (note.deletedAt) trashed.push(note);
-            else if (!allowed || allowed.has(note.id)) live.push(note);
+            if (!note || note.deletedAt) return;
+            if (!allowed || allowed.has(note.id)) live.push(note);
         });
 
         if (state.trashView) {
