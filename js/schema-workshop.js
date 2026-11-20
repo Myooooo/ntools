@@ -177,15 +177,27 @@
     }
 
     /** 高度 / 错误回传桥（注入到每个沙箱文档末尾） */
-    function bridgeScript() {
+    /** 早期桥：在生成页脚本之前执行——错误捕获 + 常用 API 兼容垫片 + 主题监听 */
+    function earlyBridgeScript() {
         return '<script>(function(){' +
-            'function h(){var d=document.documentElement,b=document.body;' +
-            'var v=Math.max(d?d.scrollHeight:0,b?b.scrollHeight:0);' +
-            "try{parent.postMessage({type:'nc-ws-height',h:v},'*');}catch(e){}" +
+            /* 常用兼容：沙箱是不透明源，crypto.randomUUID 在非安全上下文不可用 */
+            'try{' +
+            'var c=window.crypto||(window.crypto={});' +
+            "if(typeof c.randomUUID!=='function'){" +
+            'var uuid=function(){' +
+            'try{if(c.getRandomValues){var b=new Uint8Array(16);c.getRandomValues(b);' +
+            'b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;var h=[];' +
+            "for(var i=0;i<16;i++)h.push((b[i]+256).toString(16).slice(1));" +
+            "var s=h.join('');return s.slice(0,8)+'-'+s.slice(8,12)+'-'+s.slice(12,16)+'-'+s.slice(16,20)+'-'+s.slice(20);" +
+            '}}catch(e){}' +
+            "return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(ch){" +
+            "var r=Math.random()*16|0;var v=ch==='x'?r:(r&3|8);return v.toString(16);});" +
+            '};' +
+            "try{Object.defineProperty(c,'randomUUID',{value:uuid,configurable:true,writable:true});}catch(e){try{c.randomUUID=uuid;}catch(e2){}}" +
             '}' +
-            'try{if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement);}' +
-            'else{setInterval(h,600);}}catch(e){setInterval(h,600);}' +
-            "window.addEventListener('load',function(){h();try{parent.postMessage({type:'nc-ws-ready'},'*');}catch(e){}});" +
+            '}catch(e){}' +
+            "window.addEventListener('error',function(e){try{parent.postMessage({type:'nc-ws-error',message:String(e.message||'脚本错误')},'*');}catch(x){}});" +
+            "window.addEventListener('unhandledrejection',function(e){var r=e.reason;try{parent.postMessage({type:'nc-ws-error',message:String((r&&r.message)||r||'Promise 错误')},'*');}catch(x){}});" +
             "window.addEventListener('message',function(e){" +
             "if(e.source!==parent)return;var d=e.data;if(!d||d.type!=='nc-ws-theme')return;" +
             "var root=document.documentElement,light=d.theme==='light';" +
@@ -196,9 +208,20 @@
             "root.style.colorScheme=light?'light':'dark';" +
             "try{parent.postMessage({type:'nc-ws-theme-ack'},'*');}catch(x){}" +
             "});" +
+            '})();</script>';
+    }
+
+    /** 尾部桥：页面解析完之后执行——高度与 ready 回传 */
+    function bridgeScript() {
+        return '<script>(function(){' +
+            'function h(){var d=document.documentElement,b=document.body;' +
+            'var v=Math.max(d?d.scrollHeight:0,b?b.scrollHeight:0);' +
+            "try{parent.postMessage({type:'nc-ws-height',h:v},'*');}catch(e){}" +
+            '}' +
+            'try{if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement);}' +
+            'else{setInterval(h,600);}}catch(e){setInterval(h,600);}' +
+            "window.addEventListener('load',function(){h();try{parent.postMessage({type:'nc-ws-ready'},'*');}catch(e){}});" +
             "setTimeout(h,60);setTimeout(h,400);" +
-            "window.addEventListener('error',function(e){try{parent.postMessage({type:'nc-ws-error',message:String(e.message||'脚本错误')},'*');}catch(x){}});" +
-            "window.addEventListener('unhandledrejection',function(e){var r=e.reason;try{parent.postMessage({type:'nc-ws-error',message:String((r&&r.message)||r||'Promise 错误')},'*');}catch(x){}});" +
             '})();</script>';
     }
 
@@ -220,6 +243,7 @@
             'connect-src ' + connect + ';' + '">';
         var viewport = '<meta name="viewport" content="width=device-width,initial-scale=1">';
         var theme = '<style>' + themeCss(opts.theme) + '</style>';
+        var early = earlyBridgeScript();
         var bridge = bridgeScript();
 
         /* 完整文档：保留原有 head/body（样式与脚本都在），只补 CSP、主题与高度桥。
@@ -227,9 +251,9 @@
         if (/<html[\s>]/i.test(source)) {
             var doc = source.replace(/^\s*<!doctype[^>]*>/i, '');
             if (/<head[^>]*>/i.test(doc)) {
-                doc = doc.replace(/<head([^>]*)>/i, '<head$1>' + csp + viewport + theme);
+                doc = doc.replace(/<head([^>]*)>/i, '<head$1>' + csp + viewport + theme + early);
             } else {
-                doc = doc.replace(/<html([^>]*)>/i, '<html$1><head>' + csp + viewport + theme + '</head>');
+                doc = doc.replace(/<html([^>]*)>/i, '<html$1><head>' + csp + viewport + theme + early + '</head>');
             }
             if (/<\/body>/i.test(doc)) doc = doc.replace(/<\/body>/i, bridge + '</body>');
             else doc += bridge;
@@ -237,7 +261,7 @@
         }
         /* 片段：套壳并保留片段里的 <style>/<script> */
         return '<!DOCTYPE html><html><head><meta charset="utf-8">' + viewport + csp +
-            '<title>' + escapeAttr(opts.title || '创意工坊') + '</title>' + theme +
+            '<title>' + escapeAttr(opts.title || '创意工坊') + '</title>' + theme + early +
             '</head><body>' + source + bridge + '</body></html>';
     }
 
@@ -256,7 +280,10 @@
             '5. 不要使用 top.location、parent、window.open、WebSocket；不要写 <script src> 或 <iframe>。',
             '6. 页面要自适应宽度 ≥ 720px，跟随深/浅色（可用 CSS 变量 --ws-bg/--ws-panel/--ws-text/--ws-accent），不要自动播放声音。',
             '7. 数据只放在内存或 sessionStorage；不要写入 localStorage。',
-            '8. 需求不完整时先给一个可用的最小版本，不要反问。'
+            '8. 需求不完整时先给一个可用的最小版本，不要反问。',
+            '9. 所有 const/let/class 必须先声明后使用；不要写顶层立即调用、却引用后面才声明变量的代码（会报 Cannot access before initialization）。',
+            '10. 不要依赖 crypto.randomUUID、crypto.subtle、localStorage 等可能不可用的 API；需要唯一 ID 时用 Date.now() + Math.random()。',
+            '11. <script> 尽量放在 </body> 前，事件绑定放在 DOM 就绪之后。'
         ].join('\n');
     }
 
@@ -361,6 +388,7 @@
         wrapHtml: wrapHtml,
         themeCss: themeCss,
         bridgeScript: bridgeScript,
+        earlyBridgeScript: earlyBridgeScript,
         buildSystemPrompt: buildSystemPrompt,
         normalizeApp: normalizeApp,
         normalizeVersion: normalizeVersion,
