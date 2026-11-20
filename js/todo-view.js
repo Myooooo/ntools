@@ -99,6 +99,14 @@
         actions = options || {};
         cacheElements();
         if (!els.list || !store) return false;
+        /* 应用「默认视图」偏好：每次进入待办都以设置为准（页面内切换仍会持久化当前选择） */
+        try {
+            var prefView = NC.prefs && NC.prefs.get ? NC.prefs.get('ntools.todo.defaultView', 'list') : 'list';
+            if (prefView !== 'timeline') prefView = 'list';
+            if (store.getDoc().settings.viewMode !== prefView) {
+                store.updateSettings({ viewMode: prefView });
+            }
+        } catch (err) { /* ignore */ }
         bindRowModule();
         ensureExtras();
         bindStaticEvents();

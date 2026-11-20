@@ -240,6 +240,27 @@
         }));
         head.appendChild(info);
         container.appendChild(head);
+        var viewCard = moduleCard('默认视图', '打开待办事项时默认显示的视图；页面内仍可随时切换。');
+        var viewRow = util.e('div', { class: 'sp-row' });
+        viewRow.appendChild(util.e('span', { class: 'sp-row__label', text: '默认视图' }));
+        var currentView = NC.prefs && NC.prefs.get ? NC.prefs.get('ntools.todo.defaultView', 'list') : 'list';
+        if (currentView !== 'timeline') currentView = 'list';
+        viewRow.appendChild(segmented([
+            { value: 'list', label: '列表' },
+            { value: 'timeline', label: '全景' }
+        ], currentView, function (next) {
+            if (NC.prefs && NC.prefs.set) NC.prefs.set('ntools.todo.defaultView', next);
+            try {
+                if (NC.store && NC.store.todo && NC.store.todo.updateSettings) {
+                    NC.store.todo.updateSettings({ viewMode: next });
+                }
+            } catch (err) { /* ignore */ }
+            setStatus(next === 'timeline' ? '打开待办时默认显示全景' : '打开待办时默认显示列表');
+            toast(next === 'timeline' ? '默认视图：全景' : '默认视图：列表', 'success');
+        }));
+        viewCard.appendChild(viewRow);
+        container.appendChild(viewCard);
+
         renderTodoAi(container);
     }
 
