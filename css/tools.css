@@ -566,10 +566,22 @@
     display: flex;
     flex: 0 0 260px;
     flex-direction: column;
+    width: 260px;
     min-height: 0;
     min-width: 0;
+    overflow: hidden;
     border-right: 1px solid var(--nc-border);
     background: var(--nc-surface);
+    transition:
+        width var(--nc-dur-panel) var(--nc-ease-drawer),
+        flex-basis var(--nc-dur-panel) var(--nc-ease-drawer),
+        border-color var(--nc-dur-panel) var(--nc-ease-drawer);
+}
+
+.notes-shell.is-side-collapsed .notes-side {
+    width: 0;
+    flex-basis: 0;
+    border-right-color: transparent;
 }
 
 .notes-side__head {
@@ -837,7 +849,7 @@
 }
 
 .notes-head__toggle {
-    display: none;
+    display: inline-flex;
 }
 
 .notes-title {
@@ -1275,7 +1287,7 @@ html[data-lite="true"] .notes-ac {
     background: var(--nc-overlay);
     opacity: 0;
     pointer-events: none;
-    transition: opacity var(--nc-dur) var(--nc-ease);
+    transition: opacity var(--nc-dur-panel) var(--nc-ease-out);
 }
 
 /* ---------- 窄桌面：≤1100px（含 1080p 分屏） ---------- */
@@ -1296,6 +1308,18 @@ html[data-lite="true"] .notes-ac {
 
     .notes-shell.is-side-open .notes-side {
         transform: translateX(0);
+    }
+
+    .notes-shell.is-side-collapsed .notes-side {
+        width: min(280px, 82%);
+        flex-basis: auto;
+        border-right-color: var(--nc-border-strong);
+    }
+
+    .notes-shell.is-side-open .notes-scrim,
+    .notes-shell.is-info-open .notes-scrim {
+        opacity: 1;
+        pointer-events: auto;
     }
 
     #notes-side-close,

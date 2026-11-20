@@ -32,6 +32,7 @@
         mode: 'edit',          // 'edit' | 'read'
         infoOpen: false,
         sideOpen: false,
+        sideCollapsed: false,
         trashView: false,
         collapsed: Object.create(null),
         tagFilter: '',
@@ -1003,9 +1004,57 @@
         if (prev !== state.mode && animate) playModeEnter(prev, state.mode);
     }
 
+    var SIDE_KEY = 'ntools.notes.side';
+
+    function isNarrowNotes() {
+        return !!(global.matchMedia && global.matchMedia('(max-width: 1100px)').matches);
+    }
+
+    function readSideCollapsed() {
+        try { return global.localStorage.getItem(SIDE_KEY) === '1'; } catch (err) { return false; }
+    }
+
+    function saveSideCollapsed() {
+        try { global.localStorage.setItem(SIDE_KEY, state.sideCollapsed ? '1' : '0'); } catch (err) { /* ignore */ }
+    }
+
+    function syncSideButton() {
+        if (!els.sideOpen) return;
+        var expanded = isNarrowNotes() ? state.sideOpen : !state.sideCollapsed;
+        var label = expanded ? '收起笔记列表' : '打开笔记列表';
+        els.sideOpen.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        els.sideOpen.setAttribute('aria-label', label);
+        els.sideOpen.setAttribute('title', label);
+    }
+
+    /** 桌面：折叠/展开左栏；移动：抽屉开合。与 nChat / 工坊一致。 */
+    function applySideState() {
+        if (!els.shell) return;
+        if (isNarrowNotes()) {
+            els.shell.classList.remove('is-side-collapsed');
+            els.shell.classList.toggle('is-side-open', state.sideOpen);
+        } else {
+            els.shell.classList.remove('is-side-open');
+            state.sideOpen = false;
+            els.shell.classList.toggle('is-side-collapsed', !!state.sideCollapsed);
+        }
+        syncSideButton();
+    }
+
     function toggleSide(force) {
+        if (!isNarrowNotes()) return;
         state.sideOpen = typeof force === 'boolean' ? force : !state.sideOpen;
-        if (els.shell) els.shell.classList.toggle('is-side-open', state.sideOpen);
+        applySideState();
+    }
+
+    function onSideButton() {
+        if (isNarrowNotes()) {
+            toggleSide(!state.sideOpen);
+            return;
+        }
+        state.sideCollapsed = !state.sideCollapsed;
+        saveSideCollapsed();
+        applySideState();
     }
 
     var infoHideTimer = null;
@@ -1964,9 +2013,10 @@
         if (els.infoBtn) els.infoBtn.addEventListener('click', function () { toggleInfo(); });
         if (els.infoClose) els.infoClose.addEventListener('click', function () { toggleInfo(false); });
         if (els.moreBtn) els.moreBtn.addEventListener('click', openMoreMenu);
-        if (els.sideOpen) els.sideOpen.addEventListener('click', function () { toggleSide(true); });
+        if (els.sideOpen) els.sideOpen.addEventListener('click', onSideButton);
         if (els.sideClose) els.sideClose.addEventListener('click', function () { toggleSide(false); });
         if (els.scrim) els.scrim.addEventListener('click', function () { toggleSide(false); toggleInfo(false); });
+        global.addEventListener('resize', function () { applySideState(); });
 
         if (els.palette) {
             els.palette.addEventListener('mousedown', function (event) {
@@ -2095,6 +2145,7 @@
     function init() {
         if (state.initialized) return NC.view.notes;
         cacheEls();
+        state.sideCollapsed = readSideCollapsed();
         try {
             var prefMode = global.localStorage.getItem('ntools.notes.mode');
             if (prefMode === 'read' || prefMode === 'edit') state.mode = prefMode;
@@ -2126,6 +2177,7 @@
             scheduleRender(payload);
         });
         bindEvents();
+        applySideState();
         state.initialized = true;
 
         store.init().then(function () {

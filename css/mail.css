@@ -1077,8 +1077,8 @@ html, body {
 
 .bar-inner {
     width: 100%;
-    max-width: 1360px;
-    margin: 0 auto;
+    max-width: none;
+    margin: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
