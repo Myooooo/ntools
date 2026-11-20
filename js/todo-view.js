@@ -327,6 +327,23 @@
             els.detailInner.addEventListener('change', onDetailChange);
             els.detailInner.addEventListener('input', onDetailInput);
             els.detailInner.addEventListener('blur', onDetailBlur, true);
+            els.detailInner.addEventListener('keydown', function (event) {
+                if (event.target && event.target.getAttribute && event.target.getAttribute('data-notes-read') !== null) {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setDetailNotesEditing(els.detailInner, true);
+                    }
+                    return;
+                }
+                if (!event.target || event.target.getAttribute('data-field') !== 'notes') return;
+                var finish = event.key === 'Escape' || ((event.ctrlKey || event.metaKey) && event.key === 'Enter');
+                if (!finish) return;
+                event.preventDefault();
+                flushDetailEdits();
+                var task = store.getUi().selectedId ? store.getTask(store.getUi().selectedId) : null;
+                setDetailNotesEditing(els.detailInner, false);
+                if (task) renderDetailNotes(els.detailInner, task);
+            });
             /* 详情列从 display:none 展开时宽度才可测；宽度变化后重算标题高度 */
             if (global.ResizeObserver) {
                 var lastDetailWidth = -1;
@@ -1161,13 +1178,20 @@
         /* 备注 */
         var notesSection = node('div', 'detail-section');
         notesSection.appendChild(node('div', 'detail-section__label', '备注'));
-        var notesField = node('div', 'detail-field detail-field--stack');
+        var notesField = node('div', 'detail-field detail-field--stack detail-notes');
+        var notesRead = node('div', 'detail-notes__read');
+        attr(notesRead, 'data-notes-read', '');
+        attr(notesRead, 'role', 'button');
+        attr(notesRead, 'tabindex', '0');
+        attr(notesRead, 'aria-label', '编辑备注');
+        notesField.appendChild(notesRead);
         var notes = document.createElement('textarea');
         notes.className = 'nc-textarea';
         attr(notes, 'data-field', 'notes');
         attr(notes, 'aria-label', '任务备注');
-        attr(notes, 'placeholder', '补充说明、链接或子步骤…');
+        attr(notes, 'placeholder', '支持 Markdown 与 [[引用]]，Ctrl+Enter 保存');
         notes.maxLength = 20000;
+        notes.hidden = true;
         notesField.appendChild(notes);
         notesSection.appendChild(notesField);
         form.appendChild(notesSection);
@@ -1239,6 +1263,88 @@
         return form;
     }
 
+    function detailNotesContext() {
+        return {
+            notes: NC.store && NC.store.notes,
+            todo: store
+        };
+    }
+
+    function toggleDetailRefTodo(id, checked) {
+        var task = store.getTask(id);
+        if (!task) return;
+        var done = !!task.completedAt;
+        if (done === !!checked) return;
+        store.toggleTask(id);
+        if (ui && ui.toast) ui.toast(checked ? '已完成「' + task.title + '」' : '已取消完成「' + task.title + '」', { type: 'success' });
+    }
+
+    function openDetailRefNote(id, title) {
+        function focus() {
+            if (NC.view && NC.view.notes && typeof NC.view.notes.focusNote === 'function') {
+                NC.view.notes.focusNote(id);
+            }
+        }
+        if (NC.switchTab) NC.switchTab('md', true);
+        var notesStore = NC.store && NC.store.notes;
+        if (notesStore && notesStore.isReady && notesStore.isReady()) { focus(); return; }
+        if (typeof NC.loadNotesBundle !== 'function') { focus(); return; }
+        NC.loadNotesBundle().then(function () {
+            if (NC.store.notes && NC.store.notes.init) NC.store.notes.init();
+            var tries = 40;
+            (function wait() {
+                if ((NC.store.notes && NC.store.notes.isReady && NC.store.notes.isReady()) || tries <= 0) {
+                    focus();
+                    return;
+                }
+                tries -= 1;
+                setTimeout(wait, 120);
+            })();
+        }, function () {
+            if (ui && ui.toast) ui.toast('笔记模块加载失败', { type: 'error' });
+        });
+    }
+
+    function renderDetailNotes(root, task) {
+        if (!root) return null;
+        var read = root.querySelector('[data-notes-read]');
+        var field = read ? read.parentNode : null;
+        if (!read || !field) return null;
+        if (field.classList.contains('is-editing')) return read;
+        var value = String(task && task.notes ? task.notes : '');
+        if (!value.trim()) {
+            read.textContent = '';
+            var empty = node('span', 'detail-notes__empty', '点击写备注，支持 Markdown 与 [[引用]]');
+            read.appendChild(empty);
+            return read;
+        }
+        if (NC.refs && typeof NC.refs.renderMarkdown === 'function') {
+            NC.refs.renderMarkdown(read, value, detailNotesContext(), {
+                openNote: openDetailRefNote,
+                toggleTodo: toggleDetailRefTodo
+            });
+        } else {
+            read.textContent = value;
+        }
+        return read;
+    }
+
+    function setDetailNotesEditing(root, editing) {
+        if (!root) return;
+        var field = root.querySelector('.detail-notes');
+        if (!field) return;
+        var read = field.querySelector('[data-notes-read]');
+        var textarea = field.querySelector('[data-field="notes"]');
+        if (!read || !textarea) return;
+        field.classList.toggle('is-editing', !!editing);
+        read.hidden = !!editing;
+        textarea.hidden = !editing;
+        if (editing) {
+            autoGrow(textarea);
+            try { textarea.focus({ preventScroll: true }); } catch (err) { textarea.focus(); }
+        }
+    }
+
     function syncDetailForm(task, doc, force) {
         var root = els.detailInner;
         if (!root) return;
@@ -1271,6 +1377,7 @@
         if (force || active !== notesEl) {
             if (notesEl.value !== task.notes) notesEl.value = task.notes;
         }
+        renderDetailNotes(root, task);
         if (force || active !== dueEl) {
             var dueValue = util.isFiniteNum(task.due) ? util.toDateTimeInputValue(task.due) : '';
             if (dueEl.value !== dueValue) dueEl.value = dueValue;
@@ -1443,6 +1550,17 @@
 
     function onDetailBlur(event) {
         var field = event.target.getAttribute && event.target.getAttribute('data-field');
+        if (field === 'notes') {
+            var textarea = event.target;
+            setTimeout(function () {
+                if (document.activeElement === textarea) return;
+                var root = els.detailInner;
+                if (!root) return;
+                var task = store.getUi().selectedId ? store.getTask(store.getUi().selectedId) : null;
+                setDetailNotesEditing(root, false);
+                if (task) renderDetailNotes(root, task);
+            }, 120);
+        }
         if (field === 'title') {
             var id = store.getUi().selectedId;
             if (!id) return;
@@ -1454,6 +1572,11 @@
     }
 
     function onDetailClick(event) {
+        var read = event.target.closest ? event.target.closest('[data-notes-read]') : null;
+        if (read && !read.hidden) {
+            setDetailNotesEditing(els.detailInner, true);
+            return;
+        }
         var btn = event.target.closest('[data-act]');
         var id = store.getUi().selectedId;
         if (!btn) return;

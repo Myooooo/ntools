@@ -136,6 +136,10 @@
                     };
                 },
                 renderer: function (token) {
+                    var ref = NC.refs && typeof NC.refs.parseRef === 'function' ? NC.refs.parseRef(token.raw || '') : null;
+                    if (ref && (ref.type === 'todo' || (ref.type === 'note' && ref.id)) && typeof NC.refs.chipHtml === 'function') {
+                        return NC.refs.chipHtml(ref, { notes: store, todo: NC.store && NC.store.todo });
+                    }
                     var label = token.alias || token.target || token.anchor || '';
                     var resolvedId = (store && token.target) ? store.resolveTitle(token.target) : null;
                     var cls = (token.embed ? 'note-embed' : 'note-link') + (resolvedId ? '' : ' is-unresolved');
@@ -2061,6 +2065,20 @@
                 event.preventDefault();
                 openWikiLink(link.getAttribute('data-note'), link.getAttribute('data-anchor') || '');
             });
+            if (NC.refs && typeof NC.refs.bind === 'function') {
+                NC.refs.bind(els.preview, {
+                    openNote: function (id) { if (id) selectNote(id); },
+                    toggleTodo: function (id, checked) {
+                        var todo = NC.store && NC.store.todo;
+                        if (!todo) return;
+                        var task = todo.getTask(id);
+                        if (!task || !!task.completedAt === !!checked) return;
+                        todo.toggleTask(id);
+                        var note = store.getActiveNote();
+                        if (note) renderMarkdown(els.preview, note.content);
+                    }
+                });
+            }
         }
 
         document.addEventListener('keydown', function (event) {

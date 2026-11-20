@@ -133,7 +133,7 @@
         NC.refs._installed = true;
         global.marked.use({
             extensions: [{
-                name: 'ncRefs',
+                name: 'ncRef',
                 level: 'inline',
                 start: function (src) {
                     var a = src.indexOf('[[');
