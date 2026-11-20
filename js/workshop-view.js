@@ -57,10 +57,10 @@
         else node.removeAttribute('hidden');
     }
     function readActive() {
-        try { return global.localStorage.getItem(ACTIVE_KEY) || ''; } catch (err) { return ''; }
+        return NC.prefs.get(ACTIVE_KEY, '');
     }
     function writeActive(id) {
-        try { global.localStorage.setItem(ACTIVE_KEY, id || ''); } catch (err) { /* ignore */ }
+        NC.prefs.set(ACTIVE_KEY, id || '');
     }
 
     /* ------------------------------------------------------------------ *
@@ -441,11 +441,11 @@
             els.sideOpen.setAttribute('aria-label', state.sideCollapsed ? '展开工具列表' : '收起工具列表');
             els.sideOpen.setAttribute('title', state.sideCollapsed ? '展开工具列表' : '收起工具列表');
         }
-        try { global.localStorage.setItem('ntools.workshop.side', state.sideCollapsed ? '1' : '0'); } catch (err) { /* ignore */ }
+        NC.prefs.set('ntools.workshop.side', state.sideCollapsed ? '1' : '0');
     }
 
     function readSideCollapsed() {
-        try { return global.localStorage.getItem('ntools.workshop.side') === '1'; } catch (err) { return false; }
+        return NC.prefs.get('ntools.workshop.side', '0') === '1';
     }
 
     function isNarrow() {

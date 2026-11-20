@@ -73,7 +73,7 @@
     function maybeAutoLite() {
         try {
             if (!global.localStorage) return;
-            if (global.localStorage.getItem('nchat-lite-mode') !== null) return;
+            if (NC.prefs.raw('nchat-lite-mode') !== null) return;
             if (NC.theme.isLite()) return;
             var elapsed = Date.now() - (NC.bootAt || Date.now());
             if (elapsed < 400) return;
@@ -144,7 +144,7 @@
             app.classList.toggle('is-compact', isCompact());
         }
 
-        try { manual = global.localStorage.getItem(RAIL_KEY) === '1'; } catch (err) { manual = false; }
+        manual = NC.prefs.get(RAIL_KEY, '0') === '1';
         applyEffective();
 
         if (mq) {
@@ -156,7 +156,7 @@
         btn.addEventListener('click', function (event) {
             manual = !manual;
             applyEffective();
-            try { global.localStorage.setItem(RAIL_KEY, manual ? '1' : '0'); } catch (err) { /* ignore */ }
+            NC.prefs.set(RAIL_KEY, manual ? '1' : '0');
             /* 鼠标点击后释放焦点：否则收起态按钮会一直以“聚焦/悬浮”浮在 logo 上 */
             if (event && event.detail > 0) {
                 btn.blur();
@@ -277,12 +277,12 @@
     var START_TAB_KEY = 'ntools.startTab';
     function readStartTab() {
         var value = '';
-        try { value = String(global.localStorage.getItem(START_TAB_KEY) || ''); } catch (err) { value = ''; }
+        value = String(NC.prefs.get(START_TAB_KEY, ''));
         return TABS.indexOf(value) > -1 ? value : 'todo';
     }
     function writeStartTab(tab) {
         var next = TABS.indexOf(tab) > -1 ? tab : 'todo';
-        try { global.localStorage.setItem(START_TAB_KEY, next); return true; } catch (err) { return false; }
+        return NC.prefs.set(START_TAB_KEY, next);
     }
     NC.getStartTab = readStartTab;
     NC.setStartTab = writeStartTab;

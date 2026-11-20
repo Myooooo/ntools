@@ -45,6 +45,7 @@
 <script defer src="../js/compat.js"></script>
 <script defer src="../js/icons.js"></script>
 <script defer src="../js/storage.js"></script>
+<script defer src="../js/prefs.js"></script>
 <script defer src="../js/durability.js"></script>
 <script defer src="../js/ui.js"></script>
 <script defer src="../js/theme.js"></script>
@@ -829,6 +830,21 @@
             eq(list[1].id, 'b2', 'b2 顺序被覆盖为 5');
             eq(list[2].id, 'b1');
         });
+        t('prefs', '视图偏好读写保持原始字符串格式', function () {
+            var key = 'ntools.test.prefs';
+            NC.prefs.remove(key);
+            eq(NC.prefs.get(key, 'fallback'), 'fallback');
+            NC.prefs.set(key, 'light');
+            eq(NC.prefs.get(key, ''), 'light');
+            eq(NC.prefs.raw(key), 'light');
+            NC.prefs.setRaw(key, '1');
+            eq(NC.prefs.get(key), '1');
+            NC.prefs.setRaw(key, JSON.stringify({ a: 1 }));
+            eq(NC.prefs.getJSON(key, null).a, 1);
+            NC.prefs.remove(key);
+            eq(NC.prefs.raw(key), null);
+        });
+
         t('modules', '模块注册表：导航 / 设置 / 启动页派生一致', function () {
             var m = NC.modules;
             assert(m && typeof m.tabIds === 'function');

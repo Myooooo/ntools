@@ -1011,11 +1011,11 @@
     }
 
     function readSideCollapsed() {
-        try { return global.localStorage.getItem(SIDE_KEY) === '1'; } catch (err) { return false; }
+        return NC.prefs.get(SIDE_KEY, '0') === '1';
     }
 
     function saveSideCollapsed() {
-        try { global.localStorage.setItem(SIDE_KEY, state.sideCollapsed ? '1' : '0'); } catch (err) { /* ignore */ }
+        NC.prefs.set(SIDE_KEY, state.sideCollapsed ? '1' : '0');
     }
 
     function syncSideButton() {
@@ -2147,7 +2147,7 @@
         cacheEls();
         state.sideCollapsed = readSideCollapsed();
         try {
-            var prefMode = global.localStorage.getItem('ntools.notes.mode');
+            var prefMode = NC.prefs.get('ntools.notes.mode', '');
             if (prefMode === 'read' || prefMode === 'edit') state.mode = prefMode;
         } catch (err) { /* ignore */ }
         store = NC.store && NC.store.notes;
