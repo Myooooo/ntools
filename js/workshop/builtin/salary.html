@@ -422,9 +422,9 @@
   els.autoSave.addEventListener('change', save);
 
   load();
-  // v8：4fps 足够读数字，避免每帧 4 次 innerHTML + 布局
+  // 10fps：入场累加与每秒飘字需要更细的步进；稳定后开销仍然很低
   render();
-  var tickTimer = setInterval(render, 250);
+  var tickTimer = setInterval(render, 100);
   window.addEventListener('pagehide', function () { clearInterval(tickTimer); });
 })();
 </script>
