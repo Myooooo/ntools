@@ -128,7 +128,7 @@
         var result = storage.set(name, { tabId: TAB_ID, at: Date.now() });
         if (!result || result.ok === false) {
             // 连租约都写不进去（配额满）：不阻断本地写入，但要让上层知道
-            events.emit('lease:degraded', { name: name, error: result && result.error });
+            events.emit(NC.eventNames.leaseDegraded, { name: name, error: result && result.error });
         }
         startRenew(name);
         return true;

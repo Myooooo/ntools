@@ -41,7 +41,7 @@
     }
 
     function emitStorageError(kind, key, error) {
-        events.emit('storage:error', { kind: kind, key: key, error: error, memoryMode: !available });
+        events.emit(NC.eventNames.storageError, { kind: kind, key: key, error: error, memoryMode: !available });
     }
 
     /* 损坏备份最多保留 MAX_CORRUPT 份：备份是为了救命，不是为了吃满配额 */
@@ -98,7 +98,7 @@
     function setRaw(key, raw) {
         var size = estimateBytes(raw);
         if (size > MAX_BYTES) {
-            events.emit('quota:warning', { key: key, bytes: size, limit: MAX_BYTES, reason: 'budget' });
+            events.emit(NC.eventNames.quotaWarning, { key: key, bytes: size, limit: MAX_BYTES, reason: 'budget' });
         }
         try {
             if (available) {
@@ -112,7 +112,7 @@
             // 写入失败时仍保留内存副本，保证当前会话可用（getRaw 会优先返回它）
             memory[key] = raw;
             var quota = !!(err && (err.name === 'QuotaExceededError' || err.code === 22 || err.code === 1014));
-            events.emit(quota ? 'quota:warning' : 'storage:error', {
+            events.emit(quota ? NC.eventNames.quotaWarning : NC.eventNames.storageError, {
                 key: key, bytes: size, limit: MAX_BYTES, error: err, memoryMode: !available
             });
             return { ok: false, error: err, quota: quota, bytes: size, memoryMode: !available };
@@ -144,7 +144,7 @@
             result.ok = false;
             result.error = mismatch;
             result.mismatch = true;
-            events.emit('storage:error', { key: key, kind: 'verify', error: mismatch, memoryMode: !available });
+            events.emit(NC.eventNames.storageError, { key: key, kind: 'verify', error: mismatch, memoryMode: !available });
         }
         return result;
     }
@@ -174,7 +174,7 @@
         } catch (err) {
             console.error('[NC] corrupted storage value:', key, err);
             backupCorrupted(key, raw);
-            events.emit('storage:corrupt', { key: key, raw: raw });
+            events.emit(NC.eventNames.storageCorrupt, { key: key, raw: raw });
             return fallback;
         }
     }

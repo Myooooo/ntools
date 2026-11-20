@@ -140,7 +140,7 @@
                 }
             });
         }
-        events.on('llm:changed', function () {
+        events.on(NC.eventNames.llmChanged, function () {
             if (!opened) return;
             var store = llm();
             if (!store) return;

@@ -2007,7 +2007,7 @@
         }
         if (els.emptyNew) els.emptyNew.addEventListener('click', function () { newNote(); });
         if (els.emptyPalette) els.emptyPalette.addEventListener('click', function () { paletteOpen(); });
-        NC.events.on('theme:changed', function () {
+        NC.events.on(NC.eventNames.themeChanged, function () {
             if (state.infoOpen) renderInfo();
         });
         if (els.infoBtn) els.infoBtn.addEventListener('click', function () { toggleInfo(); });
@@ -2083,16 +2083,16 @@
         });
 
         /* 只读 / 保存错误提示 */
-        NC.events.on('notes:readonly', function (payload) {
+        NC.events.on(NC.eventNames.notesReadonly, function (payload) {
             toast(payload.message || '已进入只读模式', 'warning');
             renderActive();
             renderStatus();
         });
-        NC.events.on('notes:error', function (payload) {
+        NC.events.on(NC.eventNames.notesError, function (payload) {
             toast(payload.message || '笔记操作失败', 'error');
             renderStatus();
         });
-        NC.events.on('notes:savestate', function () { renderStatus(); });
+        NC.events.on(NC.eventNames.notesSavesate, function () { renderStatus(); });
     }
 
     function cacheEls() {

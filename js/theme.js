@@ -30,14 +30,14 @@
         document.documentElement.style.colorScheme = next;
         var themeMeta = document.querySelector('meta[name="theme-color"]');
         if (themeMeta) themeMeta.setAttribute('content', next === 'light' ? '#f4f5f7' : '#0b0e13');
-        events.emit('theme:changed', { theme: next });
+        events.emit(NC.eventNames.themeChanged, { theme: next });
         return next;
     }
 
     function applyLite(lite) {
         var next = !!lite;
         document.documentElement.setAttribute('data-lite', next ? 'true' : 'false');
-        events.emit('lite:changed', { lite: next });
+        events.emit(NC.eventNames.liteChanged, { lite: next });
         return next;
     }
 

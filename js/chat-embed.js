@@ -501,7 +501,7 @@
     }
 
     function bindLlmEvents() {
-        events.on('config:switched', function (payload) {
+        events.on(NC.eventNames.configSwitched, function (payload) {
             if (!payload || !payload.configId) return;
             if (payload.configId === currentProfileId) {
                 renderProfiles();
@@ -520,12 +520,12 @@
             }
             applyProfileSwitch(payload.configId, wantToast);
         });
-        events.on('llm:changed', function () {
+        events.on(NC.eventNames.llmChanged, function () {
             renderProfiles();
             applyCapabilities();
             updateGuide();
         });
-        events.on('conversation:save-failed', function (payload) {
+        events.on(NC.eventNames.conversationSaveFailed, function (payload) {
             if (payload && payload.reason === 'quota') {
                 ui.toast('本地存储空间不足，最近的消息可能未保存；请导出备份并清理旧会话。', { type: 'error', duration: 5200 });
             }

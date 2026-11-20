@@ -432,7 +432,7 @@
     }
 
     function If_emitEmail() {
-        try { if (NC.events && NC.events.emit) NC.events.emit('email:imported'); } catch (err) { /* ignore */ }
+        try { if (NC.events && NC.events.emit) NC.events.emit(NC.eventNames.emailImported); } catch (err) { /* ignore */ }
     }
 
     /** 从结构化备份恢复（先自动打一份「恢复前快照」） */

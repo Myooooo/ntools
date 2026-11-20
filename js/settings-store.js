@@ -79,7 +79,7 @@
         listeners.slice().forEach(function (fn) {
             try { fn(payload); } catch (err) { console.error('[NC] settings subscriber error:', err); }
         });
-        events.emit('settings:changed', payload);
+        events.emit(NC.eventNames.settingsChanged, payload);
     }
 
     function bindBridge() {
@@ -93,7 +93,7 @@
             var current = getState().currentId;
             if (current !== lastCurrentId) {
                 lastCurrentId = current;
-                events.emit('config:switched', { configId: current, config: getConfig() });
+                events.emit(NC.eventNames.configSwitched, { configId: current, config: getConfig() });
             }
         });
     }

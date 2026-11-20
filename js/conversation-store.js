@@ -375,7 +375,7 @@
                 maxMessages: MAX_MESSAGES
             });
         }
-        events.emit('conversation:truncated-on-load', {
+        events.emit(NC.eventNames.conversationTruncatedOnLoad, {
             sessions: rawSessions.length,
             overMessages: overMessages,
             maxSessions: MAX_SESSIONS,
@@ -392,7 +392,7 @@
             db = NC.chatDb;
             if (typeof db.setDegradedHandler === 'function') {
                 db.setDegradedHandler(function (reason) {
-                    events.emit('conversation:storage-fallback', { reason: 'degraded:' + reason });
+                    events.emit(NC.eventNames.conversationStorageFallback, { reason: 'degraded:' + reason });
                     useLocal = true;
                     db = null;
                     persistLocal();
@@ -422,7 +422,7 @@
             return finishBoot();
         }).catch(function (err) {
             bootError = err;
-            events.emit('conversation:storage-fallback', { reason: err && err.message ? err.message : String(err) });
+            events.emit(NC.eventNames.conversationStorageFallback, { reason: err && err.message ? err.message : String(err) });
             return bootWithLocal();
         });
     }
@@ -442,10 +442,10 @@
         try {
             var result = storage.set(KEY, snapshot());
             if (result && result.ok === false) {
-                events.emit('conversation:save-failed', { reason: result.quota ? 'quota' : 'unknown' });
+                events.emit(NC.eventNames.conversationSaveFailed, { reason: result.quota ? 'quota' : 'unknown' });
             }
         } catch (err) {
-            events.emit('conversation:save-failed', { reason: 'exception' });
+            events.emit(NC.eventNames.conversationSaveFailed, { reason: 'exception' });
         }
     }
 
@@ -511,7 +511,7 @@
             lastSig = '';
             return true;
         }).catch(function (err) {
-            events.emit('conversation:save-failed', {
+            events.emit(NC.eventNames.conversationSaveFailed, {
                 reason: err && (err.name === 'QuotaExceededError') ? 'quota' : 'exception'
             });
             return false;
@@ -536,7 +536,7 @@
         listeners.slice().forEach(function (fn) {
             try { fn(payload); } catch (err) { console.error('[NC] conversation subscriber error:', err); }
         });
-        events.emit('conversation:changed', payload);
+        events.emit(NC.eventNames.conversationChanged, payload);
     }
 
     /* ------------------------------------------------------------------ *

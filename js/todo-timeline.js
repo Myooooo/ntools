@@ -1316,7 +1316,7 @@
         if (typeof todoStore.subscribe === 'function') {
             state.offStore = todoStore.subscribe(function () { scheduleRender(); });
         } else if (NC.events) {
-            state.offStore = NC.events.on('todo:changed', function () { scheduleRender(); });
+            state.offStore = NC.events.on(NC.eventNames.todoChanged, function () { scheduleRender(); });
         }
     }
 
@@ -1364,8 +1364,8 @@
         bindStore();
         bindResize();
         if (NC.events) {
-            state.offTheme = NC.events.on('theme:changed', hitThemeRefresh);
-            state.offLite = NC.events.on('lite:changed', hitThemeRefresh);
+            state.offTheme = NC.events.on(NC.eventNames.themeChanged, hitThemeRefresh);
+            state.offLite = NC.events.on(NC.eventNames.liteChanged, hitThemeRefresh);
         }
         render(true);
         scheduleReveal();

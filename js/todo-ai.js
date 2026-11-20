@@ -833,5 +833,5 @@
         getWorkEndTime: getWorkEndTime
     };
 
-    events.emit('todo-ai:ready', {});
+    events.emit(NC.eventNames.todoAiReady, {});
 })(window);

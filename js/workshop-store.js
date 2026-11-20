@@ -35,7 +35,7 @@
                 if (global.console && global.console.warn) global.console.warn('[workshop] subscriber failed:', err && err.message);
             }
         });
-        try { if (NC.events && NC.events.emit) NC.events.emit('workshop:changed', payload); } catch (err) { /* ignore */ }
+        try { if (NC.events && NC.events.emit) NC.events.emit(NC.eventNames.workshopChanged, payload); } catch (err) { /* ignore */ }
     }
 
     function subscribe(fn) {

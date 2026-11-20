@@ -1356,11 +1356,11 @@
             if (event && event.target && event.target !== global) return; // 资源加载错误单独处理
             if (event && BENIGN_ERROR_RE.test(String(event.message || ''))) return;
             console.error('[NC] uncaught error:', event.error || event.message);
-            events.emit('app:error', { error: event.error, message: event.message });
+            events.emit(NC.eventNames.appError, { error: event.error, message: event.message });
         });
         global.addEventListener('unhandledrejection', function (event) {
             console.error('[NC] unhandled rejection:', event.reason);
-            events.emit('app:error', { error: event.reason, message: String(event.reason) });
+            events.emit(NC.eventNames.appError, { error: event.reason, message: String(event.reason) });
         });
     }
 

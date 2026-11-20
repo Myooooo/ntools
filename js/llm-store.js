@@ -366,14 +366,14 @@
         listeners.slice().forEach(function (fn) {
             try { fn(payload); } catch (err) { /* 视图异常不影响数据层 */ }
         });
-        events.emit('llm:changed', payload);
+        events.emit(NC.eventNames.llmChanged, payload);
     }
 
     function persist() {
         state.updatedAt = Date.now();
         var result = storage.set(KEY, state);
         if (!result || result.ok === false) {
-            events.emit('llm:error', {
+            events.emit(NC.eventNames.llmError, {
                 message: result && result.quota ? '本地存储空间不足，端点配置暂存内存' : '端点配置保存失败'
             });
         }
@@ -483,7 +483,7 @@
         if (state.currentProfileId === id) return true;
         state.currentProfileId = id;
         commit('select-profile');
-        events.emit('llm:profile-selected', { profileId: id, profile: getProfile(id) });
+        events.emit(NC.eventNames.llmProfileSelected, { profileId: id, profile: getProfile(id) });
         return true;
     }
 

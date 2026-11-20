@@ -172,10 +172,10 @@
             NC.theme.init();
         } catch (err) { /* ignore */ }
         updateThemeButtons();
-        NC.events.on('theme:changed', function () {
+        NC.events.on(NC.eventNames.themeChanged, function () {
             updateThemeButtons();
         });
-        NC.events.on('lite:changed', function () {
+        NC.events.on(NC.eventNames.liteChanged, function () {
             updateThemeButtons();
         });
         var toggle = document.getElementById('theme-toggle-btn');
@@ -708,19 +708,19 @@
                 onAction: exportTodoBackup
             });
         }
-        NC.events.on('quota:warning', function () {
+        NC.events.on(NC.eventNames.quotaWarning, function () {
             showBanner('本地存储空间接近上限（3.5 MB），建议导出备份并清理旧任务。', {
                 actionLabel: '导出待办备份',
                 onAction: exportTodoBackup
             });
         });
-        NC.events.on('storage:error', function () {
+        NC.events.on(NC.eventNames.storageError, function () {
             showBanner('本地存储读写异常，修改可能无法保存，请及时导出备份。', {
                 actionLabel: '导出待办备份',
                 onAction: exportTodoBackup
             });
         });
-        NC.events.on('storage:corrupt', function () {
+        NC.events.on(NC.eventNames.storageCorrupt, function () {
             showBanner('检测到损坏的本地数据，已备份原始内容并尝试恢复。', {});
         });
     }
@@ -775,8 +775,8 @@
         }
 
         frame.addEventListener('load', postTheme);
-        NC.events.on('theme:changed', postTheme);
-        NC.events.on('lite:changed', postTheme);
+        NC.events.on(NC.eventNames.themeChanged, postTheme);
+        NC.events.on(NC.eventNames.liteChanged, postTheme);
 
         global.addEventListener('message', function (event) {
             var data = event.data;
@@ -814,7 +814,7 @@
         var dismiss = document.getElementById('email-dismiss-btn');
         if (dismiss) dismiss.addEventListener('click', function () { showMissing(false); });
 
-        NC.events.on('email:imported', reload);
+        NC.events.on(NC.eventNames.emailImported, reload);
         armTimeout();
     }
 
@@ -837,20 +837,20 @@
         durabilityView.actions = document.getElementById('durability-actions');
         if (!durabilityView.bar || !durabilityView.text || !durabilityView.actions) return;
 
-        NC.events.on('todo:readonly', function (payload) {
+        NC.events.on(NC.eventNames.todoReadonly, function (payload) {
             durabilityView.readonly = payload && payload.reason ? payload : null;
             renderDurability();
         });
-        NC.events.on('todo:savestate', function (payload) {
+        NC.events.on(NC.eventNames.todoSavesate, function (payload) {
             durabilityView.save = payload || null;
             renderDurability();
         });
-        NC.events.on('storage:error', function () { renderDurability(); });
-        NC.events.on('quota:warning', function () { renderDurability(); });
-        NC.events.on('todo:limit', function (payload) {
+        NC.events.on(NC.eventNames.storageError, function () { renderDurability(); });
+        NC.events.on(NC.eventNames.quotaWarning, function () { renderDurability(); });
+        NC.events.on(NC.eventNames.todoLimit, function (payload) {
             ui.toast((payload && payload.message) || '已达数据上限', { type: 'warn', duration: 4200 });
         });
-        NC.events.on('conversation:truncated-on-load', function (payload) {
+        NC.events.on(NC.eventNames.conversationTruncatedOnLoad, function (payload) {
             var p = payload || {};
             ui.toast(
                 '聊天记录超出上限（会话 ' + p.sessions + ' / 单会话消息上限 ' + p.maxMessages +
@@ -858,7 +858,7 @@
                 { type: 'warn', duration: 6000 }
             );
         });
-        NC.events.on('todo:trash-purged', function (payload) {
+        NC.events.on(NC.eventNames.todoTrashPurged, function (payload) {
             ui.toast((payload && payload.message) || '已清理回收站旧任务', { type: 'info', duration: 4200 });
         });
         renderDurability();
@@ -1077,7 +1077,7 @@
      * 全局事件：错误提示（限流） + 首屏可见性
      * ------------------------------------------------------------------ */
     function bindGlobalEvents() {
-        NC.events.on('app:error', function (payload) {
+        NC.events.on(NC.eventNames.appError, function (payload) {
             var now = Date.now();
             if (now - lastErrorToast < 5000) return;
             lastErrorToast = now;

@@ -1184,8 +1184,8 @@
             }
         });
         if (NC.events && NC.events.on) {
-            NC.events.on('theme:changed', function () { syncFrameTheme(); });
-            NC.events.on('lite:changed', function () { syncFrameTheme(); });
+            NC.events.on(NC.eventNames.themeChanged, function () { syncFrameTheme(); });
+            NC.events.on(NC.eventNames.liteChanged, function () { syncFrameTheme(); });
         }
     }
 

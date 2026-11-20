@@ -109,7 +109,7 @@
                 }
             }
         });
-        events.emit('notes:changed', payload);
+        events.emit(NC.eventNames.notesChanged, payload);
     }
 
     function subscribe(fn) {
@@ -146,7 +146,7 @@
         state.readOnlyReason = reason;
         if (reason === 'other-window') startLeaseProbe();
         notify('read-only', { message: readOnlyMessage(reason) });
-        events.emit('notes:readonly', { reason: reason, message: readOnlyMessage(reason) });
+        events.emit(NC.eventNames.notesReadonly, { reason: reason, message: readOnlyMessage(reason) });
     }
 
     function readOnlyMessage(reason) {
@@ -259,7 +259,7 @@
             state.lastSavedAt = Date.now();
             clearRetry();
             warnedSave = false;
-            events.emit('notes:savestate', saveState());
+            events.emit(NC.eventNames.notesSavesate, saveState());
             return true;
         }).catch(function (err) {
             notes.forEach(function (note) { state.dirty[note.id] = 1; });
@@ -267,12 +267,12 @@
             scheduleRetry();
             if (!warnedSave) {
                 warnedSave = true;
-                events.emit('notes:error', {
+                events.emit(NC.eventNames.notesError, {
                     code: 'save-failed',
                     message: '笔记保存失败，修改暂存在内存中：' + (err && err.message ? err.message : err)
                 });
             }
-            events.emit('notes:savestate', saveState());
+            events.emit(NC.eventNames.notesSavesate, saveState());
             return false;
         });
     }
@@ -623,7 +623,7 @@
     function addImage(blob, name) {
         if (state.readOnly) return null;
         if (state.mode !== 'idb') {
-            events.emit('notes:error', { code: 'no-files', message: '当前为降级模式，暂不支持图片附件' });
+            events.emit(NC.eventNames.notesError, { code: 'no-files', message: '当前为降级模式，暂不支持图片附件' });
             return null;
         }
         if (!blob) return null;
@@ -811,7 +811,7 @@
             if (state.activeId === id) state.activeId = null;
         });
         if (removed.length) {
-            events.emit('notes:trash-purged', { removed: removed.length });
+            events.emit(NC.eventNames.notesTrashPurged, { removed: removed.length });
         }
         return removed.length;
     }
@@ -886,7 +886,7 @@
             state.loadError = err;
             state.mode = db().getMode ? db().getMode() : 'local';
             notify('init-error', { error: err });
-            events.emit('notes:error', { code: 'load-failed', message: '笔记库加载失败：' + (err && err.message ? err.message : err) });
+            events.emit(NC.eventNames.notesError, { code: 'load-failed', message: '笔记库加载失败：' + (err && err.message ? err.message : err) });
             return { mode: state.mode, notes: 0, folders: 0, activeId: null, error: err };
         });
         return initPromise;

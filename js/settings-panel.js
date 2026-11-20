@@ -1329,7 +1329,7 @@
                             groups: data.groups,
                             emails: data.emails
                         }));
-                        events.emit('email:imported');
+                        events.emit(NC.eventNames.emailImported);
                         toast('已导入 ' + data.emails.length + ' 个邮箱地址', 'success');
                         renderSection('email');
                     } catch (err) {
@@ -1672,7 +1672,7 @@
                             NC.chatEmbed.clearConversation();
                         } else if (NC.store.conversation) {
                             NC.store.conversation.clear();
-                            events.emit('conversation:changed', { messages: [] });
+                            events.emit(NC.eventNames.conversationChanged, { messages: [] });
                         }
                         toast('聊天记录已清除', 'success');
                     });
@@ -2043,7 +2043,7 @@
                     emails: Array.isArray(data.email.emails) ? data.email.emails : []
                 }));
                 done.push('邮件');
-                events.emit('email:imported');
+                events.emit(NC.eventNames.emailImported);
             } catch (err) { failed.push('邮件'); }
         }
         if (data.llm) {
@@ -2325,7 +2325,7 @@
         if (btn && btn.getAttribute('data-nc-settings-lazy') !== '1') {
             btn.addEventListener('click', function () { openSheet('profiles'); });
         }
-        events.on('app:open-settings', function (payload) {
+        events.on(NC.eventNames.appOpenSettings, function (payload) {
             openSheet(payload && payload.section);
         });
         // 端点变化时刷新（若设置面板打开且处于端点/Todo AI 分区）

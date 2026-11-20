@@ -84,7 +84,7 @@
         listeners.slice().forEach(function (fn) {
             try { fn(snapshot); } catch (err) { /* 视图错误不影响状态层 */ }
         });
-        events.emit('todo:changed', snapshot);
+        events.emit(NC.eventNames.todoChanged, snapshot);
     }
 
     function scheduleSave() {
@@ -119,7 +119,7 @@
 
     function emitSaveState() {
         var payload = saveState();
-        events.emit('todo:savestate', payload);
+        events.emit(NC.eventNames.todoSavesate, payload);
         return payload;
     }
 
@@ -181,7 +181,7 @@
         if (!was) {
             notify('read-only', { reason: reason, detail: state.readOnlyDetail });
         }
-        events.emit('todo:readonly', {
+        events.emit(NC.eventNames.todoReadonly, {
             reason: reason,
             detail: state.readOnlyDetail,
             message: readOnlyMessage(reason, detail)
@@ -209,7 +209,7 @@
         state.readOnlyDetail = null;
         state.readOnlyRaw = null;
         notify('read-write', {});
-        events.emit('todo:readonly', { reason: null, message: null });
+        events.emit(NC.eventNames.todoReadonly, { reason: null, message: null });
         emitSaveState();
         return true;
     }
@@ -223,7 +223,7 @@
         state.readOnlyReason = null;
         state.readOnlyDetail = null;
         state.readOnlyRaw = null;
-        events.emit('todo:readonly', { reason: null, message: null });
+        events.emit(NC.eventNames.todoReadonly, { reason: null, message: null });
         emitSaveState();
         if (state.dirty) saveNow();
         return true;
@@ -237,7 +237,7 @@
         state.readOnly = false;
         state.readOnlyReason = null;
         state.readOnlyDetail = null;
-        events.emit('todo:readonly', { reason: null, message: null });
+        events.emit(NC.eventNames.todoReadonly, { reason: null, message: null });
         var ok = saveNow();
         if (!ok) enterReadOnly('save-failed', { issues: payload });
         return ok;
@@ -278,7 +278,7 @@
                 scheduleRetry();
                 if (!warnedSave) {
                     warnedSave = true;
-                    events.emit('todo:error', {
+                    events.emit(NC.eventNames.todoError, {
                         code: 'save-failed',
                         message: result && result.quota
                             ? '本地存储空间不足，修改暂存在内存中，请导出备份'
@@ -329,7 +329,7 @@
         }).then(function (res) {
             if (res && res.ok) {
                 state.snapshotInfo = { at: now, slot: res.slot, backend: res.backend };
-                events.emit('todo:snapshot', state.snapshotInfo);
+                events.emit(NC.eventNames.todoSnapshot, state.snapshotInfo);
             }
         }).catch(function () { /* 快照失败不阻断主流程 */ });
     }
@@ -547,7 +547,7 @@
         });
         var removed = before - state.doc.tasks.length;
         if (removed > 0) {
-            events.emit('todo:trash-purged', {
+            events.emit(NC.eventNames.todoTrashPurged, {
                 removed: removed,
                 days: Math.round(TRASH_TTL / 86400000),
                 message: '已自动清理回收站中 ' + removed + ' 条超过 30 天的任务'
@@ -594,7 +594,7 @@
             state.saveError = true;
             ensureUi();
             notify('init', { loadInfo: { from: 'fallback' } });
-            events.emit('todo:error', { code: 'load-failed', message: '待办数据加载失败，已使用空白列表' });
+            events.emit(NC.eventNames.todoError, { code: 'load-failed', message: '待办数据加载失败，已使用空白列表' });
         }
 
         if (externalUnsub) externalUnsub();
@@ -1021,7 +1021,7 @@
         if (!title) return null;
         /* 上限护栏：宁可拒绝新增，也不要造出一个"下次加载会被截断"的文档 */
         if (state.doc.tasks.length >= schema.LIMITS.tasks) {
-            events.emit('todo:limit', {
+            events.emit(NC.eventNames.todoLimit, {
                 code: 'tasks',
                 limit: schema.LIMITS.tasks,
                 message: '任务已达 ' + schema.LIMITS.tasks + ' 条上限，请先清理已完成或回收站任务'
@@ -1148,7 +1148,7 @@
                 }, { label: '完成循环任务' });
                 if (ok) {
                     notify('task:recurred', { id: id, nextDue: nextDue });
-                    events.emit('todo:recurred', {
+                    events.emit(NC.eventNames.todoRecurred, {
                         id: id,
                         nextDue: nextDue,
                         freq: nextRecurrence.freq,

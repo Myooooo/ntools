@@ -41,6 +41,7 @@
 <script defer src="../js/marked.min.js"></script>
 <script defer src="../js/purify.min.js"></script>
 <script defer src="../js/core.js"></script>
+<script defer src="../js/event-names.js"></script>
 <script defer src="../js/modules.js"></script>
 <script defer src="../js/compat.js"></script>
 <script defer src="../js/icons.js"></script>
@@ -830,6 +831,19 @@
             eq(list[1].id, 'b2', 'b2 顺序被覆盖为 5');
             eq(list[2].id, 'b1');
         });
+        t('events', '事件常量唯一且命名空间清晰', function () {
+            var names = NC.eventNames;
+            assert(names && typeof names === 'object');
+            var values = Object.keys(names).map(function (key) { return names[key]; });
+            assert(values.length > 20);
+            var seen = Object.create(null);
+            values.forEach(function (value) {
+                assert(/^[a-z0-9-]+:[a-z0-9-]+$/.test(value), value);
+                assert(!seen[value], '重复事件：' + value);
+                seen[value] = true;
+            });
+        });
+
         t('prefs', '视图偏好读写保持原始字符串格式', function () {
             var key = 'ntools.test.prefs';
             NC.prefs.remove(key);

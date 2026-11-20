@@ -94,7 +94,7 @@
     }
 
     function wireEvents() {
-        NC.events.on('todo:error', function (payload) {
+        NC.events.on(NC.eventNames.todoError, function (payload) {
             var now = Date.now();
             if (now - errorToastAt < 4000) return;
             errorToastAt = now;
@@ -104,13 +104,13 @@
                 action: { label: '导出备份', onClick: exportJson }
             });
         });
-        NC.events.on('storage:error', function () {
+        NC.events.on(NC.eventNames.storageError, function () {
             /* 由 ntools-app 的常驻横幅负责，这里不重复提示 */
         });
         store.subscribe(function () {
             updateChrome();
         });
-        NC.events.on('todo:recurred', function (payload) {
+        NC.events.on(NC.eventNames.todoRecurred, function (payload) {
             if (!payload || !util.isFiniteNum(payload.nextDue)) return;
             ui.toast('循环任务已完成，下次到期 ' + util.formatDateTime(payload.nextDue), {
                 type: 'success',
@@ -129,12 +129,12 @@
      * ------------------------------------------------------------------ */
     function initAiIntegration() {
         refreshQuickDue();
-        NC.events.on('llm:changed', function (payload) {
+        NC.events.on(NC.eventNames.llmChanged, function (payload) {
             if (payload && (payload.reason === 'work-end-time' || payload.reason === 'todo-ai')) {
                 refreshQuickDue();
             }
         });
-        NC.events.on('llm:profile-selected', function () {
+        NC.events.on(NC.eventNames.llmProfileSelected, function () {
             refreshQuickDue();
         });
     }
@@ -187,7 +187,7 @@
             return false;
         }
         ui.toast('已识别，请确认后创建', { type: 'success', duration: 4200 });
-        NC.events.emit('todo:ai-filled', { data: data });
+        NC.events.emit(NC.eventNames.todoAiFilled, { data: data });
         return true;
     }
 
