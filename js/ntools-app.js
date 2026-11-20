@@ -11,8 +11,8 @@
     var icons = NC.icons;
     var ui = NC.ui;
 
-    var TABS = ['todo', 'email', 'md', 'nchat', 'workshop'];
-    var PAGE_TITLES = {
+    var TABS = (NC.modules && NC.modules.tabIds) ? NC.modules.tabIds() : ['todo', 'email', 'md', 'nchat', 'workshop'];
+    var PAGE_TITLES = (NC.modules && NC.modules.pageTitles) ? NC.modules.pageTitles() : {
         todo: '待办事项',
         email: '邮箱维护',
         md: '笔记本',

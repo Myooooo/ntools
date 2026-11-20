@@ -41,6 +41,7 @@
 <script defer src="../js/marked.min.js"></script>
 <script defer src="../js/purify.min.js"></script>
 <script defer src="../js/core.js"></script>
+<script defer src="../js/modules.js"></script>
 <script defer src="../js/compat.js"></script>
 <script defer src="../js/icons.js"></script>
 <script defer src="../js/storage.js"></script>
@@ -828,6 +829,25 @@
             eq(list[1].id, 'b2', 'b2 顺序被覆盖为 5');
             eq(list[2].id, 'b1');
         });
+        t('modules', '模块注册表：导航 / 设置 / 启动页派生一致', function () {
+            var m = NC.modules;
+            assert(m && typeof m.tabIds === 'function');
+            eq(m.tabIds().join(','), 'todo,email,md,nchat,workshop');
+            var settings = m.settingsSections();
+            eq(settings.length, 5);
+            eq(settings.map(function (x) { return x.id; }).join(','), 'todo,email,notes,nchat,workshop');
+            var titles = m.pageTitles();
+            eq(titles.md, '笔记本');
+            eq(titles.workshop, '创意工坊');
+            var starts = m.startOptions();
+            eq(starts.length, 5);
+            eq(starts[2].id, 'md');
+            starts.forEach(function (item) {
+                assert(!!titles[item.id], item.id + ' 应有页面标题');
+                assert(!!m.get(item.id), item.id + ' 应可按 id 查');
+            });
+        });
+
         /* ---------------- storage ---------------- */
         t('storage', 'available 与 memoryMode 一致', function () {
             eq(typeof NC.storage.available, 'boolean');
