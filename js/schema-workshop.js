@@ -35,7 +35,8 @@
         effort: 'high',               // low | medium | high
         contextLimit: 256000,
         outputLimit: 25600,
-        endpointId: ''
+        endpointId: '',
+        allowNetwork: true
     };
 
     var EFFORTS = ['low', 'medium', 'high'];
@@ -90,7 +91,8 @@
             effort: DEFAULT_PARAMS.effort,
             contextLimit: DEFAULT_PARAMS.contextLimit,
             outputLimit: DEFAULT_PARAMS.outputLimit,
-            endpointId: DEFAULT_PARAMS.endpointId
+            endpointId: DEFAULT_PARAMS.endpointId,
+            allowNetwork: DEFAULT_PARAMS.allowNetwork
         };
         var temp = Number(src.temperature);
         if (isFinite(temp)) out.temperature = Math.round(clamp(temp, 0, 2) * 100) / 100;
@@ -104,6 +106,7 @@
         var outLimit = parseCount(src.outputLimit, { min: 256, max: LIMITS.outputMax });
         if (outLimit != null) out.outputLimit = outLimit;
         out.endpointId = typeof src.endpointId === 'string' ? src.endpointId.trim() : '';
+        if (typeof src.allowNetwork === 'boolean') out.allowNetwork = src.allowNetwork;
         return out;
     }
 
@@ -182,7 +185,8 @@
             '}' +
             'try{if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement);}' +
             'else{setInterval(h,600);}}catch(e){setInterval(h,600);}' +
-            "window.addEventListener('load',h);setTimeout(h,60);setTimeout(h,400);" +
+            "window.addEventListener('load',function(){h();try{parent.postMessage({type:'nc-ws-ready'},'*');}catch(e){}});" +
+            "setTimeout(h,60);setTimeout(h,400);" +
             "window.addEventListener('error',function(e){try{parent.postMessage({type:'nc-ws-error',message:String(e.message||'脚本错误')},'*');}catch(x){}});" +
             "window.addEventListener('unhandledrejection',function(e){var r=e.reason;try{parent.postMessage({type:'nc-ws-error',message:String((r&&r.message)||r||'Promise 错误')},'*');}catch(x){}});" +
             '})();</script>';

@@ -18,8 +18,7 @@
     var schema = null;
     var unsubscribe = null;
     var drag = { id: null, category: null };
-    var frameObjectUrl = null;
-    var lastPreviewHtml = '';
+    var host = null;
     var sideRelease = null;
     var state = {
         initialized: false,
@@ -270,100 +269,86 @@
     }
 
     /* ------------------------------------------------------------------ *
-     * 预览
+     * 预览（统一由 NC.previewHost 管理 blob / sandbox / 错误）
      * ------------------------------------------------------------------ */
-    function releaseFrameUrl() {
-        if (!frameObjectUrl) return;
-        try { global.URL.revokeObjectURL(frameObjectUrl); } catch (err) { /* ignore */ }
-        frameObjectUrl = null;
-    }
-
-    /**
-     * 把生成好的文档装进 iframe。
-     * 注意：不能用 srcdoc —— srcdoc 文档会继承主应用的 CSP（script-src 'self' file:），
-     * 生成页面里的内联脚本会被整体拦截；blob: 文档有自己的 CSP，脚本可正常执行。
-     */
-    function setFrameHtml(html, allowSameOrigin) {
-        if (!els.frame) return;
-        lastPreviewHtml = html;
-        releaseFrameUrl();
-        els.frame.removeAttribute('srcdoc');
-        els.frame.setAttribute('sandbox', allowSameOrigin
-            ? 'allow-scripts allow-forms allow-modals allow-same-origin'
-            : 'allow-scripts allow-forms allow-modals');
-        var blob = null;
-        try {
-            blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-        } catch (err) { blob = null; }
-        if (blob && global.URL && typeof global.URL.createObjectURL === 'function') {
-            frameObjectUrl = global.URL.createObjectURL(blob);
-            els.frame.src = frameObjectUrl;
-        } else {
-            els.frame.src = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
-        }
-        setHidden(els.frame, false);
-    }
-
     function clearFrame() {
-        if (!els.frame) return;
-        releaseFrameUrl();
-        els.frame.removeAttribute('src');
-        els.frame.removeAttribute('srcdoc');
-        setHidden(els.frame, true);
+        if (host) host.clear();
     }
-
-    var themeSeq = 0;
 
     /** 主题/ Lite 变化：内置工具只发消息（不重载），自定义应用仍重载 */
     function syncFrameTheme(fromLoad) {
         var item = currentItem();
         if (!item || !els.frame || els.frame.hidden) return;
         if (item.kind !== 'builtin') {
-            // 自定义应用的主题在 wrapHtml 时烘焙；只有主题变化才 reload，
-            // 不能在 iframe load 时 reload（会无限循环）
             if (!fromLoad) reloadFrame();
             return;
         }
-        try {
-            els.frame.contentWindow.postMessage({
-                type: 'nc-ws-theme',
-                theme: currentTheme(),
-                lite: isLite(),
-                requestId: String(++themeSeq)
-            }, '*');
-        } catch (err) {
-            reloadFrame();
-        }
+        if (!host || !host.postTheme(currentTheme(), isLite())) reloadFrame();
     }
 
     function openBuiltin(item) {
-        if (!els.frame) return;
-        els.frame.removeAttribute('srcdoc');
-        els.frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-same-origin');
+        resetErrors();
         var src = item.file + '?theme=' + currentTheme() + '&lite=' + (isLite() ? '1' : '0');
-        setHidden(els.frame, false);
+        if (host) host.mountUrl(src, { trusted: true });
+        els.frame.title = (item.title || '工具') + ' · 预览';
         els.frame.style.height = '';
         els.frame.style.width = '';
-        els.frame.title = (item.title || '工具') + ' · 预览';
-        els.frame.src = src;
         setHidden(els.empty, true);
     }
 
     function openCustom(item) {
-        if (!els.frame) return;
-        els.frame.removeAttribute('src');
-        els.frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
+        resetErrors();
+        var params = store.getParams();
         var html = schema.wrapHtml(item.code || '', {
             theme: currentTheme(),
-            allowNetwork: true,
+            allowNetwork: params.allowNetwork !== false,
             title: item.title
         });
-        setHidden(els.frame, false);
+        if (host) host.mountHtml(html, { trusted: false });
+        els.frame.title = (item.title || '应用') + ' · 预览';
         els.frame.style.height = '';
         els.frame.style.width = '';
-        els.frame.title = (item.title || '工具') + ' · 预览';
-        els.frame.srcdoc = html;
         setHidden(els.empty, true);
+    }
+
+    function renderErrors() {
+        var errors = host ? host.getErrors() : [];
+        if (els.errorsBtn) {
+            els.errorsBtn.hidden = !errors.length;
+            els.errorsBtn.setAttribute('aria-expanded', els.errorsPanel && !els.errorsPanel.hidden ? 'true' : 'false');
+        }
+        if (els.errorsCount) els.errorsCount.textContent = String(errors.length);
+        if (els.errorsPanel && !errors.length) {
+            els.errorsPanel.hidden = true;
+            if (els.errorsBtn) els.errorsBtn.setAttribute('aria-expanded', 'false');
+        }
+        if (!els.errorsList) return;
+        els.errorsList.textContent = '';
+        errors.forEach(function (entry) {
+            var row = document.createElement('div');
+            row.className = 'ws-error-row';
+            var text = document.createElement('span');
+            text.textContent = entry.message;
+            var time = document.createElement('time');
+            time.textContent = new Date(entry.at).toLocaleTimeString('zh-CN', { hour12: false });
+            row.appendChild(text);
+            row.appendChild(time);
+            els.errorsList.appendChild(row);
+        });
+    }
+
+    function resetErrors() {
+        if (host) host.clearErrors();
+        state.lastError = '';
+        renderErrors();
+    }
+
+    function toggleErrors(show) {
+        if (!els.errorsPanel) return;
+        var next = typeof show === 'boolean' ? show : els.errorsPanel.hidden;
+        if (next) els.errorsPanel.removeAttribute('hidden');
+        else els.errorsPanel.setAttribute('hidden', '');
+        if (els.errorsBtn) els.errorsBtn.setAttribute('aria-expanded', next ? 'true' : 'false');
     }
 
     function currentItem() {
@@ -530,24 +515,6 @@
     /* ------------------------------------------------------------------ *
      * 事件
      * ------------------------------------------------------------------ */
-    function bindFrameMessages() {
-        global.addEventListener('message', function (event) {
-            var data = event.data;
-            if (!data || typeof data !== 'object') return;
-            if (!els.frame || event.source !== els.frame.contentWindow) return;
-            if (data.type === 'nc-ws-height') {
-                // v8：预览恒为 100% 视口，工具内部滚动；不再按内容高度撑开
-                return;
-            } else if (data.type === 'nc-ws-error') {
-                var message = String(data.message || '页面脚本错误');
-                if (message && message !== state.lastError) {
-                    state.lastError = message;
-                    toast('页面脚本错误：' + message.slice(0, 80), 'error');
-                }
-            }
-        });
-    }
-
     /* ------------------------------------------------------------------ *
      * 生成草稿
      * ------------------------------------------------------------------ */
@@ -839,11 +806,15 @@
 
     function renderDraft() {
         if (!draft.code || !els.frame) return;
-        setFrameHtml(schema.wrapHtml(draft.code, {
+        resetErrors();
+        var params = store.getParams();
+        var html = schema.wrapHtml(draft.code, {
             theme: currentTheme(),
-            allowNetwork: true,
+            allowNetwork: params.allowNetwork !== false,
             title: draft.title
-        }), false);
+        });
+        if (host) host.mountHtml(html, { trusted: false });
+        els.frame.title = (draft.title || '创意工坊') + ' · 预览';
         setHidden(els.empty, true);
     }
 
@@ -1031,6 +1002,18 @@
                 }
             });
         }
+        if (els.errorsBtn) {
+            els.errorsBtn.addEventListener('click', function (event) {
+                event.stopPropagation();
+                toggleErrors();
+            });
+        }
+        if (els.errorsClear) {
+            els.errorsClear.addEventListener('click', function () {
+                resetErrors();
+                toast('已清除运行错误', 'success');
+            });
+        }
         if (els.chatClose) {
             els.chatClose.addEventListener('click', function () {
                 if (draft.streaming) stopGeneration();
@@ -1117,7 +1100,10 @@
             stopBtn: $('ws-stop-btn'), chat: $('ws-chat'), chatLog: $('ws-chat-log'),
             prompt: $('ws-prompt'), generateBtn: $('ws-generate-btn'), chatHint: $('ws-chat-hint'),
             chatClose: $('ws-chat-close'), versions: $('ws-versions-btn'),
-            endpointSelect: $('ws-endpoint-select'), settingsBtn: $('ws-settings-btn')
+            endpointSelect: $('ws-endpoint-select'), settingsBtn: $('ws-settings-btn'),
+            errorsBtn: $('ws-errors-btn'), errorsPanel: $('ws-errors-panel'),
+            errorsList: $('ws-errors-list'), errorsCount: $('ws-errors-count'),
+            errorsClear: $('ws-errors-clear')
         };
         store = NC.store && NC.store.workshop;
         schema = NC.schema && NC.schema.workshop;
@@ -1135,9 +1121,26 @@
                 payload.reason === 'app:delete' || payload.reason === 'app:rename' || payload.reason === 'view:pin')) {
                 renderList();
             }
+            if (payload && payload.reason === 'params') {
+                if (draft.active && draft.code) renderDraft();
+                else renderActive();
+            }
         });
+        host = (NC.previewHost && typeof NC.previewHost.create === 'function')
+            ? NC.previewHost.create(els.frame, {
+                onError: function (entry) {
+                    if (entry.message !== state.lastError) {
+                        state.lastError = entry.message;
+                        toast('页面脚本错误：' + entry.message.slice(0, 80), 'error');
+                    }
+                    renderErrors();
+                },
+                onReady: function () {
+                    state.lastError = '';
+                }
+            })
+            : null;
         bind();
-        bindFrameMessages();
         if (els.frame) els.frame.addEventListener('load', function () { syncFrameTheme(true); });
         applySideCollapsed(readSideCollapsed());
         state.initialized = true;
@@ -1164,6 +1167,6 @@
         isReady: function () { return state.initialized; },
         select: selectItem,
         getActiveId: function () { return state.activeId; },
-        getPreviewSource: function () { return lastPreviewHtml; }
+        getPreviewSource: function () { return host ? host.getSource() : ''; }
     };
 })(window);

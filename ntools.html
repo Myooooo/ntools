@@ -586,6 +586,17 @@
                                 <span class="ws-loading__text" id="ws-loading-text">正在生成…</span>
                                 <button type="button" class="nc-btn nc-btn--sm" id="ws-stop-btn">停止</button>
                             </div>
+                            <button type="button" class="ws-errors-btn" id="ws-errors-btn" hidden aria-label="查看运行错误" title="查看运行错误" aria-expanded="false">
+                                <span data-icon="alert" data-icon-size="15"></span>
+                                <span class="ws-errors-btn__count" id="ws-errors-count">0</span>
+                            </button>
+                            <div class="ws-errors-panel" id="ws-errors-panel" hidden role="dialog" aria-label="运行错误">
+                                <div class="ws-errors-panel__head">
+                                    <span>运行错误</span>
+                                    <button type="button" class="nc-btn nc-btn--sm nc-btn--ghost" id="ws-errors-clear">清除</button>
+                                </div>
+                                <div class="ws-errors-panel__list nc-scroll" id="ws-errors-list"></div>
+                            </div>
                             <div class="ws-empty" id="ws-empty">
                                 <span class="ws-empty__icon" data-icon="wand" data-icon-size="22" aria-hidden="true"></span>
                                 <p class="ws-empty__title">选择一个工具开始</p>

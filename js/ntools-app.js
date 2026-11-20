@@ -406,6 +406,7 @@
         'js/workshop-builtin.js',
         'js/workshop-db.js',
         'js/workshop-store.js',
+        'js/preview-host.js',
         'js/workshop-view.js'
     ];
     var workshopBundlePromise = null;

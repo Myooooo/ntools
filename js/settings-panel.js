@@ -1394,6 +1394,14 @@
             setStatus('top_p 已更新为 ' + next);
         });
 
+        var networkRow = util.e('div', { class: 'sp-row' });
+        networkRow.appendChild(util.e('span', { class: 'sp-row__label', text: '允许生成页联网' }));
+        networkRow.appendChild(switchField('关闭后生成页的 fetch / 外链脚本一律被 CSP 拦截', params.allowNetwork !== false, function (checked) {
+            store.setParams({ allowNetwork: checked });
+            setStatus(checked ? '生成页可以访问网络' : '生成页已禁止联网');
+        }));
+        card.appendChild(networkRow);
+
         var reasonRow = util.e('div', { class: 'sp-row' });
         reasonRow.appendChild(util.e('span', { class: 'sp-row__label', text: '推理' }));
         reasonRow.appendChild(switchField('发送推理请求（关闭则不带推理字段）', params.reasoning, function (checked) {

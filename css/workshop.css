@@ -651,3 +651,87 @@ html[data-lite="true"] .ws-loading {
     .ws-chat__tools { width: 100%; justify-content: flex-end; }
     .ws-endpoint-select { max-width: none; flex: 1; }
 }
+
+/* ---------- 生成页运行错误 ---------- */
+.ws-errors-btn {
+    position: absolute;
+    z-index: 6;
+    left: 14px;
+    bottom: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid var(--nc-danger-soft, rgba(255, 122, 114, .3));
+    border-radius: 99px;
+    background: var(--nc-danger-soft, rgba(255, 122, 114, .14));
+    color: var(--nc-danger, #ff7a72);
+    font: inherit;
+    font-size: var(--nc-fs-xs);
+    cursor: pointer;
+    transition: background-color var(--nc-dur-fast) var(--nc-ease), border-color var(--nc-dur-fast) var(--nc-ease);
+}
+
+.ws-errors-btn:hover {
+    border-color: var(--nc-danger, #ff7a72);
+}
+
+.ws-errors-btn__count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+}
+
+.ws-errors-panel {
+    position: absolute;
+    z-index: 7;
+    left: 14px;
+    bottom: 52px;
+    width: min(360px, calc(100% - 28px));
+    max-height: 260px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--nc-border-strong);
+    border-radius: var(--nc-radius-md);
+    background: var(--nc-elevated, var(--nc-surface));
+    box-shadow: var(--nc-shadow-3);
+    overflow: hidden;
+}
+
+.ws-errors-panel__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px 8px 12px;
+    border-bottom: 1px solid var(--nc-border-faint);
+    color: var(--nc-text-2);
+    font-size: var(--nc-fs-sm);
+    font-weight: 600;
+}
+
+.ws-errors-panel__list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    overflow-y: auto;
+}
+
+.ws-error-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 9px;
+    border-radius: var(--nc-radius-sm);
+    background: var(--nc-danger-soft, rgba(255, 122, 114, .12));
+    color: var(--nc-text);
+    font-size: var(--nc-fs-xs);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.ws-error-row time {
+    color: var(--nc-text-3);
+    font-size: var(--nc-fs-2xs);
+    font-variant-numeric: tabular-nums;
+}
