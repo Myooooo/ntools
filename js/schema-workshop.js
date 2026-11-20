@@ -196,6 +196,23 @@
             "try{Object.defineProperty(c,'randomUUID',{value:uuid,configurable:true,writable:true});}catch(e){try{c.randomUUID=uuid;}catch(e2){}}" +
             '}' +
             '}catch(e){}' +
+            /* 沙箱是不透明源：localStorage/sessionStorage 读取会抛 SecurityError，
+               在页面脚本之前替换为内存实现（同一页面内可读写，刷新/切页后重置）。 */
+            'try{' +
+            'var __mem={},__mem2={};' +
+            'function __mkStore(m){' +
+            'var s={getItem:function(k){k=String(k);return Object.prototype.hasOwnProperty.call(m,k)?m[k]:null;},' +
+            'setItem:function(k,v){m[String(k)]=String(v);},' +
+            'removeItem:function(k){delete m[String(k)];},' +
+            'clear:function(){Object.keys(m).forEach(function(k){delete m[k];});},' +
+            'key:function(i){var ks=Object.keys(m);return i>=0&&i<ks.length?ks[i]:null;}};' +
+            'try{Object.defineProperty(s,"length",{get:function(){return Object.keys(m).length;}});}catch(e){}' +
+            'return s;}' +
+            'try{Object.defineProperty(window,"localStorage",{configurable:true,get:function(){return window.__ncLocalStore||(window.__ncLocalStore=__mkStore(__mem));}});}' +
+            'catch(e){try{window.localStorage=__mkStore(__mem);}catch(e2){}}' +
+            'try{Object.defineProperty(window,"sessionStorage",{configurable:true,get:function(){return window.__ncSessionStore||(window.__ncSessionStore=__mkStore(__mem2));}});}' +
+            'catch(e){try{window.sessionStorage=__mkStore(__mem2);}catch(e2){}}' +
+            '}catch(e){}' +
             "window.addEventListener('error',function(e){try{parent.postMessage({type:'nc-ws-error',message:String(e.message||'脚本错误')},'*');}catch(x){}});" +
             "window.addEventListener('unhandledrejection',function(e){var r=e.reason;try{parent.postMessage({type:'nc-ws-error',message:String((r&&r.message)||r||'Promise 错误')},'*');}catch(x){}});" +
             "window.addEventListener('message',function(e){" +
@@ -282,8 +299,9 @@
             '7. 数据只放在内存或 sessionStorage；不要写入 localStorage。',
             '8. 需求不完整时先给一个可用的最小版本，不要反问。',
             '9. 所有 const/let/class 必须先声明后使用；不要写顶层立即调用、却引用后面才声明变量的代码（会报 Cannot access before initialization）。',
-            '10. 不要依赖 crypto.randomUUID、crypto.subtle、localStorage 等可能不可用的 API；需要唯一 ID 时用 Date.now() + Math.random()。',
-            '11. <script> 尽量放在 </body> 前，事件绑定放在 DOM 就绪之后。'
+            '10. 不要依赖 crypto.randomUUID、crypto.subtle 等可能不可用的 API；需要唯一 ID 时用 Date.now() + Math.random()。',
+            '11. 沙箱内 localStorage/sessionStorage 是内存垫片（刷新即重置），不要依赖持久化；不要使用 IndexedDB、caches、serviceWorker。',
+            '12. <script> 尽量放在 </body> 前，事件绑定放在 DOM 就绪之后。'
         ].join('\n');
     }
 
