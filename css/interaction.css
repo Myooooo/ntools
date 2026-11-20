@@ -328,31 +328,12 @@ html[data-lite="true"] .chat-toolbar--embed.is-switching::after {
 /* --------------------------------------------------------------------------
  * 4. 材质高光：浮层顶部一条亮边，表达“这是一层材料”而不是一块纯色
  * -------------------------------------------------------------------------- */
-html:not([data-lite="true"]) .nc-menu,
-html:not([data-lite="true"]) .nc-modal,
-html:not([data-lite="true"]) .chat-menu,
-html:not([data-lite="true"]) .nc-select-pop {
-    box-shadow:
-        inset 0 1px 0 var(--nc-glass-highlight),
-        var(--nc-shadow-3);
-}
-
-html:not([data-lite="true"]) .nc-toast,
+/* v8.2：菜单/弹层/确认框/设置面板的阴影统一由 materials.css 的材质类接管，
+ * 这里只保留尚未迁移到材质类的自绘面板。 */
 html:not([data-lite="true"]) .chat-stats__panel {
     box-shadow:
         inset 0 1px 0 var(--nc-glass-highlight),
         var(--nc-shadow-2);
-}
-
-html:not([data-lite="true"]) .settings-sheet__panel {
-    box-shadow:
-        inset 0 1px 0 var(--nc-glass-highlight),
-        -24px 0 80px -32px rgba(0, 0, 0, 0.5);
-}
-
-/* Lite：设置 Sheet 的 80px 投影是整页最贵的一层，直接去掉 */
-html[data-lite="true"] .settings-sheet__panel {
-    box-shadow: none;
 }
 
 /* v6.0：QR 工作台改为与图片工具同构的整块双栏面板（布局在 tools.css §4 定义），
@@ -360,14 +341,12 @@ html[data-lite="true"] .settings-sheet__panel {
 
 
 /* ==========================================================================
- * v6.4 材质：浮层玻璃（仅标准模式）
- * 说明：Modal / Sheet 面板保持实色——它们叠在已经模糊的遮罩上，
- *       再加一层整块 backdrop-filter 只会拖慢 ARM 软渲染。
+ * v6.4 材质：尚未迁移到 .nc-material-* 的自绘面板（仅标准模式）
+ * 说明：菜单 / 下拉 / Toast / 聊天菜单 / Modal / Sheet 已由 materials.css
+ *       或 settings.css 接管；这里只保留 notes 面板与日期弹层等旧组件。
  * ========================================================================== */
-html:not([data-lite="true"]) .nc-menu,
-html:not([data-lite="true"]) .nc-select-pop,
-html:not([data-lite="true"]) .chat-menu,
-html:not([data-lite="true"]) .nc-toast,
+/* ui.js 的菜单/下拉/Toast 已带 .nc-material-float；聊天菜单也显式加了这个类。
+ * 这里不再二次覆盖，避免旧玻璃 token 把新材质的透明度盖回去。 */
 html:not([data-lite="true"]) .nc-dt__pop,
 html:not([data-lite="true"]) .notes-palette__panel,
 html:not([data-lite="true"]) .notes-ac {

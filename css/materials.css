@@ -169,3 +169,13 @@ html[data-lite="true"] .nc-liquid::before {
         background-image: none;
     }
 }
+
+/* 系统要求更高对比度时，确认框也转实色，避免径向高光抢文字 */
+@media (prefers-contrast: more) {
+    .nc-modal {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background-color: var(--nc-elevated);
+        background-image: none;
+    }
+}

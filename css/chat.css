@@ -32,7 +32,7 @@
     overflow: hidden;
 }
 
-/* 滚动区 */
+/* 滚动区：顶部让出绝对定位工具栏，消息可滚到玻璃下方 */
 .chat-main {
     position: relative;
     display: flex;
@@ -44,6 +44,10 @@
     padding: var(--nc-space-5) var(--nc-space-6) var(--nc-space-4);
     outline: none;
     scroll-behavior: smooth;
+}
+
+.chat-toolbar--embed ~ .chat-main {
+    padding-top: calc(56px + var(--nc-space-5));
 }
 
 .chat-list {
@@ -68,7 +72,10 @@
  * 1. 工具栏：小面积玻璃 + 发丝线；端点/状态/操作用对齐建立层级
  * -------------------------------------------------------------------------- */
 .chat-toolbar--embed {
-    position: relative;
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
     z-index: var(--nc-z-sticky);
     display: flex;
     align-items: center;
@@ -220,15 +227,12 @@ html[data-theme="light"] #chat-profile-select {
 .chat-menu {
     position: absolute;
     z-index: var(--nc-z-dropdown);
-    top: calc(100% + 6px);
+    top: calc(56px + 6px);
     right: var(--nc-space-3);
     min-width: 196px;
     max-width: 300px;
     padding: 5px;
-    border: 1px solid var(--nc-border-strong);
     border-radius: var(--nc-radius-md);
-    background: var(--nc-elevated);
-    box-shadow: var(--nc-shadow-3);
     transform-origin: top right;
     transform: scale(0.97) translateY(-2px);
     opacity: 0;
@@ -1525,6 +1529,15 @@ html[data-lite="true"] .chat-msg__actions {
         height: 46px;
         padding: 0 var(--nc-space-2);
         gap: var(--nc-space-2);
+    }
+
+    .chat-toolbar--embed ~ .chat-main {
+        padding-top: calc(46px + var(--nc-space-3));
+    }
+
+    .chat-menu {
+        top: calc(46px + 6px);
+        right: var(--nc-space-2);
     }
 
     .chat-toolbar__left {

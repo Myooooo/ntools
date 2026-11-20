@@ -1635,10 +1635,10 @@ html[data-lite="true"] .settings-sheet__backdrop {
     }
 }
 
-/* 落位后再叠一层柔和模糊：避免打开动画期间逐帧重算大面板 */
+/* 落位后再叠一层柔和模糊（18px）：避免打开动画期间逐帧重算大面板 */
 .settings-sheet.is-settled .settings-sheet__panel {
-    -webkit-backdrop-filter: blur(12px) saturate(140%);
-    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    backdrop-filter: blur(18px) saturate(150%);
 }
 
 /* 面板内容透出玻璃底：导航与主区不再铺实色 */
@@ -1722,6 +1722,15 @@ html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
 
 
 @media (prefers-reduced-transparency: reduce) {
+    .settings-sheet.is-settled .settings-sheet__panel {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background-color: var(--nc-bg-soft);
+        background-image: none;
+    }
+}
+
+@media (prefers-contrast: more) {
     .settings-sheet.is-settled .settings-sheet__panel {
         -webkit-backdrop-filter: none;
         backdrop-filter: none;

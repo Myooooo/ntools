@@ -452,3 +452,12 @@ html[data-lite="true"] input[type="range"]::-webkit-slider-thumb {
         background-image: none;
     }
 }
+
+@media (prefers-contrast: more) {
+    .tselect__list {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background-color: var(--nc-elevated);
+        background-image: none;
+    }
+}

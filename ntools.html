@@ -109,7 +109,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" id="rail-version" title="版本">v8.2</span>
+            <span class="tools-rail__version" id="rail-version" title="版本">v8.3</span>
         </div>
     </aside>
 
@@ -447,29 +447,30 @@
                                 <span data-icon="edit" data-icon-size="15"></span>
                                 <span>系统提示词</span>
                             </button>
-                            <button id="chat-menu-btn" class="nc-btn nc-btn--icon nc-btn--sm" type="button" title="聊天菜单" aria-label="聊天菜单" aria-haspopup="menu" aria-expanded="false">
+                            <button id="chat-menu-btn" class="nc-btn nc-btn--icon nc-btn--sm" type="button" title="聊天菜单" aria-label="聊天菜单" aria-haspopup="menu" aria-controls="chat-menu" aria-expanded="false">
                                 <span data-icon="more" data-icon-size="16"></span>
                             </button>
                         </div>
-                        <div id="chat-menu" class="chat-menu" role="menu" hidden>
-                            <button type="button" class="chat-menu__item" role="menuitem" id="export-conversation-btn">
-                                <span data-icon="download" data-icon-size="16"></span><span>导出对话</span>
-                            </button>
-                            <button type="button" class="chat-menu__item" role="menuitem" id="export-note-btn">
-                                <span data-icon="notebook-text" data-icon-size="16"></span><span>导出到笔记本</span>
-                            </button>
-                            <button type="button" class="chat-menu__item" role="menuitem" id="backup-conversation-btn">
-                                <span data-icon="copy" data-icon-size="16"></span><span>备份对话</span>
-                            </button>
-                            <button type="button" class="chat-menu__item" role="menuitem" id="restore-conversation-btn">
-                                <span data-icon="upload" data-icon-size="16"></span><span>恢复对话</span>
-                            </button>
-                            <div class="chat-menu__divider"></div>
-                            <button type="button" class="chat-menu__item is-danger" role="menuitem" id="clear-chat-btn">
-                                <span data-icon="trash" data-icon-size="16"></span><span>清除对话</span>
-                            </button>
-                        </div>
                     </header>
+
+                    <div id="chat-menu" class="chat-menu nc-material-float" role="menu" hidden>
+                        <button type="button" class="chat-menu__item" role="menuitem" id="export-conversation-btn">
+                            <span data-icon="download" data-icon-size="16"></span><span>导出对话</span>
+                        </button>
+                        <button type="button" class="chat-menu__item" role="menuitem" id="export-note-btn">
+                            <span data-icon="notebook-text" data-icon-size="16"></span><span>导出到笔记本</span>
+                        </button>
+                        <button type="button" class="chat-menu__item" role="menuitem" id="backup-conversation-btn">
+                            <span data-icon="copy" data-icon-size="16"></span><span>备份对话</span>
+                        </button>
+                        <button type="button" class="chat-menu__item" role="menuitem" id="restore-conversation-btn">
+                            <span data-icon="upload" data-icon-size="16"></span><span>恢复对话</span>
+                        </button>
+                        <div class="chat-menu__divider"></div>
+                        <button type="button" class="chat-menu__item is-danger" role="menuitem" id="clear-chat-btn">
+                            <span data-icon="trash" data-icon-size="16"></span><span>清除对话</span>
+                        </button>
+                    </div>
 
                     <main id="chat-container" class="chat-main" role="log" aria-label="对话" aria-live="off" tabindex="0"></main>
                     <button id="jump-bottom-btn" class="chat-jump" type="button" title="回到底部" aria-label="回到底部" hidden>
@@ -536,8 +537,8 @@
                             <button type="button" class="nc-btn nc-btn--sm nc-btn--primary" id="ws-new-btn" title="用自然语言新建应用">
                                 <span data-icon="plus" data-icon-size="15"></span><span>新建</span>
                             </button>
-                            <button type="button" class="nc-btn nc-btn--sm nc-btn--ghost" id="ws-more-btn" aria-label="菜单" title="菜单" aria-haspopup="menu">
-                                <span data-icon="menu" data-icon-size="15"></span><span>菜单</span>
+                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-more-btn" aria-label="菜单" title="菜单" aria-haspopup="menu">
+                                <span data-icon="more" data-icon-size="16"></span>
                             </button>
                             <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-side-close" aria-label="关闭列表" title="关闭列表">
                                 <span data-icon="chevron-left" data-icon-size="15"></span>

@@ -5111,7 +5111,7 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
 
     /* 浅色：白色玻璃需要更实的描边，避免与纸面混在一起 */
     html[data-theme="dark"] .tools-nav {
-        background: rgba(18, 24, 33, 0.84);
+        background: rgba(18, 24, 33, 0.80);
         border-color: rgba(255, 255, 255, 0.10);
         border-top-color: rgba(255, 255, 255, 0.13);
     }
@@ -5182,5 +5182,14 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
         background: var(--nc-elevated);
+    }
+}
+
+@media (prefers-contrast: more) {
+    .tools-nav {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background: var(--nc-elevated);
+        border-color: var(--nc-border-strong);
     }
 }

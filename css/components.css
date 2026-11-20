@@ -2499,8 +2499,8 @@ html[data-lite="true"] .nc-modal-overlay {
 
 /* v8.1：确认框使用小面积液态玻璃；区域小，标准模式可接受 */
 .nc-modal {
-    -webkit-backdrop-filter: blur(14px) saturate(150%);
-    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    backdrop-filter: blur(16px) saturate(150%);
 }
 
 html[data-lite="true"] .nc-modal {
