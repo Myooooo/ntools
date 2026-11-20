@@ -19,6 +19,7 @@
     var unsubscribe = null;
     var drag = { id: null, category: null };
     var host = null;
+    var lastFailedPrompt = '';
     var sideRelease = null;
     var state = {
         initialized: false,
@@ -272,6 +273,7 @@
      * 预览（统一由 NC.previewHost 管理 blob / sandbox / 错误）
      * ------------------------------------------------------------------ */
     function clearFrame() {
+        showSkeleton(false);
         if (host) host.clear();
     }
 
@@ -286,9 +288,16 @@
         if (!host || !host.postTheme(currentTheme(), isLite())) reloadFrame();
     }
 
+    function showSkeleton(show) {
+        if (!els.skeleton) return;
+        if (show) els.skeleton.removeAttribute('hidden');
+        else els.skeleton.setAttribute('hidden', '');
+    }
+
     function openBuiltin(item) {
         resetErrors();
         var src = item.file + '?theme=' + currentTheme() + '&lite=' + (isLite() ? '1' : '0');
+        showSkeleton(true);
         if (host) host.mountUrl(src, { trusted: true });
         els.frame.title = (item.title || '工具') + ' · 预览';
         els.frame.style.height = '';
@@ -297,6 +306,7 @@
     }
 
     function openCustom(item) {
+        showSkeleton(false);
         resetErrors();
         var params = store.getParams();
         var html = schema.wrapHtml(item.code || '', {
@@ -455,6 +465,27 @@
         }
     }
 
+    function moveInList(item, delta) {
+        var all = store.list();
+        var sameKind = all.filter(function (entry) { return entry.kind === item.kind; });
+        var index = -1;
+        sameKind.forEach(function (entry, i) { if (entry.id === item.id) index = i; });
+        var target = sameKind[index + delta];
+        if (index < 0 || !target) return false;
+        var ordered = [];
+        ['builtin', 'custom'].forEach(function (kind) {
+            var list = all.filter(function (entry) { return entry.kind === kind; });
+            if (kind === item.kind) {
+                var from = list.map(function (entry) { return entry.id; }).indexOf(item.id);
+                var moved = list.splice(from, 1)[0];
+                var to = list.map(function (entry) { return entry.id; }).indexOf(target.id);
+                list.splice(delta > 0 ? to + 1 : to, 0, moved);
+            }
+            list.forEach(function (entry) { ordered.push(entry.id); });
+        });
+        return store.applyOrder(ordered);
+    }
+
     function openItemMenu(item, anchor) {
         var items = [
             {
@@ -463,6 +494,16 @@
                 onSelect: function () { store.togglePinned(item.id); renderList(); }
             }
         ];
+        items.push({
+            label: '上移',
+            icon: 'arrow-up-down',
+            onSelect: function () { if (moveInList(item, -1)) renderList(); }
+        });
+        items.push({
+            label: '下移',
+            icon: 'arrow-up-down',
+            onSelect: function () { if (moveInList(item, 1)) renderList(); }
+        });
         if (item.kind === 'custom') {
             items.push({
                 label: '编辑（对话调整）',
@@ -533,6 +574,10 @@
         return profile.modelId ? name + ' · ' + profile.modelId : String(name);
     }
 
+    function profileReady(profile) {
+        return !!(profile && profile.baseUrl && profile.modelId);
+    }
+
     function renderEndpointOptions() {
         if (!els.endpointSelect) return;
         var params = store.getParams();
@@ -549,14 +594,22 @@
         try {
             active = NC.store.llm && NC.store.llm.getChatConfig ? NC.store.llm.getChatConfig() : null;
         } catch (err) { active = null; }
-        follow.textContent = active ? '跟随当前 · ' + (active.name || active.modelId || '默认') : '跟随当前端点';
+        follow.textContent = active
+            ? '跟随当前 · ' + (active.name || active.modelId || '默认') + (profileReady(active) ? '' : '（未配置）')
+            : '跟随当前端点';
+        follow.title = follow.textContent;
         els.endpointSelect.appendChild(follow);
         profiles.forEach(function (profile) {
             var option = document.createElement('option');
             option.value = profile.id;
-            option.textContent = endpointLabel(profile);
+            option.textContent = endpointLabel(profile) + (profileReady(profile) ? '' : '（未配置）');
+            option.title = profileReady(profile) ? option.textContent : option.textContent + '：缺少 Base URL 或 Model ID';
             els.endpointSelect.appendChild(option);
         });
+        var manage = document.createElement('option');
+        manage.value = '__manage';
+        manage.textContent = '管理端点…';
+        els.endpointSelect.appendChild(manage);
         els.endpointSelect.value = currentId;
         els.endpointSelect.title = '生成使用的模型端点：' + (currentId
             ? (els.endpointSelect.options[els.endpointSelect.selectedIndex] || {}).textContent
@@ -566,6 +619,11 @@
     function onEndpointChange() {
         if (!els.endpointSelect) return;
         var value = els.endpointSelect.value;
+        if (value === '__manage') {
+            renderEndpointOptions();
+            if (NC.settingsPanel && NC.settingsPanel.open) NC.settingsPanel.open('profiles');
+            return;
+        }
         store.setParams({ endpointId: value });
         var label = value ? (els.endpointSelect.options[els.endpointSelect.selectedIndex] || {}).textContent : '跟随当前端点';
         toast('生成端点：' + label, 'success');
@@ -586,7 +644,7 @@
         if (els.chatLog) els.chatLog.textContent = '';
     }
 
-    function appendChat(role, text, meta) {
+    function appendChat(role, text, meta, action) {
         if (!els.chatLog) return;
         var item = document.createElement('div');
         item.className = 'ws-msg ws-msg--' + role;
@@ -597,8 +655,25 @@
             span.textContent = meta;
             item.appendChild(span);
         }
+        if (action && action.label) {
+            var retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'nc-btn nc-btn--sm ws-msg__action';
+            retry.textContent = action.label;
+            retry.addEventListener('click', function () {
+                item.remove();
+                action.onClick();
+            });
+            item.appendChild(retry);
+        }
         els.chatLog.appendChild(item);
         els.chatLog.scrollTop = els.chatLog.scrollHeight;
+    }
+
+    function retryLastGeneration() {
+        if (!lastFailedPrompt || !els.prompt) return;
+        els.prompt.value = lastFailedPrompt;
+        generate();
     }
 
     function setChatHint(text) {
@@ -749,12 +824,14 @@
         }
     }
 
-    function finishWithError(message) {
+    function finishWithError(message, canRetry) {
         stopTimer();
         setStreaming(false);
         setLoading(false);
         var text = String(message || '生成失败');
-        appendChat('error', text);
+        appendChat('error', text, null, canRetry && lastFailedPrompt
+            ? { label: '重试', onClick: retryLastGeneration }
+            : null);
         toast(text, 'error');
     }
 
@@ -764,7 +841,9 @@
         setLoading(false);
         var parsed = schema.extractHtml(raw);
         if (!parsed || !parsed.code) {
-            appendChat('error', '模型没有返回可用的 HTML，请换个说法再试一次。');
+            appendChat('error', '模型没有返回可用的 HTML，请换个说法再试一次。', null, lastFailedPrompt
+                ? { label: '重试', onClick: retryLastGeneration }
+                : null);
             toast('模型没有返回可用的 HTML', 'error');
             return;
         }
@@ -806,6 +885,7 @@
 
     function renderDraft() {
         if (!draft.code || !els.frame) return;
+        showSkeleton(false);
         resetErrors();
         var params = store.getParams();
         var html = schema.wrapHtml(draft.code, {
@@ -846,7 +926,7 @@
             return;
         }
         if (!NC.api || typeof NC.api.chat !== 'function') {
-            finishWithError('对话 API 未加载，请刷新页面后重试');
+            finishWithError('对话 API 未加载，请刷新页面后重试', false);
             return;
         }
         var params = store.getParams();
@@ -857,7 +937,7 @@
                 : null;
         } catch (err) { config = null; }
         if (!config || !config.apiUrl || !config.modelId) {
-            finishWithError('还没有可用的模型端点：请到「设置 → AI 端点」配置 Base URL 与 Model ID');
+            finishWithError('还没有可用的模型端点：请到「设置 → AI 端点」配置 Base URL 与 Model ID', false);
             return;
         }
         var runtime = Object.assign({}, config, {
@@ -868,6 +948,7 @@
             reasoningEffort: params.reasoning !== false ? params.effort : ''
         });
 
+        lastFailedPrompt = prompt;
         appendChat('user', prompt);
         if (els.prompt) els.prompt.value = '';
         draft.startedAt = Date.now();
@@ -919,7 +1000,7 @@
                 draft.controller = null;
                 var message = error && error.message ? error.message : '生成失败，请检查网络或端点配置';
                 if (error && error.type === 'abort') message = '已停止生成';
-                finishWithError(message);
+                finishWithError(message, !!lastFailedPrompt);
             }
         });
     }
@@ -1096,7 +1177,7 @@
             frame: $('ws-frame'), empty: $('ws-empty'), moduleNote: $('ws-module-note'),
             stage: $('ws-stage'), scrim: $('ws-scrim'),
             save: $('ws-save-btn'), exportBtn: $('ws-export-btn'), importFile: $('ws-import-file'),
-            loading: $('ws-loading'), loadingText: $('ws-loading-text'),
+            loading: $('ws-loading'), loadingText: $('ws-loading-text'), skeleton: $('ws-skeleton'),
             stopBtn: $('ws-stop-btn'), chat: $('ws-chat'), chatLog: $('ws-chat-log'),
             prompt: $('ws-prompt'), generateBtn: $('ws-generate-btn'), chatHint: $('ws-chat-hint'),
             chatClose: $('ws-chat-close'), versions: $('ws-versions-btn'),
@@ -1141,7 +1222,10 @@
             })
             : null;
         bind();
-        if (els.frame) els.frame.addEventListener('load', function () { syncFrameTheme(true); });
+        if (els.frame) els.frame.addEventListener('load', function () {
+            showSkeleton(false);
+            syncFrameTheme(true);
+        });
         applySideCollapsed(readSideCollapsed());
         state.initialized = true;
         store.init().then(function () {

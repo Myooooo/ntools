@@ -735,3 +735,56 @@ html[data-lite="true"] .ws-loading {
     font-size: var(--nc-fs-2xs);
     font-variant-numeric: tabular-nums;
 }
+
+/* ---------- 内置工具加载骨架 ---------- */
+.ws-skeleton {
+    position: absolute;
+    z-index: 4;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 28px 30px;
+    background: var(--nc-surface);
+}
+
+.ws-skeleton[hidden] {
+    display: none;
+}
+
+.ws-skeleton__bar {
+    display: block;
+    height: 14px;
+    width: 62%;
+    border-radius: 7px;
+    background: linear-gradient(90deg, var(--nc-surface-2) 25%, var(--nc-surface-3) 50%, var(--nc-surface-2) 75%);
+    background-size: 200% 100%;
+    animation: ws-skeleton 1.4s linear infinite;
+}
+
+.ws-skeleton__bar--lg { height: 26px; width: 38%; }
+.ws-skeleton__bar--sm { width: 44%; }
+
+@keyframes ws-skeleton {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+}
+
+html[data-lite="true"] .ws-skeleton__bar {
+    animation: none;
+    background: var(--nc-surface-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ws-skeleton__bar { animation: none; background: var(--nc-surface-2); }
+}
+
+.ws-msg__action {
+    margin-top: 6px;
+    align-self: flex-start;
+}
+
+.ws-item:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--nc-accent-soft);
+}
