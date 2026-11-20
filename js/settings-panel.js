@@ -1195,8 +1195,7 @@
                         }).then(function (ok) {
                             if (!ok) return;
                             backup.restoreAuto(item.id).then(function (res) {
-                                toast('恢复完成：' + (res.done || []).join('、') + '，即将刷新…', 'success');
-                                global.setTimeout(function () { global.location.reload(); }, 1200);
+                                finishRestore(res);
                             }, function (err) {
                                 toast('恢复失败：' + (err && err.message ? err.message : err), 'error');
                             });
@@ -1213,6 +1212,18 @@
             });
         });
         return card;
+    }
+
+    function restoreReport(result) {
+        var done = (result && result.done || []).join('、') || '无';
+        var failed = (result && result.failed || []).join('、') || '无';
+        return '已恢复：' + done + '\n未恢复：' + failed + '\n\n恢复前已自动保存一份本机快照，可在「最近的自动备份」里找回。';
+    }
+
+    function finishRestore(result) {
+        ui.alert('恢复完成', restoreReport(result)).then(function () {
+            global.location.reload();
+        });
     }
 
     function restoreFromBackupFile() {
@@ -1234,8 +1245,7 @@
                     if (!ok) return;
                     if (!NC.backup) { toast('备份模块未加载', 'error'); return; }
                     NC.backup.restoreFromJson(raw).then(function (res) {
-                        toast('恢复完成：' + (res.done || []).join('、') + '，即将刷新…', 'success');
-                        global.setTimeout(function () { global.location.reload(); }, 1200);
+                        finishRestore(res);
                     }, function (err) {
                         toast('恢复失败：' + (err && err.message ? err.message : err), 'error');
                     });

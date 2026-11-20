@@ -240,6 +240,18 @@
             entries.push({ name: name, data: String(note.content || '') });
         });
 
+        var workshopApps = (payload.workshop && Array.isArray(payload.workshop.apps)) ? payload.workshop.apps : [];
+        workshopApps.forEach(function (app) {
+            var code = typeof app.code === 'string' ? app.code : '';
+            if (!code) return;
+            var wbase = safeName(app.title || '未命名应用');
+            var wname = 'workshop/' + wbase + '.html';
+            var wn = 2;
+            while (used[wname]) { wname = 'workshop/' + wbase + '-' + wn + '.html'; wn += 1; }
+            used[wname] = 1;
+            entries.push({ name: wname, data: code });
+        });
+
         entries.push({
             name: 'README.txt',
             data: [
@@ -251,6 +263,7 @@
                 '  ntools-backup.json  结构化备份（待办 / 聊天 / 邮箱 / 端点 / 笔记正文 / 偏好）',
                 '  notes/*.md          每篇笔记的纯文本副本',
                 '  files/*             笔记里的图片附件',
+                '  workshop/*.html     创意工坊里保存的自定义应用',
                 '',
                 '恢复：打开 nTools → 设置 → 数据 → 从备份恢复（选择 ntools-backup.json）。',
                 '注意：JSON 里若包含 API Key，请妥善保管该压缩包。',
@@ -332,7 +345,7 @@
             var req = store.getAll();
             req.onsuccess = function () {
                 box.value = (req.result || []).map(function (item) {
-                    return { id: item.id, at: item.at, notes: item.notes, chats: item.chats, bytes: item.bytes };
+                    return { id: item.id, at: item.at, kind: item.kind || 'auto', notes: item.notes, chats: item.chats, bytes: item.bytes };
                 }).sort(function (a, b) { return b.at - a.at; });
             };
             return box;
@@ -355,7 +368,7 @@
             var record = {
                 id: 'auto-' + nowTs(),
                 at: nowTs(),
-                kind: 'auto',
+                kind: reason || 'auto',
                 payload: bundle.payload,
                 files: bundle.files,
                 notes: bundle.payload.notes ? bundle.payload.notes.notes.length : 0,
@@ -422,8 +435,17 @@
         try { if (NC.events && NC.events.emit) NC.events.emit('email:imported'); } catch (err) { /* ignore */ }
     }
 
-    /** 从结构化备份恢复（payload 与 ZIP 里的 ntools-backup.json 同构） */
+    /** 从结构化备份恢复（先自动打一份「恢复前快照」） */
     function restorePayload(payload, options) {
+        return runAuto('pre-restore').then(function () {
+            return applyPayload(payload, options);
+        }, function () {
+            return applyPayload(payload, options);
+        });
+    }
+
+    /** 实际恢复逻辑（payload 与 ZIP 里的 ntools-backup.json 同构） */
+    function applyPayload(payload, options) {
         var opts = options || {};
         if (!payload || typeof payload !== 'object') return Promise.reject(new Error('备份内容无效'));
         var done = [];
