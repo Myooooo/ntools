@@ -880,7 +880,7 @@
         '',
         '## 双向链接',
         '',
-        '用双方括号引用其他笔记：[[欢迎使用 nTools 笔记|这就是一条自链接]]。',
+        '用双方括号引用其他笔记：[[note:__SELF_ID__]]（只存唯一 ID，改标题也不会断）。',
         '点击链接可以跳转；标题不存在时，点击会新建同名笔记。',
         '',
         '## 引用待办',
@@ -909,6 +909,9 @@
             }
             var note = createNote({ title: '欢迎使用 nTools 笔记', content: WELCOME_MD });
             if (note) {
+                try {
+                    updateNote(note.id, { content: WELCOME_MD.replace(/__SELF_ID__/g, note.id) });
+                } catch (err) { /* ignore */ }
                 setActive(note.id);
                 NC.prefs.set(WELCOME_FLAG, '1');
             }

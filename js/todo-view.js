@@ -1295,29 +1295,23 @@
     }
 
     function openDetailRefNote(id, title) {
-        function focus() {
-            if (NC.view && NC.view.notes && typeof NC.view.notes.focusNote === 'function') {
-                NC.view.notes.focusNote(id);
+        function focus(tries) {
+            var view = NC.view && NC.view.notes;
+            var store = NC.store && NC.store.notes;
+            if (view && typeof view.isReady === 'function' && view.isReady() &&
+                store && store.getNote && store.getNote(id)) {
+                view.focusNote(id);
+                return;
             }
+            if (tries <= 0) {
+                if (ui && ui.toast) ui.toast('笔记加载失败，请稍后重试', { type: 'error' });
+                return;
+            }
+            setTimeout(function () { focus(tries - 1); }, 100);
         }
         if (NC.switchTab) NC.switchTab('md', true);
-        var notesStore = NC.store && NC.store.notes;
-        if (notesStore && notesStore.isReady && notesStore.isReady()) { focus(); return; }
-        if (typeof NC.loadNotesBundle !== 'function') { focus(); return; }
-        NC.loadNotesBundle().then(function () {
-            if (NC.store.notes && NC.store.notes.init) NC.store.notes.init();
-            var tries = 40;
-            (function wait() {
-                if ((NC.store.notes && NC.store.notes.isReady && NC.store.notes.isReady()) || tries <= 0) {
-                    focus();
-                    return;
-                }
-                tries -= 1;
-                setTimeout(wait, 120);
-            })();
-        }, function () {
-            if (ui && ui.toast) ui.toast('笔记模块加载失败', { type: 'error' });
-        });
+        if (typeof NC.initNotes === 'function') NC.initNotes();
+        focus(40);
     }
 
     function renderDetailNotes(root, task) {
@@ -1336,6 +1330,9 @@
         if (NC.refs && typeof NC.refs.renderMarkdown === 'function') {
             NC.refs.renderMarkdown(read, value, detailNotesContext(), {
                 openNote: openDetailRefNote,
+                openTodo: function (id) {
+                    if (store.getTask(id)) store.selectTask(id);
+                },
                 toggleTodo: toggleDetailRefTodo
             });
         } else {
@@ -1667,7 +1664,7 @@
                     items.push({
                         label: '笔记：' + item.title,
                         hint: '笔记',
-                        onSelect: function () { insertDetailRef('[[note:' + item.id + '|' + item.title + ']] '); }
+                        onSelect: function () { insertDetailRef('[[note:' + item.id + ']] '); }
                     });
                 });
             }
@@ -1678,7 +1675,7 @@
                         items.push({
                             label: '待办：' + (task.title || '未命名'),
                             hint: task.completedAt ? '已完成' : '待办',
-                            onSelect: function () { insertDetailRef('[[todo:' + task.id + '|' + (task.title || '待办') + ']] '); }
+                            onSelect: function () { insertDetailRef('[[todo:' + task.id + ']] '); }
                         });
                     });
             }

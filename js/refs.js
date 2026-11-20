@@ -114,10 +114,10 @@
             var done = !!(resolved && resolved.done);
             var cls = 'nc-ref nc-ref--todo' + (done ? ' is-done' : '') + (deleted ? ' is-missing' : '');
             var title = deleted ? '待办已删除' : (done ? '已完成，点击取消' : '点击标记完成');
-            return '<label class="' + cls + '" data-ref-todo="' + escapeAttr(resolved.id || ref.id) + '" title="' + escapeAttr(title) + '">' +
+            return '<span class="' + cls + '" role="link" tabindex="0" data-ref-todo="' + escapeAttr(resolved.id || ref.id) + '" title="' + escapeAttr(title) + '">' +
                 '<input type="checkbox" data-ref-toggle="' + escapeAttr(resolved.id || ref.id) + '"' +
-                (done ? ' checked' : '') + (deleted ? ' disabled' : '') + '>' +
-                '<span class="nc-ref__label">' + label + '</span></label>';
+                (done ? ' checked' : '') + (deleted ? ' disabled' : '') + ' aria-label="标记完成">' +
+                '<span class="nc-ref__label">' + label + '</span></span>';
         }
         var missing = !resolved || resolved.missing || resolved.deleted;
         var noteCls = 'nc-ref nc-ref--note' + (missing ? ' is-missing' : '');
@@ -186,6 +186,7 @@
         if (!host || host.__ncRefsBound) return;
         host.__ncRefsBound = true;
         host.addEventListener('click', function (event) {
+            if (event.target && event.target.getAttribute && event.target.getAttribute('data-ref-toggle')) return;
             var note = event.target.closest ? event.target.closest('.nc-ref--note') : null;
             if (note) {
                 event.preventDefault();
@@ -193,14 +194,23 @@
                 if (handlers && typeof handlers.openNote === 'function') {
                     handlers.openNote(note.getAttribute('data-ref-note') || '', note.getAttribute('data-ref-title') || '');
                 }
+                return;
+            }
+            var todo = event.target.closest ? event.target.closest('.nc-ref--todo') : null;
+            if (todo) {
+                event.preventDefault();
+                if (todo.classList.contains('is-missing')) return;
+                if (handlers && typeof handlers.openTodo === 'function') {
+                    handlers.openTodo(todo.getAttribute('data-ref-todo') || '');
+                }
             }
         });
         host.addEventListener('keydown', function (event) {
             if (event.key !== 'Enter' && event.key !== ' ') return;
-            var note = event.target.closest ? event.target.closest('.nc-ref--note') : null;
-            if (!note) return;
+            var ref = event.target.closest ? event.target.closest('.nc-ref--note, .nc-ref--todo') : null;
+            if (!ref || (event.target.getAttribute && event.target.getAttribute('data-ref-toggle'))) return;
             event.preventDefault();
-            note.click();
+            ref.click();
         });
         host.addEventListener('change', function (event) {
             var box = event.target;
@@ -211,6 +221,17 @@
         });
     }
 
+    function openTodo(id) {
+        if (!id) return;
+        if (NC.switchTab) {
+            var tab = document.querySelector('[data-tab="todo"]');
+            if (tab && !tab.classList.contains('is-active')) NC.switchTab('todo', true);
+        }
+        var todo = NC.store && NC.store.todo;
+        if (!todo || !todo.getTask || !todo.getTask(id)) return;
+        setTimeout(function () { todo.selectTask(id); }, 30);
+    }
+
     NC.refs = {
         parse: parse,
         parseRef: parseRef,
@@ -218,6 +239,7 @@
         chipHtml: chipHtml,
         renderMarkdown: renderMarkdown,
         bind: bind,
+        openTodo: openTodo,
         escapeHtml: escapeHtml
     };
 })(window);

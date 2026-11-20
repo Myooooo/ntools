@@ -5245,10 +5245,20 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
     border-color: var(--nc-accent-line, rgba(47, 111, 219, .22));
 }
 .nc-ref--todo {
-    color: var(--nc-text-2);
-    background: var(--nc-panel-2);
-    border-color: var(--nc-line);
+    color: inherit;
+    background: transparent;
+    border-color: transparent;
+    padding: 0 2px;
     cursor: pointer;
+    transition: background-color 120ms ease;
+}
+.nc-ref--todo:hover {
+    background: var(--nc-hover, rgba(127, 127, 127, .12));
+    border-radius: 4px;
+}
+.nc-ref--todo:focus-visible {
+    outline: 2px solid var(--nc-accent);
+    outline-offset: 1px;
 }
 .nc-ref--todo input {
     width: 12px;

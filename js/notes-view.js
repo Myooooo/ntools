@@ -942,6 +942,7 @@
      * 交互
      * ------------------------------------------------------------------ */
     function selectNote(id) {
+        if (!store) return;
         commitNow();
         if (!store.setActive(id)) return;
         state.lastRenderedId = null;
@@ -1757,15 +1758,14 @@
     function acBuildSlash(ctx) {
         var command = ctx.command || '';
         var query = ctx.query || '';
-        if (command === 'todo' || (command.indexOf('t') === 0 && command !== 'task')) {
-            var todos = todoCandidates(command === 'todo' ? query : '');
-            if (todos.length) return todos;
+        if (command === 'todo') {
+            return todoCandidates(query);
         }
-        if (command === 'note' || command.indexOf('n') === 0) {
+        if (command === 'note') {
             var notes = store.quickSwitch(command === 'note' ? query : '').slice(0, 7).map(function (item) {
-                return { kind: 'slash-note', label: item.title, title: item.title };
+                return { kind: 'slash-note', id: item.id, label: item.title, title: item.title };
             });
-            if (notes.length) return notes;
+            return notes;
         }
         return SLASH_COMMANDS.filter(function (item) {
             return !command || item.command.indexOf(command) === 0;
@@ -1779,7 +1779,7 @@
         if (ctx.type === 'slash') return acBuildSlash(ctx);
         if (ctx.type === 'link') {
             var list = store.quickSwitch(ctx.query).slice(0, 7).map(function (item) {
-                return { kind: 'note', label: item.title, title: item.title };
+                return { kind: 'note', id: item.id, label: item.title, title: item.title };
             });
             todoCandidates(ctx.query).slice(0, 5).forEach(function (item) { list.push(item); });
             var exact = list.some(function (item) { return item.title.toLowerCase() === ctx.query.toLowerCase(); });
@@ -1910,9 +1910,21 @@
         var value = els.editor.value;
         var insert;
         if (item.kind === 'tag') insert = '#' + item.tag + ' ';
-        else if (item.kind === 'todo') insert = '[[todo:' + item.id + '|' + item.label + ']] ';
-        else if (item.kind === 'slash-note') insert = '[[' + item.title + ']] ';
+        else if (item.kind === 'todo') insert = '[[todo:' + item.id + ']] ';
+        else if (item.kind === 'slash-note') insert = '[[note:' + item.id + ']] ';
         else if (item.kind === 'command') {
+            if (item.command === 'todo' || item.command === 'note') {
+                insert = '/' + item.command + ' ';
+                els.editor.value = value.slice(0, ctx.start) + insert + value.slice(ctx.end);
+                var nextCaret = ctx.start + insert.length;
+                els.editor.setSelectionRange(nextCaret, nextCaret);
+                acHide();
+                scheduleCommit();
+                renderStatus();
+                els.editor.focus();
+                setTimeout(acUpdate, 0);
+                return;
+            }
             if (item.today) {
                 var d = new Date();
                 var pad = function (n) { return n < 10 ? '0' + n : String(n); };
@@ -1920,7 +1932,7 @@
             } else {
                 insert = item.insert || '';
             }
-        } else insert = '[[' + item.title + ']] ';
+        } else insert = '[[note:' + item.id + ']] ';
         els.editor.value = value.slice(0, ctx.start) + insert + value.slice(ctx.end);
         var caret = ctx.start + insert.length;
         els.editor.setSelectionRange(caret, caret);
@@ -2143,6 +2155,7 @@
             if (NC.refs && typeof NC.refs.bind === 'function') {
                 NC.refs.bind(els.preview, {
                     openNote: function (id) { if (id) selectNote(id); },
+                    openTodo: function (id) { if (NC.refs.openTodo) NC.refs.openTodo(id); },
                     toggleTodo: function (id, checked) {
                         var todo = NC.store && NC.store.todo;
                         if (!todo) return;
@@ -2296,7 +2309,7 @@
     }
 
     function focusNote(id) {
-        if (!id) return;
+        if (!id || !store) return;
         selectNote(id);
     }
 
