@@ -107,6 +107,7 @@
             } else {
                 memory[key] = raw;         // 内存模式：这就是唯一副本，不能删
             }
+            checkUsage();
             return { ok: true, bytes: size, memoryMode: !available };
         } catch (err) {
             // 写入失败时仍保留内存副本，保证当前会话可用（getRaw 会优先返回它）
@@ -149,8 +150,7 @@
         return result;
     }
 
-    /** 配额余量估算（0 表示已满或不可估算） */
-    function remainingBytes() {
+    function usageBytes() {
         if (!available) return 0;
         var used = 0;
         try {
@@ -159,10 +159,33 @@
                 var value = name ? global.localStorage.getItem(name) : null;
                 used += estimateBytes(value || '') + estimateBytes(name || '');
             }
-        } catch (err) {
-            return 0;
+        } catch (err) { return 0; }
+        return used;
+    }
+
+    /** 配额余量估算（0 表示已满或不可估算） */
+    function remainingBytes() {
+        return Math.max(0, MAX_BYTES - usageBytes());
+    }
+
+    /* 主动水位提醒：总占用达到预算 80% 时提示一次（降到 70% 以下后重新武装） */
+    var nearLimitNotified = false;
+    var usageCheckAt = 0;
+    function checkUsage() {
+        if (!available) return;
+        var now = Date.now();
+        if (now - usageCheckAt < 1500) return;
+        usageCheckAt = now;
+        var used = usageBytes();
+        if (used >= MAX_BYTES * 0.8) {
+            if (nearLimitNotified) return;
+            nearLimitNotified = true;
+            events.emit(NC.eventNames.quotaWarning, {
+                reason: 'near-limit', used: used, limit: MAX_BYTES
+            });
+        } else if (used < MAX_BYTES * 0.7) {
+            nearLimitNotified = false;
         }
-        return Math.max(0, MAX_BYTES - used);
     }
 
     function get(key, fallback) {
@@ -255,6 +278,7 @@
         has: has,
         keys: keys,
         estimateBytes: estimateBytes,
+        usageBytes: usageBytes,
         remainingBytes: remainingBytes,
         hasPending: hasPending,
         onExternalChange: onExternalChange,
