@@ -80,6 +80,50 @@
   .hero__amount .num { color: var(--nc-time); }
   .hero__amount .cur, .hero__amount .dec { color: var(--nc-time); opacity: 1; }
   .hero__mood { color: var(--ws-text-2); opacity: 1; }
+  .hero__mood.is-changing { animation: moodSwap 420ms var(--ws-ease-out); }
+  @keyframes moodSwap {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+  .hero__coins {
+    position: absolute;
+    right: 26px;
+    top: 58px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    pointer-events: none;
+  }
+  .coin-pop {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--nc-time);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    opacity: 0;
+    animation: coinFloat 1s var(--ws-ease-out) forwards;
+  }
+  .coin-pop i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-size: 9px;
+    font-style: normal;
+    line-height: 1;
+  }
+  @keyframes coinFloat {
+    0% { opacity: 0; transform: translateY(6px) scale(.92); }
+    22% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-20px) scale(1); }
+  }
+  html[data-lite="true"] .hero__mood.is-changing { animation: none; }
+  html[data-lite="true"] .coin-pop { animation: none; opacity: 1; transform: none; }
   .hero__bar { background: var(--ws-line); }
   .hero__bar i {
     width: 100%;
@@ -112,6 +156,7 @@
       <span class="num" id="earned">0</span>
       <span class="dec" id="earnedDec">.00</span>
     </div>
+    <div class="hero__coins" id="coins" aria-hidden="true"></div>
     <div class="hero__mood" id="mood">今天也要好好生活。</div>
     <div class="hero__bar"><i id="bar"></i></div>
     <div class="hero__meta"><span id="range">08:30 — 17:30</span><span id="remain">距下班 —</span></div>
@@ -162,6 +207,7 @@
     remain: document.getElementById('remain'), perSec: document.getElementById('perSec'),
     perHour: document.getElementById('perHour'), daily: document.getElementById('daily'),
     monthly: document.getElementById('monthly'), statusTag: document.getElementById('statusTag'),
+    coins: document.getElementById('coins'),
     salary: document.getElementById('salary'), workdays: document.getElementById('workdays'),
     lunch: document.getElementById('lunch'), start: document.getElementById('start'),
     end: document.getElementById('end'), multiplier: document.getElementById('multiplier'),
@@ -210,12 +256,68 @@
   }
 
   var MOODS = [
-    '今天也要好好生活。', '每一分钟都在变成底气。', '咖啡钱正在路上。',
-    '慢一点也没关系，你在往前走。', '把时间换成喜欢的生活。'
+    '今天也要好好生活。',
+    '每一分钟都在变成底气。',
+    '咖啡钱正在路上。',
+    '慢一点也没关系，你在往前走。',
+    '把时间换成喜欢的生活。',
+    '认真工作，也认真休息。',
+    '今天的你，值得一顿好饭。',
+    '数字在涨，心情也要跟上。',
+    '不必着急，时间会给出答案。',
+    '把注意力放回手头这一件事。',
+    '离下班自由又近了一点。',
+    '每一秒都在为自己的生活投票。',
+    '今天也请照顾好自己。',
+    '先完成，再完美。',
+    '你已经在路上了。',
+    '赚的是钱，攒的是选择权。',
+    '累了就喝口水，回来继续。',
+    '平凡的一天也值得被认真对待。'
   ];
 
   var shown = 0;
   var lastMilestone = 0;
+  var introStart = 0;
+  var introDone = false;
+  var lastCoinAt = 0;
+  var lastCoinTotal = 0;
+  var moodIndex = Math.floor(Math.random() * MOODS.length);
+  var moodInitialized = false;
+
+  function setMood(text, animate) {
+    if (!text || text === els.mood.textContent) return;
+    els.mood.textContent = text;
+    if (!animate) return;
+    els.mood.classList.remove('is-changing');
+    void els.mood.offsetWidth;
+    els.mood.classList.add('is-changing');
+  }
+
+  function rotateMood() {
+    if (MOODS.length < 2) return;
+    var next = moodIndex;
+    while (next === moodIndex) next = Math.floor(Math.random() * MOODS.length);
+    moodIndex = next;
+    setMood(MOODS[moodIndex], true);
+  }
+
+  function spawnCoin(delta) {
+    if (!els.coins) return;
+    var item = document.createElement('span');
+    item.className = 'coin-pop';
+    var coin = document.createElement('i');
+    coin.textContent = '¥';
+    var text = document.createElement('span');
+    text.textContent = '+' + (delta < 0.01 ? delta.toFixed(3) : delta.toFixed(2));
+    item.appendChild(coin);
+    item.appendChild(text);
+    els.coins.appendChild(item);
+    while (els.coins.children.length > 6) els.coins.removeChild(els.coins.firstChild);
+    setTimeout(function () {
+      if (item.parentNode) item.parentNode.removeChild(item);
+    }, 1100);
+  }
 
   function render() {
     var now = new Date();
@@ -225,9 +327,28 @@
     var earned = Math.min(cfg.dailyWithMultiplier, cfg.perSecond * worked * 60);
     var ratio = cfg.dailyWithMultiplier ? Math.min(1, earned / cfg.dailyWithMultiplier) : 0;
 
-    /* 平滑逼近，避免每秒跳一下 */
-    shown += (earned - shown) * 0.24;
-    if (Math.abs(earned - shown) < 0.005) shown = earned;
+    /* 进入时快速累加到当前收入，之后平滑跟随每秒增量 */
+    var perf = (window.performance && performance.now) ? performance.now() : Date.now();
+    if (!introDone) {
+      var t = Math.min(1, (perf - introStart) / 700);
+      var eased = 1 - Math.pow(1 - t, 3);
+      shown = earned * eased;
+      if (t >= 1) {
+        introDone = true;
+        shown = earned;
+        lastCoinAt = perf;
+        lastCoinTotal = earned;
+      }
+    } else {
+      shown += (earned - shown) * 0.22;
+      if (Math.abs(earned - shown) < 0.005) shown = earned;
+      if (perf - lastCoinAt >= 1000) {
+        var delta = earned - lastCoinTotal;
+        if (delta > 0.00005) spawnCoin(delta);
+        lastCoinTotal = earned;
+        lastCoinAt = perf;
+      }
+    }
     var whole = Math.floor(shown);
     var dec = Math.round((shown - whole) * 100);
     if (dec >= 100) { whole += 1; dec -= 100; }
@@ -241,10 +362,10 @@
     var remainMin = Math.max(0, Math.round(cfg.valid * (1 - ratio)));
     els.remain.textContent = ratio >= 1 ? '今天已下班，辛苦了' : '距下班 ' + Math.floor(remainMin / 60) + ' 小时 ' + (remainMin % 60) + ' 分';
 
-    var moodIndex = Math.min(MOODS.length - 1, Math.floor(ratio * MOODS.length));
-    if (ratio >= 1) els.mood.textContent = '今天的时间已经全部换成收入，去享受下班吧。';
-    else if (ratio < 0.08) els.mood.textContent = '刚到工位，先泡杯茶。';
-    else els.mood.textContent = MOODS[moodIndex];
+    if (!moodInitialized) {
+      moodInitialized = true;
+      els.mood.textContent = MOODS[moodIndex];
+    }
 
     els.perSec.innerHTML = cfg.perSecond.toFixed(4) + '<small>元</small>';
     els.perHour.innerHTML = cfg.hourly.toFixed(1) + '<small>元</small>';
@@ -287,7 +408,16 @@
   }
 
   ['salary', 'workdays', 'lunch', 'start', 'end', 'multiplier'].forEach(function (id) {
-    els[id].addEventListener('change', function () { save(); shown = 0; lastMilestone = 0; render(); });
+    els[id].addEventListener('change', function () {
+      save();
+      shown = 0;
+      lastMilestone = 0;
+      introDone = false;
+      introStart = (window.performance && performance.now) ? performance.now() : Date.now();
+      lastCoinTotal = 0;
+      lastCoinAt = 0;
+      render();
+    });
   });
   els.autoSave.addEventListener('change', save);
 
