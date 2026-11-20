@@ -7,7 +7,7 @@
     'use strict';
 
     var NC = global.NC = global.NC || {};
-    NC.version = '8.6.0';
+    NC.version = '8.7.0';
     NC.env = {
         page: 'unknown',
         chrome: 0,
