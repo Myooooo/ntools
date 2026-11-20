@@ -173,7 +173,6 @@
   <div class="fields">
     <label class="field">月薪（元）<input class="input num" id="salary" type="number" min="0" step="100" value="15000"></label>
     <label class="field">每月工作日<input class="input num" id="workdays" type="number" min="1" max="31" step="0.25" value="21.75"></label>
-    <label class="field">午休（分钟）<input class="input num" id="lunch" type="number" min="0" max="240" step="30" value="120"></label>
     <label class="field">上班时间<input class="input" id="start" type="time" value="08:30"></label>
     <label class="field">下班时间<input class="input" id="end" type="time" value="17:30"></label>
     <label class="field">倍率
@@ -186,7 +185,7 @@
     </label>
   </div>
   <label class="check"><input type="checkbox" id="autoSave" checked> 记住这份设置（仅本机）</label>
-  <p class="hint">按「月薪 ÷ 工作日 ÷ 有效工时 × 倍率」折算，午休从总工时中扣除；数字为本机计算结果，不会上传。</p>
+  <p class="hint">按「月薪 ÷ 工作日 ÷ 上下班工时 × 倍率」折算，从上班时间开始累计；数字为本机计算结果，不会上传。</p>
 
 <script>
 (function () {
@@ -209,7 +208,7 @@
     monthly: document.getElementById('monthly'), statusTag: document.getElementById('statusTag'),
     coins: document.getElementById('coins'),
     salary: document.getElementById('salary'), workdays: document.getElementById('workdays'),
-    lunch: document.getElementById('lunch'), start: document.getElementById('start'),
+    start: document.getElementById('start'),
     end: document.getElementById('end'), multiplier: document.getElementById('multiplier'),
     autoSave: document.getElementById('autoSave')
   };
@@ -223,20 +222,18 @@
   function readConfig() {
     var salary = Math.max(0, Number(els.salary.value) || 0);
     var workdays = Math.max(1, Number(els.workdays.value) || 21.75);
-    var lunch = Math.max(0, Number(els.lunch.value) || 0);
     var start = toMinutes(els.start.value);
     var end = toMinutes(els.end.value);
     if (start == null) start = 8 * 60 + 30;
     if (end == null) end = 17 * 60 + 30;
     if (end <= start) end = start + 60;
-    var span = end - start;
-    lunch = Math.min(lunch, Math.max(0, span - 1));
-    var valid = Math.max(1, span - lunch);
+    var span = Math.max(1, end - start);
+    var valid = span;
     var multiplier = Math.max(0.1, Number(els.multiplier.value) || 1);
     var daily = salary / workdays;
     var hourly = daily / (valid / 60);
     return {
-      salary: salary, workdays: workdays, lunch: lunch, start: start, end: end,
+      salary: salary, workdays: workdays, start: start, end: end,
       span: span, valid: valid, multiplier: multiplier,
       daily: daily, hourly: hourly,
       perSecond: (daily / (valid * 60)) * multiplier,
@@ -245,14 +242,9 @@
   }
 
   function workedMinutes(nowMinutes, cfg) {
-    /* 午休从中间时段扣除：上班 + 有效工时/2 后连续午休 */
-    var lunchStart = cfg.start + (cfg.span - cfg.lunch) / 2;
-    var lunchEnd = lunchStart + cfg.lunch;
     var end = Math.min(nowMinutes, cfg.end);
     if (end <= cfg.start) return 0;
-    var worked = end - cfg.start;
-    var overlap = Math.max(0, Math.min(end, lunchEnd) - Math.max(cfg.start, lunchStart));
-    return Math.max(0, worked - overlap);
+    return end - cfg.start;
   }
 
   var MOODS = [
@@ -388,7 +380,7 @@
     if (!els.autoSave.checked) { try { localStorage.removeItem(KEY); } catch (e) {} return; }
     try {
       localStorage.setItem(KEY, JSON.stringify({
-        salary: els.salary.value, workdays: els.workdays.value, lunch: els.lunch.value,
+        salary: els.salary.value, workdays: els.workdays.value,
         start: els.start.value, end: els.end.value, multiplier: els.multiplier.value
       }));
     } catch (err) {}
@@ -400,14 +392,13 @@
       if (!data) return;
       if (data.salary != null) els.salary.value = data.salary;
       if (data.workdays != null) els.workdays.value = data.workdays;
-      if (data.lunch != null) els.lunch.value = data.lunch;
       if (data.start) els.start.value = data.start;
       if (data.end) els.end.value = data.end;
       if (data.multiplier && els.multiplier.querySelector('option[value="' + data.multiplier + '"]')) els.multiplier.value = data.multiplier;
     } catch (err) {}
   }
 
-  ['salary', 'workdays', 'lunch', 'start', 'end', 'multiplier'].forEach(function (id) {
+  ['salary', 'workdays', 'start', 'end', 'multiplier'].forEach(function (id) {
     els[id].addEventListener('change', function () {
       save();
       shown = 0;
