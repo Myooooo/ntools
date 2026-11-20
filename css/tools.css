@@ -5341,3 +5341,5 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
     color: var(--nc-text-3);
 }
 .detail-refs .nc-ref { padding: 1px 6px; font-size: 11.5px; }
+.detail-refs--broken { color: var(--nc-warn, #b45309); }
+.detail-refs--broken .nc-btn { margin-left: 4px; }

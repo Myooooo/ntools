@@ -1205,6 +1205,10 @@
         attr(refsInfo, 'data-detail-refs', '');
         refsInfo.hidden = true;
         notesSection.appendChild(refsInfo);
+        var brokenInfo = node('div', 'detail-refs detail-refs--broken');
+        attr(brokenInfo, 'data-detail-broken', '');
+        brokenInfo.hidden = true;
+        notesSection.appendChild(brokenInfo);
         form.appendChild(notesSection);
 
         /* 标签 */
@@ -1356,6 +1360,39 @@
         }
     }
 
+    function missingDetailRefs(task) {
+        if (!task || !NC.refs || typeof NC.refs.parse !== 'function') return [];
+        return NC.refs.parse(task.notes || '').map(function (ref) {
+            var resolved = NC.refs.resolve(ref, detailNotesContext());
+            return (!resolved || resolved.missing || resolved.deleted) ? ref : null;
+        }).filter(Boolean);
+    }
+
+    function renderDetailBrokenRefs(root, task) {
+        var host = root ? root.querySelector('[data-detail-broken]') : null;
+        if (!host) return;
+        var broken = missingDetailRefs(task);
+        host.hidden = !broken.length;
+        host.textContent = '';
+        if (!broken.length) return;
+        host.appendChild(node('span', 'detail-refs__text', broken.length + ' 条引用已失效'));
+        var btn = node('button', 'nc-btn nc-btn--sm nc-btn--ghost', '清理失效引用');
+        btn.type = 'button';
+        btn.addEventListener('click', function () {
+            ui.confirm('把失效引用替换为普通文字？正文其余内容不变。', { confirmText: '清理' }).then(function (ok) {
+                if (!ok) return;
+                var text = String(task.notes || '');
+                broken.slice().sort(function (a, b) { return b.index - a.index; }).forEach(function (ref) {
+                    var label = ref.alias || ref.title || ref.id || '引用';
+                    text = text.slice(0, ref.index) + label + '（已删除）' + text.slice(ref.end);
+                });
+                store.updateTask(task.id, { notes: text }, { label: '清理失效引用' });
+                ui.toast('已清理 ' + broken.length + ' 条失效引用', { type: 'success' });
+            });
+        });
+        host.appendChild(btn);
+    }
+
     function renderTodoBacklinks(root, task) {
         var host = root ? root.querySelector('[data-detail-refs]') : null;
         if (!host || !task) return;
@@ -1426,6 +1463,7 @@
         }
         renderDetailNotes(root, task);
         renderTodoBacklinks(root, task);
+        renderDetailBrokenRefs(root, task);
         if (force || active !== dueEl) {
             var dueValue = util.isFiniteNum(task.due) ? util.toDateTimeInputValue(task.due) : '';
             if (dueEl.value !== dueValue) dueEl.value = dueValue;
