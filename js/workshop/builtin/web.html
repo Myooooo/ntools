@@ -49,6 +49,43 @@
   }
   .resp-tabs { display: flex; gap: 6px; margin-top: 8px; }
   .hint-inline { color: var(--ws-text-3); font-size: 11px; margin-top: 6px; }
+
+  .req-tools {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .req-tools .select { max-width: 280px; min-width: 180px; }
+
+  .saved { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+
+  .saved-row {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) 26px;
+    gap: 8px;
+    align-items: center;
+    padding: 5px 8px;
+    border: 1px solid var(--ws-line);
+    border-radius: 8px;
+    background: var(--ws-panel-2);
+    cursor: pointer;
+    transition: border-color var(--ws-dur-fast) var(--ws-ease-out), background-color var(--ws-dur-fast) var(--ws-ease-out);
+  }
+
+  .saved-row:hover { border-color: var(--ws-line-strong); }
+
+  .saved-row__method { font-size: 10.5px; font-weight: 700; color: var(--ws-accent); letter-spacing: .02em; }
+  .saved-row__name { font-size: 12px; color: var(--ws-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .saved-row__del {
+    border: 0; background: transparent; color: var(--ws-text-3);
+    font-size: 14px; line-height: 1; padding: 3px; border-radius: 5px; cursor: pointer;
+  }
+  .saved-row__del:hover { color: var(--ws-danger); background: var(--ws-danger-soft); }
+
+  html[data-lite="true"] .saved-row { transition: none; }
   .history { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
   .history button {
     text-align: left; border: 0; background: transparent; color: var(--ws-text-2);
@@ -69,6 +106,15 @@
     </div>
     <span class="tag" id="netTag">可联网</span>
   </header>
+
+  <div class="req-tools rise rise-2">
+    <button type="button" class="btn" id="saveReq">保存请求</button>
+    <button type="button" class="btn btn--ghost" id="importReq">导入</button>
+    <button type="button" class="btn btn--ghost" id="exportReq">导出</button>
+    <select class="select" id="exampleSelect" aria-label="示例请求"></select>
+    <button type="button" class="btn btn--ghost" id="loadExample">载入示例</button>
+    <input type="file" id="reqFile" accept=".json,application/json" hidden>
+  </div>
 
   <div class="urlbar rise rise-2">
     <select class="select" id="method" aria-label="请求方法">
@@ -115,6 +161,9 @@
         </div>
       </div>
 
+      <div class="section-label">已保存的请求</div>
+      <div class="saved" id="savedList"></div>
+
       <div class="section-label">最近请求</div>
       <div class="history" id="history"></div>
     </section>
@@ -160,10 +209,51 @@
     meta: document.getElementById('meta'), respBody: document.getElementById('respBody'),
     respHeaders: document.getElementById('respHeaders'), copyResp: document.getElementById('copyResp'),
     downloadResp: document.getElementById('downloadResp'), history: document.getElementById('history'),
-    netTag: document.getElementById('netTag')
+    netTag: document.getElementById('netTag'),
+    saveReq: document.getElementById('saveReq'), importReq: document.getElementById('importReq'),
+    exportReq: document.getElementById('exportReq'), exampleSelect: document.getElementById('exampleSelect'),
+    loadExample: document.getElementById('loadExample'), reqFile: document.getElementById('reqFile'),
+    savedList: document.getElementById('savedList')
   };
 
-  var state = { running: false, controller: null, last: '', history: [] };
+  var state = { running: false, controller: null, last: '', history: [], saved: [] };
+  var STORE_KEY = 'ws-web-requests-v1';
+
+  var EXAMPLES = [
+    {
+      name: 'OpenAI 对话补全（POST JSON）', method: 'POST',
+      url: 'https://api.openai.com/v1/chat/completions',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_API_KEY' },
+      body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: '用一句话介绍 nTools' }], temperature: 0.7 }, null, 2)
+    },
+    {
+      name: 'OpenAI 兼容网关（内网）', method: 'POST',
+      url: 'https://your-gateway.local/v1/chat/completions',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer YOUR_API_KEY' },
+      body: JSON.stringify({ model: 'your-model', messages: [{ role: 'user', content: 'ping' }], stream: false }, null, 2)
+    },
+    {
+      name: 'JSONPlaceholder 列表（GET）', method: 'GET',
+      url: 'https://jsonplaceholder.typicode.com/posts',
+      params: { _limit: '5' }
+    },
+    {
+      name: 'JSONPlaceholder 新建（POST）', method: 'POST',
+      url: 'https://jsonplaceholder.typicode.com/posts',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'nTools', body: 'hello', userId: 1 }, null, 2)
+    },
+    {
+      name: '表单提交（x-www-form-urlencoded）', method: 'POST',
+      url: 'https://httpbin.org/post',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'username=nTools&password=demo'
+    },
+    {
+      name: '健康检查（GET 204）', method: 'GET',
+      url: 'https://httpbin.org/status/204'
+    }
+  ];
 
   function kvRow(container, key, value) {
     var row = document.createElement('div');
@@ -203,6 +293,179 @@
       if (key) out[key] = value;
     });
     return out;
+  }
+
+  /* ---------- 保存 / 示例 / 导入导出 ---------- */
+  function loadSaved() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      var data = raw ? JSON.parse(raw) : [];
+      return Array.isArray(data) ? data.filter(function (item) { return item && typeof item === 'object'; }) : [];
+    } catch (err) { return []; }
+  }
+
+  function persistSaved() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state.saved.slice(0, 50))); } catch (err) { /* ignore */ }
+  }
+
+  function setRows(container, obj) {
+    container.textContent = '';
+    var keys = Object.keys(obj || {});
+    if (!keys.length) { kvRow(container, '', ''); return; }
+    keys.forEach(function (key) { kvRow(container, key, obj[key]); });
+  }
+
+  function captureRequest(name) {
+    return {
+      name: name,
+      method: els.method.value,
+      url: els.url.value.trim(),
+      params: readRows(els.params),
+      headers: readRows(els.headers),
+      body: els.body.value,
+      withAuth: els.withAuth.checked
+    };
+  }
+
+  function applyRequest(req) {
+    if (!req) return;
+    els.method.value = req.method || 'GET';
+    els.url.value = req.url || '';
+    els.body.value = typeof req.body === 'string' ? req.body : '';
+    els.withAuth.checked = req.withAuth !== false;
+    els.token.value = '';
+    setRows(els.params, req.params || {});
+    setRows(els.headers, req.headers || {});
+    setStatus('已载入：' + (req.name || '请求'));
+    if (els.body.value.trim()) activeTab('body');
+    sendHeight();
+  }
+
+  function renderSaved() {
+    if (!els.savedList) return;
+    els.savedList.textContent = '';
+    if (!state.saved.length) {
+      var empty = document.createElement('div');
+      empty.className = 'hint-inline';
+      empty.textContent = '还没有保存的请求。填好后点「保存请求」，也可以导入 JSON。';
+      els.savedList.appendChild(empty);
+      return;
+    }
+    state.saved.forEach(function (item, index) {
+      var row = document.createElement('div');
+      row.className = 'saved-row';
+      row.setAttribute('role', 'button');
+      row.tabIndex = 0;
+      row.title = item.method + ' ' + item.url;
+      var method = document.createElement('span');
+      method.className = 'saved-row__method';
+      method.textContent = item.method || 'GET';
+      var name = document.createElement('span');
+      name.className = 'saved-row__name';
+      name.textContent = item.name || item.url || '未命名请求';
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'saved-row__del';
+      del.setAttribute('aria-label', '删除 ' + (item.name || '请求'));
+      del.textContent = '×';
+      del.addEventListener('click', function (event) {
+        event.stopPropagation();
+        state.saved.splice(index, 1);
+        persistSaved();
+        renderSaved();
+        setStatus('已删除保存的请求');
+      });
+      row.appendChild(method);
+      row.appendChild(name);
+      row.appendChild(del);
+      row.addEventListener('click', function () { applyRequest(item); });
+      row.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); applyRequest(item); }
+      });
+      els.savedList.appendChild(row);
+    });
+  }
+
+  function saveRequest() {
+    var current = captureRequest('');
+    if (!current.url) { setStatus('请先填写 URL', 'bad'); els.url.focus(); return; }
+    var suggested = current.url.replace(/^https?:\/\//, '').slice(0, 40);
+    var name = window.prompt ? window.prompt('给这个请求起个名字', suggested) : suggested;
+    if (name == null) return;
+    name = String(name).trim();
+    if (!name) name = suggested;
+    var existing = -1;
+    state.saved.forEach(function (item, index) { if (item.name === name) existing = index; });
+    current.name = name;
+    if (existing > -1) state.saved[existing] = current;
+    else state.saved.unshift(current);
+    persistSaved();
+    renderSaved();
+    setStatus('已保存：' + name);
+  }
+
+  function exportRequests() {
+    if (!state.saved.length) { setStatus('还没有保存的请求可导出', 'bad'); return; }
+    var payload = {
+      app: 'nTools', kind: 'web-requests', exportedAt: new Date().toISOString(),
+      requests: state.saved
+    };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'ntools-web-requests-' + Date.now() + '.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 800);
+    setStatus('已导出 ' + state.saved.length + ' 个请求');
+  }
+
+  function importRequests(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var data;
+      try { data = JSON.parse(String(reader.result || '')); } catch (err) { setStatus('导入失败：不是有效 JSON', 'bad'); return; }
+      var list = Array.isArray(data) ? data : (data && Array.isArray(data.requests) ? data.requests : null);
+      if (!list) { setStatus('导入失败：缺少 requests 数组', 'bad'); return; }
+      var added = 0;
+      list.forEach(function (item) {
+        if (!item || typeof item !== 'object' || !item.url) return;
+        var name = String(item.name || item.url).slice(0, 60);
+        var current = {
+          name: name, method: item.method || 'GET', url: item.url,
+          params: item.params && typeof item.params === 'object' ? item.params : {},
+          headers: item.headers && typeof item.headers === 'object' ? item.headers : {},
+          body: typeof item.body === 'string' ? item.body : '',
+          withAuth: item.withAuth !== false
+        };
+        var replaced = false;
+        state.saved = state.saved.filter(function (req) {
+          if (req.name === name) { replaced = true; return false; }
+          return true;
+        });
+        state.saved.unshift(current);
+        added += 1;
+        void replaced;
+      });
+      persistSaved();
+      renderSaved();
+      setStatus('已导入 ' + added + ' 个请求');
+    };
+    reader.onerror = function () { setStatus('读取文件失败', 'bad'); };
+    reader.readAsText(file);
+  }
+
+  function renderExamples() {
+    els.exampleSelect.textContent = '';
+    EXAMPLES.forEach(function (item, index) {
+      var option = document.createElement('option');
+      option.value = String(index);
+      option.textContent = item.name;
+      els.exampleSelect.appendChild(option);
+    });
+    els.exampleSelect.value = '0';
   }
 
   function activeTab(tab) {
@@ -360,6 +623,22 @@
     sendHeight();
   }
 
+  els.saveReq.addEventListener('click', saveRequest);
+  els.exportReq.addEventListener('click', exportRequests);
+  els.importReq.addEventListener('click', function () { els.reqFile.click(); });
+  els.reqFile.addEventListener('change', function () {
+    importRequests(els.reqFile.files && els.reqFile.files[0]);
+    els.reqFile.value = '';
+  });
+  els.loadExample.addEventListener('click', function () {
+    var index = Number(els.exampleSelect.value);
+    if (EXAMPLES[index]) applyRequest(EXAMPLES[index]);
+  });
+  els.exampleSelect.addEventListener('dblclick', function () {
+    var index = Number(els.exampleSelect.value);
+    if (EXAMPLES[index]) applyRequest(EXAMPLES[index]);
+  });
+
   els.send.addEventListener('click', send);
   els.clear.addEventListener('click', function () {
     els.url.value = '';
@@ -404,6 +683,9 @@
   });
   els.body.addEventListener('input', function () { els.bodyHint.textContent = 'JSON 会在发送前校验'; });
 
+  state.saved = loadSaved();
+  renderExamples();
+  renderSaved();
   kvRow(els.params, '', '');
   kvRow(els.headers, 'Content-Type', 'application/json');
   renderHistory();
