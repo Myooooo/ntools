@@ -1177,7 +1177,14 @@
 
         /* 备注 */
         var notesSection = node('div', 'detail-section');
-        notesSection.appendChild(node('div', 'detail-section__label', '备注'));
+        var notesLabel = node('div', 'detail-section__label detail-notes__label');
+        notesLabel.appendChild(node('span', '', '备注'));
+        var refBtn = node('button', 'nc-btn nc-btn--sm nc-btn--ghost detail-notes__refbtn', '插入引用');
+        refBtn.type = 'button';
+        attr(refBtn, 'data-act', 'detail-insert-ref');
+        attr(refBtn, 'title', '插入笔记或待办引用');
+        notesLabel.appendChild(refBtn);
+        notesSection.appendChild(notesLabel);
         var notesField = node('div', 'detail-field detail-field--stack detail-notes');
         var notesRead = node('div', 'detail-notes__read');
         attr(notesRead, 'data-notes-read', '');
@@ -1194,6 +1201,10 @@
         notes.hidden = true;
         notesField.appendChild(notes);
         notesSection.appendChild(notesField);
+        var refsInfo = node('div', 'detail-refs');
+        attr(refsInfo, 'data-detail-refs', '');
+        refsInfo.hidden = true;
+        notesSection.appendChild(refsInfo);
         form.appendChild(notesSection);
 
         /* 标签 */
@@ -1345,6 +1356,42 @@
         }
     }
 
+    function renderTodoBacklinks(root, task) {
+        var host = root ? root.querySelector('[data-detail-refs]') : null;
+        if (!host || !task) return;
+        var notesStore = NC.store && NC.store.notes;
+        var hits = [];
+        if (notesStore && notesStore.quickSwitch && notesStore.getNote) {
+            notesStore.quickSwitch('').forEach(function (item) {
+                var note = notesStore.getNote(item.id);
+                if (note && !note.deletedAt && String(note.content || '').indexOf('todo:' + task.id) > -1) hits.push(note);
+            });
+        }
+        var todoHits = 0;
+        var todo = NC.store && NC.store.todo;
+        if (todo && todo.getDoc) {
+            (todo.getDoc().tasks || []).forEach(function (other) {
+                if (other.id === task.id || other.deletedAt) return;
+                if (String(other.notes || '').indexOf('todo:' + task.id) > -1) todoHits += 1;
+            });
+        }
+        if (!hits.length && !todoHits) { host.hidden = true; host.textContent = ''; return; }
+        host.hidden = false;
+        host.textContent = '';
+        if (hits.length) {
+            host.appendChild(node('span', 'detail-refs__text', '被 ' + hits.length + ' 篇笔记引用：'));
+            hits.slice(0, 5).forEach(function (note) {
+                var chip = node('button', 'nc-ref nc-ref--note', note.title || '未命名笔记');
+                chip.type = 'button';
+                chip.addEventListener('click', function () { openDetailRefNote(note.id); });
+                host.appendChild(chip);
+            });
+        }
+        if (todoHits) {
+            host.appendChild(node('span', 'detail-refs__text', (hits.length ? '；' : '') + '被 ' + todoHits + ' 条待办引用'));
+        }
+    }
+
     function syncDetailForm(task, doc, force) {
         var root = els.detailInner;
         if (!root) return;
@@ -1378,6 +1425,7 @@
             if (notesEl.value !== task.notes) notesEl.value = task.notes;
         }
         renderDetailNotes(root, task);
+        renderTodoBacklinks(root, task);
         if (force || active !== dueEl) {
             var dueValue = util.isFiniteNum(task.due) ? util.toDateTimeInputValue(task.due) : '';
             if (dueEl.value !== dueValue) dueEl.value = dueValue;
@@ -1571,6 +1619,69 @@
         }
     }
 
+    function openDetailRefMenu(anchor) {
+        function show() {
+            var todo = NC.store && NC.store.todo;
+            var notes = NC.store && NC.store.notes;
+            var items = [];
+            if (notes && notes.quickSwitch) {
+                notes.quickSwitch('').slice(0, 6).forEach(function (item) {
+                    items.push({
+                        label: '笔记：' + item.title,
+                        hint: '笔记',
+                        onSelect: function () { insertDetailRef('[[note:' + item.id + '|' + item.title + ']] '); }
+                    });
+                });
+            }
+            if (todo && todo.getDoc) {
+                (todo.getDoc().tasks || []).filter(function (task) { return task && !task.deletedAt; })
+                    .sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); })
+                    .slice(0, 6).forEach(function (task) {
+                        items.push({
+                            label: '待办：' + (task.title || '未命名'),
+                            hint: task.completedAt ? '已完成' : '待办',
+                            onSelect: function () { insertDetailRef('[[todo:' + task.id + '|' + (task.title || '待办') + ']] '); }
+                        });
+                    });
+            }
+            if (!items.length) {
+                ui.toast('还没有可引用的笔记或待办', { type: 'info' });
+                return;
+            }
+            ui.openMenu(anchor, items);
+        }
+        var notesStore = NC.store && NC.store.notes;
+        if (notesStore && notesStore.isReady && notesStore.isReady()) { show(); return; }
+        if (typeof NC.loadNotesBundle !== 'function') { show(); return; }
+        NC.loadNotesBundle().then(function () {
+            if (NC.store.notes && NC.store.notes.init) NC.store.notes.init();
+            var tries = 40;
+            (function wait() {
+                if ((NC.store.notes && NC.store.notes.isReady && NC.store.notes.isReady()) || tries <= 0) { show(); return; }
+                tries -= 1;
+                setTimeout(wait, 100);
+            })();
+        }, show);
+    }
+
+    function insertDetailRef(text) {
+        var root = els.detailInner;
+        if (!root) return;
+        var field = root.querySelector('.detail-notes');
+        var textarea = root.querySelector('[data-field="notes"]');
+        if (!field || !textarea) return;
+        if (field.classList.contains('is-editing') === false) setDetailNotesEditing(root, true);
+        var start = textarea.selectionStart == null ? textarea.value.length : textarea.selectionStart;
+        var end = textarea.selectionEnd == null ? start : textarea.selectionEnd;
+        var next = textarea.value.slice(0, start) + text + textarea.value.slice(end);
+        textarea.value = next;
+        var caret = start + text.length;
+        try { textarea.setSelectionRange(caret, caret); } catch (err) { /* ignore */ }
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        try { textarea.focus(); } catch (err) { /* ignore */ }
+        autoGrow(textarea);
+    }
+
     function onDetailClick(event) {
         var read = event.target.closest ? event.target.closest('[data-notes-read]') : null;
         if (read && !read.hidden) {
@@ -1588,6 +1699,10 @@
             return;
         }
         if (!id) return;
+        if (act === 'detail-insert-ref') {
+            openDetailRefMenu(btn);
+            return;
+        }
         if (act === 'detail-delete') {
             /* 删除后自动收起详情（动画结束再删除/提示） */
             closeDetailAnimated(function () {

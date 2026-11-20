@@ -1712,12 +1712,76 @@
         ac.el = null;
     }
 
+    function todoCandidates(query) {
+        var todo = NC.store && NC.store.todo;
+        if (!todo || typeof todo.getDoc !== 'function') return [];
+        var q = String(query || '').toLowerCase();
+        var tasks = (todo.getDoc().tasks || []).filter(function (task) {
+            return task && !task.deletedAt && (!q || String(task.title || '').toLowerCase().indexOf(q) > -1);
+        });
+        tasks.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+        return tasks.slice(0, 7).map(function (task) {
+            return {
+                kind: 'todo', id: task.id,
+                label: task.title || '未命名待办',
+                hint: task.completedAt ? '已完成' : '待办'
+            };
+        });
+    }
+
+    function slashContextAt(value, caret) {
+        var before = String(value || '').slice(0, caret);
+        var lineStart = before.lastIndexOf('\n') + 1;
+        var line = before.slice(lineStart);
+        var match = /^(\s*)\/([^\s]*)\s*(.*)$/.exec(line);
+        if (!match) return null;
+        return {
+            type: 'slash',
+            command: match[2].toLowerCase(),
+            query: match[3] || '',
+            start: lineStart + match[1].length,
+            end: caret
+        };
+    }
+
+    var SLASH_COMMANDS = [
+        { kind: 'cmd', command: 'todo', label: '/todo', hint: '插入待办引用' },
+        { kind: 'cmd', command: 'note', label: '/note', hint: '插入笔记链接' },
+        { kind: 'cmd', command: 'task', label: '/task', hint: '任务行', insert: '- [ ] ' },
+        { kind: 'cmd', command: 'date', label: '/date', hint: '今天日期', today: true },
+        { kind: 'cmd', command: 'h2', label: '/h2', hint: '二级标题', insert: '## ' },
+        { kind: 'cmd', command: 'h3', label: '/h3', hint: '三级标题', insert: '### ' },
+        { kind: 'cmd', command: 'code', label: '/code', hint: '代码块', insert: '```\n\n```\n' }
+    ];
+
+    function acBuildSlash(ctx) {
+        var command = ctx.command || '';
+        var query = ctx.query || '';
+        if (command === 'todo' || (command.indexOf('t') === 0 && command !== 'task')) {
+            var todos = todoCandidates(command === 'todo' ? query : '');
+            if (todos.length) return todos;
+        }
+        if (command === 'note' || command.indexOf('n') === 0) {
+            var notes = store.quickSwitch(command === 'note' ? query : '').slice(0, 7).map(function (item) {
+                return { kind: 'slash-note', label: item.title, title: item.title };
+            });
+            if (notes.length) return notes;
+        }
+        return SLASH_COMMANDS.filter(function (item) {
+            return !command || item.command.indexOf(command) === 0;
+        }).map(function (item) {
+            return { kind: 'command', command: item.command, label: item.label, hint: item.hint, insert: item.insert, today: item.today };
+        });
+    }
+
     function acBuildItems(ctx) {
         if (!ctx) return [];
+        if (ctx.type === 'slash') return acBuildSlash(ctx);
         if (ctx.type === 'link') {
             var list = store.quickSwitch(ctx.query).slice(0, 7).map(function (item) {
                 return { kind: 'note', label: item.title, title: item.title };
             });
+            todoCandidates(ctx.query).slice(0, 5).forEach(function (item) { list.push(item); });
             var exact = list.some(function (item) { return item.title.toLowerCase() === ctx.query.toLowerCase(); });
             if (ctx.query && !exact) {
                 /* 有候选时把「新建」放最后，默认选中第一条已有笔记；没有候选时才放到第一位 */
@@ -1826,7 +1890,8 @@
         if (state.mode !== 'edit' || store.isReadOnly()) { acHide(); return; }
         var value = els.editor.value;
         var caret = els.editor.selectionStart || 0;
-        var ctx = schema.linkContextAt(value, caret);
+        var slash = slashContextAt(value, caret);
+        var ctx = slash || schema.linkContextAt(value, caret);
         if (!ctx) { acHide(); return; }
         var items = acBuildItems(ctx);
         if (!items.length) { acHide(); return; }
@@ -1845,7 +1910,17 @@
         var value = els.editor.value;
         var insert;
         if (item.kind === 'tag') insert = '#' + item.tag + ' ';
-        else insert = '[[' + item.title + ']] ';
+        else if (item.kind === 'todo') insert = '[[todo:' + item.id + '|' + item.label + ']] ';
+        else if (item.kind === 'slash-note') insert = '[[' + item.title + ']] ';
+        else if (item.kind === 'command') {
+            if (item.today) {
+                var d = new Date();
+                var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+                insert = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+            } else {
+                insert = item.insert || '';
+            }
+        } else insert = '[[' + item.title + ']] ';
         els.editor.value = value.slice(0, ctx.start) + insert + value.slice(ctx.end);
         var caret = ctx.start + insert.length;
         els.editor.setSelectionRange(caret, caret);
