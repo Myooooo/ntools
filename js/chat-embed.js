@@ -543,6 +543,7 @@
     }
 
     function openSettings(sectionId) {
+        if (NC.openSettings) { NC.openSettings(sectionId || 'profiles'); return; }
         if (NC.settingsPanel && typeof NC.settingsPanel.open === 'function') {
             try {
                 NC.settingsPanel.open(sectionId || 'profiles');

@@ -626,7 +626,8 @@
         var value = els.endpointSelect.value;
         if (value === '__manage') {
             renderEndpointOptions();
-            if (NC.settingsPanel && NC.settingsPanel.open) NC.settingsPanel.open('profiles');
+            if (NC.openSettings) NC.openSettings('profiles');
+            else if (NC.settingsPanel && NC.settingsPanel.open) NC.settingsPanel.open('profiles');
             return;
         }
         store.setParams({ endpointId: value });
@@ -1095,7 +1096,8 @@
         if (els.endpointSelect) els.endpointSelect.addEventListener('change', onEndpointChange);
         if (els.settingsBtn) {
             els.settingsBtn.addEventListener('click', function () {
-                if (NC.settingsPanel && typeof NC.settingsPanel.open === 'function') {
+                if (NC.openSettings) NC.openSettings('workshop');
+                else if (NC.settingsPanel && typeof NC.settingsPanel.open === 'function') {
                     NC.settingsPanel.open('workshop');
                 } else {
                     toast('设置面板未加载', 'error');

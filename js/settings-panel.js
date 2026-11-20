@@ -2322,7 +2322,7 @@
         if (NC._settingsPanelInit) return;
         NC._settingsPanelInit = true;
         var btn = document.getElementById('settings-btn');
-        if (btn) {
+        if (btn && btn.getAttribute('data-nc-settings-lazy') !== '1') {
             btn.addEventListener('click', function () { openSheet('profiles'); });
         }
         events.on('app:open-settings', function (payload) {

@@ -38,6 +38,7 @@
         syncVersionLabel();
         initTheme();
         initLlmAndSettings();
+        bindLazySettingsButton();
         initRail();
         bindNav();
         bindAppMenu();
@@ -308,6 +309,58 @@
     /* ------------------------------------------------------------------ *
      * 全局端点 / 设置面板 / 原生聊天（懒加载）
      * ------------------------------------------------------------------ */
+    /* 设置面板（约 116KB）按需加载：首屏不解析，第一次打开时注入 */
+    var settingsPromise = null;
+    var settingsLoaded = false;
+
+    function loadSettingsBundle() {
+        if (settingsLoaded) return Promise.resolve(true);
+        if (settingsPromise) return settingsPromise;
+        var util = NC.util;
+        if (!util || typeof util.loadScript !== 'function') return Promise.reject(new Error('loader unavailable'));
+        settingsPromise = util.loadScript('js/settings-panel.js').then(function () {
+            settingsLoaded = true;
+            if (NC.settingsPanel && typeof NC.settingsPanel.init === 'function') NC.settingsPanel.init();
+            return true;
+        }, function (err) {
+            settingsPromise = null;
+            throw err;
+        });
+        return settingsPromise;
+    }
+
+    function openSettings(section) {
+        return loadSettingsBundle().then(function () {
+            if (NC.settingsPanel && typeof NC.settingsPanel.open === 'function') {
+                NC.settingsPanel.open(section || 'general');
+            }
+        }, function (err) {
+            if (NC.ui && NC.ui.toast) {
+                NC.ui.toast('设置面板加载失败：' + (err && err.message ? err.message : err), { type: 'error' });
+            }
+        });
+    }
+
+    NC.openSettings = openSettings;
+    NC.loadSettingsBundle = loadSettingsBundle;
+
+    /* 兼容：懒加载完成前，旧的同步调用先走存根，加载完成后由真实面板覆盖 */
+    if (!NC.settingsPanel) {
+        NC.settingsPanel = {
+            open: function (section) { return openSettings(section); },
+            close: function () { /* 面板尚未加载，无需关闭 */ },
+            isOpen: function () { return false; }
+        };
+    }
+
+    /* 设置按钮先绑定一次，避免面板未加载时点击无反应；面板加载后会跳过重复绑定 */
+    function bindLazySettingsButton() {
+        var btn = document.getElementById('settings-btn');
+        if (!btn) return;
+        btn.setAttribute('data-nc-settings-lazy', '1');
+        btn.addEventListener('click', function () { openSettings('profiles'); });
+    }
+
     function initLlmAndSettings() {
         try {
             if (NC.store && NC.store.llm && typeof NC.store.llm.init === 'function') {
@@ -315,13 +368,6 @@
             }
         } catch (err) {
             showBanner('端点配置加载失败，聊天与 Todo AI 可能不可用。', { persistent: true });
-        }
-        try {
-            if (NC.settingsPanel && typeof NC.settingsPanel.init === 'function') {
-                NC.settingsPanel.init();
-            }
-        } catch (err) {
-            showBanner('设置面板初始化失败，请刷新页面重试。', { persistent: true });
         }
     }
 
@@ -537,7 +583,7 @@
                     icon: 'settings',
                     hint: '模型 · AI',
                     onSelect: function () {
-                        if (NC.settingsPanel) NC.settingsPanel.open('profiles');
+                        if (NC.openSettings) NC.openSettings('profiles');
                         else ui.toast('设置面板未加载', { type: 'warn' });
                     }
                 },

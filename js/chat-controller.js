@@ -39,6 +39,8 @@
         }
         if (deps.settingsView && typeof deps.settingsView.open === 'function') {
             deps.settingsView.open();
+        } else if (NC.openSettings) {
+            NC.openSettings(sectionId || 'profiles');
         } else if (NC.settingsPanel && typeof NC.settingsPanel.open === 'function') {
             NC.settingsPanel.open(sectionId || 'profiles');
         }

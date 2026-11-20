@@ -649,12 +649,12 @@
 
     function openSettings() {
         try {
-            if (NC.settingsPanel && typeof NC.settingsPanel.open === 'function') {
-                NC.settingsPanel.open('todo-ai');
+            if (NC.openSettings) {
+                NC.openSettings('todo-ai');
                 return true;
             }
             if (NC.settingsPanel && typeof NC.settingsPanel.open === 'function') {
-                NC.settingsPanel.open();
+                NC.settingsPanel.open('todo-ai');
                 return true;
             }
         } catch (err) { /* ignore */ }

@@ -34,7 +34,7 @@
 - **形态**：一个 `ntools.html` + 若干经典 `<script defer>`，没有打包与转译。所有模块挂在 `window.NC` 命名空间下、用 IIFE 隔离作用域，`file://` 双击即可运行。
 - **模块注册表**：`js/modules.js` 是五个模块的唯一来源，导航、启动页、设置分区与页面标题都从它派生，新增模块只需改一处（外加导航 HTML）。
 - **分层**：`core`（工具函数 / 事件总线 / 动态加载器）→ `storage`（localStorage 适配 + 内存降级）→ `durability`（单写者租约、环形快照）→ `schema-*`（纯函数契约与数据校验）→ `*-store`（状态与持久化）→ `*-view`（只碰 DOM）。`api.js` 管流式对话，`ai.js` 管一次性补全。
-- **按需加载**：聊天栈、笔记栈、创意工坊、全景时间线、ZIP 打包等重模块在首次使用时才注入；首屏只加载基础脚本，弱机启动更快。
+- **按需加载**：聊天栈、笔记栈、创意工坊、设置面板、全景时间线、ZIP 打包等重模块在首次使用时才注入；首屏只加载基础脚本，弱机启动更快。
 - **沙箱**：创意工坊的生成物跑在 `iframe` 里——内置工具是随包的可信文件（允许 same-origin 以便持久化），模型生成的应用用 `blob:` 文档且**不给 same-origin**，配合 CSP 隔离，读不到 nTools 的数据；预览 iframe 恒为 100% 视口、工具内部滚动；父页只渲染模型输出，绝不 `eval`。`blob:` 而非 `srcdoc` 是因为后者会继承父页 CSP、拦掉内联脚本；主应用 CSP 因此保留 `script-src 'unsafe-inline'`，取舍见 `docs/security-model.md`。
 - **渲染**：Markdown 走 `marked` + `DOMPurify` 统一净化，流式回复只重画尾部未完成块；界面用 CSS 变量（设计令牌）驱动，深浅色与 Lite 模式共用同一套变量。Lite 下去掉毛玻璃、阴影与位移动画，但保留 80–140ms 的按压、淡入与颜色反馈。
 - **材质**：`css/materials.css` 定义 chrome / float / sheet / scrim 四档；浮层 14px 毛玻璃、设置/模态为厚材质 + 静态遮罩模糊；所有模糊同时写 `-webkit-backdrop-filter`，Safari 可用。
