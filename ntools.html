@@ -569,6 +569,9 @@
                                 <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-versions-btn" aria-label="版本历史" title="版本历史" hidden>
                                     <span data-icon="repeat" data-icon-size="16"></span>
                                 </button>
+                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-edit-btn" aria-label="编辑小程序" title="编辑小程序" hidden>
+                                    <span data-icon="edit" data-icon-size="16"></span>
+                                </button>
                                 <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-export-btn" aria-label="导出 HTML" title="导出 HTML" hidden>
                                     <span data-icon="download" data-icon-size="16"></span>
                                 </button>
@@ -616,22 +619,22 @@
                     </div>
                     <aside class="ws-chat" id="ws-chat" aria-label="生成对话" hidden>
                         <div class="ws-chat__head">
-                            <span class="ws-chat__title">用一句话描述</span>
-                            <div class="ws-chat__tools">
-                                <select id="ws-endpoint-select" class="nc-select ws-endpoint-select" aria-label="生成使用的模型端点" title="生成使用的模型端点"></select>
-                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-settings-btn" aria-label="创意工坊设置" title="创意工坊设置">
-                                    <span data-icon="settings" data-icon-size="15"></span>
-                                </button>
-                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-chat-close" aria-label="收起对话" title="收起对话">
-                                    <span data-icon="x" data-icon-size="15"></span>
-                                </button>
-                            </div>
+                            <span class="ws-chat__title">创造小程序</span>
+                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-chat-close" aria-label="收起对话" title="收起对话">
+                                <span data-icon="x" data-icon-size="15"></span>
+                            </button>
                         </div>
                         <div class="ws-chat__log nc-scroll" id="ws-chat-log" role="log" aria-live="polite"></div>
                         <div class="ws-chat__compose">
                             <textarea id="ws-prompt" class="ws-prompt" rows="3" placeholder="例如：做一个番茄钟，25 分钟专注、5 分钟休息，结束提示音" spellcheck="false"></textarea>
+                            <div class="ws-chat__meta">
+                                <select id="ws-endpoint-select" class="nc-select ws-endpoint-select" aria-label="生成使用的模型端点" title="生成使用的模型端点"></select>
+                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost ws-chat__settings" id="ws-settings-btn" aria-label="创意工坊设置" title="创意工坊设置">
+                                    <span data-icon="settings" data-icon-size="14"></span>
+                                </button>
+                            </div>
                             <div class="ws-chat__actions">
-                                <span class="ws-chat__hint" id="ws-chat-hint">Ctrl+Enter 生成</span>
+                                <span class="ws-chat__hint" id="ws-chat-hint">Enter 发送 · Shift+Enter 换行</span>
                                 <button type="button" class="nc-btn nc-btn--primary nc-btn--sm" id="ws-generate-btn">生成</button>
                             </div>
                         </div>

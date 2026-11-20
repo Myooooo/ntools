@@ -429,15 +429,35 @@ html[data-lite="true"] .ws-scrim {
 /* ---------- 右侧生成对话 ---------- */
 .ws-chat {
     display: flex;
-    flex: 0 0 320px;
+    flex: 0 0 340px;
+    width: 340px;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
     border-left: 1px solid var(--nc-border);
     background: var(--nc-surface-2);
+    transition:
+        flex-basis var(--nc-dur-panel) var(--nc-ease-drawer),
+        width var(--nc-dur-panel) var(--nc-ease-drawer),
+        opacity var(--nc-dur) var(--nc-ease),
+        border-left-color var(--nc-dur) var(--nc-ease);
+}
+
+/* 收起态：宽度归零 + 轻微右移，避免 display:none 的硬切 */
+.ws-chat.is-closed {
+    flex-basis: 0;
+    width: 0;
+    opacity: 0;
+    border-left-color: transparent;
+    pointer-events: none;
 }
 
 .ws-chat[hidden] {
     display: none;
+}
+
+html[data-lite="true"] .ws-chat {
+    transition: none;
 }
 
 .ws-chat__head {
@@ -445,12 +465,14 @@ html[data-lite="true"] .ws-scrim {
     flex: 0 0 auto;
     align-items: center;
     justify-content: space-between;
+    gap: 8px;
     height: 56px;
     padding: 0 8px 0 14px;
     border-bottom: 1px solid var(--nc-border-faint);
-    color: var(--nc-text-2);
-    font-size: var(--nc-fs-sm);
+    color: var(--nc-text);
+    font-size: var(--nc-fs-md);
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .ws-chat__log {
@@ -595,7 +617,15 @@ html[data-lite="true"] .ws-loading {
         right: 0;
         bottom: 0;
         width: min(340px, 88%);
+        flex-basis: auto;
         box-shadow: var(--nc-shadow-3);
+    }
+
+    .ws-chat.is-closed {
+        width: min(340px, 88%);
+        opacity: 1;
+        transform: translateX(102%);
+        transition: transform var(--nc-dur-panel) var(--nc-ease-drawer);
     }
 }
 
@@ -616,7 +646,7 @@ html[data-lite="true"] .ws-loading {
     box-shadow: inset 0 -2px 0 var(--nc-accent);
 }
 
-/* ---------- 生成面板：端点选择与设置入口 ---------- */
+/* ---------- 生成面板：输入框下方的端点与设置 ---------- */
 .ws-chat__title {
     flex: 1 1 auto;
     min-width: 0;
@@ -625,31 +655,36 @@ html[data-lite="true"] .ws-loading {
     white-space: nowrap;
 }
 
-.ws-chat__tools {
+.ws-chat__meta {
     display: flex;
     align-items: center;
-    gap: 4px;
-    flex: 0 0 auto;
+    gap: 6px;
+    margin-top: 8px;
     min-width: 0;
 }
 
 .ws-endpoint-select {
-    max-width: 148px;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    max-width: none;
     height: 28px;
-    padding: 0 26px 0 9px;
+    padding: 0 24px 0 8px;
     font-size: var(--nc-fs-xs);
     border-radius: var(--nc-radius-sm);
     text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
-@media (max-width: 1280px) {
-    .ws-endpoint-select { max-width: 112px; }
+.ws-chat__settings {
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
 }
 
 @media (max-width: 720px) {
-    .ws-chat__head { height: auto; min-height: 56px; flex-wrap: wrap; padding-block: 8px; }
-    .ws-chat__tools { width: 100%; justify-content: flex-end; }
-    .ws-endpoint-select { max-width: none; flex: 1; }
+    .ws-chat__head { height: 48px; }
 }
 
 /* ---------- 生成页运行错误 ---------- */

@@ -385,6 +385,7 @@
         }
         if (els.pin) els.pin.setAttribute('aria-pressed', item && item.pinned ? 'true' : 'false');
         if (els.exportBtn) els.exportBtn.hidden = !(item && item.kind === 'custom' && item.code);
+        if (els.editBtn) els.editBtn.hidden = !(item && item.kind === 'custom');
         if (!item) {
             clearFrame();
             setHidden(els.empty, false);
@@ -401,6 +402,7 @@
         showChat(false);
         if (els.save) els.save.hidden = true;
         if (els.exportBtn) els.exportBtn.hidden = true;
+        if (els.editBtn) els.editBtn.hidden = true;
         if (els.pin) els.pin.disabled = false;
         state.activeId = id;
         writeActive(id);
@@ -605,7 +607,7 @@
         profiles.forEach(function (profile) {
             var option = document.createElement('option');
             option.value = profile.id;
-            option.textContent = endpointLabel(profile) + (profileReady(profile) ? '' : '（未配置）');
+            option.textContent = (profile.name || profile.modelId || profile.id) + (profileReady(profile) ? '' : '（未配置）');
             option.title = profileReady(profile) ? option.textContent : option.textContent + '：缺少 Base URL 或 Model ID';
             els.endpointSelect.appendChild(option);
         });
@@ -633,14 +635,26 @@
         els.endpointSelect.title = '生成使用的模型端点：' + label;
     }
 
+    var chatHideTimer = null;
+
     function showChat(show) {
         if (!els.chat) return;
         if (show) {
+            if (chatHideTimer) { global.clearTimeout(chatHideTimer); chatHideTimer = null; }
             renderEndpointOptions();
+            els.chat.classList.add('is-closed');
             els.chat.removeAttribute('hidden');
-        } else {
-            els.chat.setAttribute('hidden', '');
+            global.requestAnimationFrame(function () {
+                global.requestAnimationFrame(function () { els.chat.classList.remove('is-closed'); });
+            });
+            return;
         }
+        els.chat.classList.add('is-closed');
+        if (chatHideTimer) global.clearTimeout(chatHideTimer);
+        chatHideTimer = global.setTimeout(function () {
+            els.chat.setAttribute('hidden', '');
+            chatHideTimer = null;
+        }, 280);
     }
 
     function clearChatLog() {
@@ -713,6 +727,7 @@
         if (els.pin) { els.pin.disabled = true; els.pin.setAttribute('aria-pressed', 'false'); }
         if (els.save) els.save.hidden = true;
         if (els.exportBtn) els.exportBtn.hidden = true;
+        if (els.editBtn) els.editBtn.hidden = true;
         if (els.versions) els.versions.hidden = true;
         if (els.loading) els.loading.hidden = true;
         if (els.prompt) {
@@ -721,7 +736,7 @@
             els.prompt.focus();
         }
         clearChatLog();
-        setChatHint('Ctrl+Enter 生成');
+        setChatHint('Enter 发送 · Shift+Enter 换行');
         if (els.generateBtn) { els.generateBtn.disabled = false; els.generateBtn.textContent = '生成'; }
         appendChat('bot', '说说你想要的小工具：用来做什么、大概长什么样。我会直接生成一个可运行的单页应用。');
     }
@@ -754,8 +769,9 @@
         if (els.save) els.save.hidden = true;
         if (els.versions) els.versions.hidden = store.listVersions(appId).length === 0;
         if (els.exportBtn) els.exportBtn.hidden = !app.code;
+        if (els.editBtn) els.editBtn.hidden = false;
         if (els.prompt) { els.prompt.value = ''; els.prompt.readOnly = false; }
-        setChatHint('Ctrl+Enter 发送修改');
+        setChatHint('Enter 发送 · Shift+Enter 换行');
         renderDraft();
         renderList();
         return true;
@@ -818,7 +834,7 @@
             els.generateBtn.textContent = on ? '生成中…' : '生成';
         }
         if (els.save) els.save.hidden = on || !draft.code;
-        setChatHint(on ? '正在生成，可随时停止' : 'Ctrl+Enter 生成');
+        setChatHint(on ? '正在生成，可随时停止' : 'Enter 发送 · Shift+Enter 换行');
     }
 
     function stopGeneration() {
@@ -1106,10 +1122,10 @@
         }
         if (els.prompt) {
             els.prompt.addEventListener('keydown', function (event) {
-                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-                    event.preventDefault();
-                    generate();
-                }
+                if (event.key !== 'Enter') return;
+                if (event.shiftKey || event.isComposing) return;   // Shift+Enter 换行、输入法组词不触发
+                event.preventDefault();
+                generate();
             });
         }
         if (els.filter) {
@@ -1126,6 +1142,12 @@
         if (els.emptyImport) els.emptyImport.addEventListener('click', function () { if (els.importFile) els.importFile.click(); });
         if (els.sideOpen) els.sideOpen.addEventListener('click', onSideToggle);
         if (els.exportBtn) els.exportBtn.addEventListener('click', exportHtml);
+        if (els.editBtn) {
+            els.editBtn.addEventListener('click', function () {
+                if (state.activeId) enterEdit(state.activeId);
+                else showChat(true);
+            });
+        }
         if (els.importFile) els.importFile.addEventListener('change', importHtml);
         if (els.sideClose) els.sideClose.addEventListener('click', function () { toggleSide(false); });
         if (els.scrim) els.scrim.addEventListener('click', function () { toggleSide(false); });
@@ -1185,7 +1207,7 @@
             prompt: $('ws-prompt'), generateBtn: $('ws-generate-btn'), chatHint: $('ws-chat-hint'),
             chatClose: $('ws-chat-close'), versions: $('ws-versions-btn'),
             endpointSelect: $('ws-endpoint-select'), settingsBtn: $('ws-settings-btn'),
-            errorsBtn: $('ws-errors-btn'), errorsPanel: $('ws-errors-panel'),
+            editBtn: $('ws-edit-btn'), errorsBtn: $('ws-errors-btn'), errorsPanel: $('ws-errors-panel'),
             errorsList: $('ws-errors-list'), errorsCount: $('ws-errors-count'),
             errorsClear: $('ws-errors-clear')
         };

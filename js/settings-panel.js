@@ -1473,11 +1473,11 @@
         countRow('输出长度', params.outputLimit, 256, schema.LIMITS.outputMax, 'outputLimit', '映射为 max_tokens，例如 25.6k');
 
         var bar = util.e('div', { class: 'sp-data-card__actions' });
-        bar.appendChild(button('重制为默认', {
+        bar.appendChild(button('恢复默认设置', {
             small: true, ghost: true, icon: 'rotate-ccw',
             onClick: function () {
                 ui.confirm('把创意工坊的全部生成参数恢复为默认值（不影响端点与已保存应用）？', {
-                    title: '重制参数', confirmText: '恢复默认'
+                    title: '恢复默认设置', confirmText: '恢复默认'
                 }).then(function (ok) {
                     if (!ok) return;
                     store.resetParams();
