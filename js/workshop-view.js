@@ -18,6 +18,8 @@
     var schema = null;
     var unsubscribe = null;
     var drag = { id: null, category: null };
+    var frameObjectUrl = null;
+    var lastPreviewHtml = '';
     var sideRelease = null;
     var state = {
         initialized: false,
@@ -270,8 +272,41 @@
     /* ------------------------------------------------------------------ *
      * 预览
      * ------------------------------------------------------------------ */
+    function releaseFrameUrl() {
+        if (!frameObjectUrl) return;
+        try { global.URL.revokeObjectURL(frameObjectUrl); } catch (err) { /* ignore */ }
+        frameObjectUrl = null;
+    }
+
+    /**
+     * 把生成好的文档装进 iframe。
+     * 注意：不能用 srcdoc —— srcdoc 文档会继承主应用的 CSP（script-src 'self' file:），
+     * 生成页面里的内联脚本会被整体拦截；blob: 文档有自己的 CSP，脚本可正常执行。
+     */
+    function setFrameHtml(html, allowSameOrigin) {
+        if (!els.frame) return;
+        lastPreviewHtml = html;
+        releaseFrameUrl();
+        els.frame.removeAttribute('srcdoc');
+        els.frame.setAttribute('sandbox', allowSameOrigin
+            ? 'allow-scripts allow-forms allow-modals allow-same-origin'
+            : 'allow-scripts allow-forms allow-modals');
+        var blob = null;
+        try {
+            blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        } catch (err) { blob = null; }
+        if (blob && global.URL && typeof global.URL.createObjectURL === 'function') {
+            frameObjectUrl = global.URL.createObjectURL(blob);
+            els.frame.src = frameObjectUrl;
+        } else {
+            els.frame.src = 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
+        }
+        setHidden(els.frame, false);
+    }
+
     function clearFrame() {
         if (!els.frame) return;
+        releaseFrameUrl();
         els.frame.removeAttribute('src');
         els.frame.removeAttribute('srcdoc');
         setHidden(els.frame, true);
@@ -516,10 +551,68 @@
     /* ------------------------------------------------------------------ *
      * 生成草稿
      * ------------------------------------------------------------------ */
+    /* ------------------------------------------------------------------ *
+     * 模型端点：生成面板直接切换（与「设置 → 创意工坊」同一个参数）
+     * ------------------------------------------------------------------ */
+    function endpointProfiles() {
+        try {
+            return (NC.store && NC.store.llm && NC.store.llm.getProfiles) ? (NC.store.llm.getProfiles() || []) : [];
+        } catch (err) { return []; }
+    }
+
+    function endpointLabel(profile) {
+        if (!profile) return '';
+        var name = profile.name || profile.id;
+        return profile.modelId ? name + ' · ' + profile.modelId : String(name);
+    }
+
+    function renderEndpointOptions() {
+        if (!els.endpointSelect) return;
+        var params = store.getParams();
+        var profiles = endpointProfiles();
+        var currentId = params.endpointId || '';
+        if (currentId && !profiles.some(function (profile) { return profile.id === currentId; })) {
+            currentId = '';
+            store.setParams({ endpointId: '' });
+        }
+        els.endpointSelect.textContent = '';
+        var follow = document.createElement('option');
+        follow.value = '';
+        var active = null;
+        try {
+            active = NC.store.llm && NC.store.llm.getChatConfig ? NC.store.llm.getChatConfig() : null;
+        } catch (err) { active = null; }
+        follow.textContent = active ? '跟随当前 · ' + (active.name || active.modelId || '默认') : '跟随当前端点';
+        els.endpointSelect.appendChild(follow);
+        profiles.forEach(function (profile) {
+            var option = document.createElement('option');
+            option.value = profile.id;
+            option.textContent = endpointLabel(profile);
+            els.endpointSelect.appendChild(option);
+        });
+        els.endpointSelect.value = currentId;
+        els.endpointSelect.title = '生成使用的模型端点：' + (currentId
+            ? (els.endpointSelect.options[els.endpointSelect.selectedIndex] || {}).textContent
+            : '跟随 nChat 当前端点');
+    }
+
+    function onEndpointChange() {
+        if (!els.endpointSelect) return;
+        var value = els.endpointSelect.value;
+        store.setParams({ endpointId: value });
+        var label = value ? (els.endpointSelect.options[els.endpointSelect.selectedIndex] || {}).textContent : '跟随当前端点';
+        toast('生成端点：' + label, 'success');
+        els.endpointSelect.title = '生成使用的模型端点：' + label;
+    }
+
     function showChat(show) {
         if (!els.chat) return;
-        if (show) els.chat.removeAttribute('hidden');
-        else els.chat.setAttribute('hidden', '');
+        if (show) {
+            renderEndpointOptions();
+            els.chat.removeAttribute('hidden');
+        } else {
+            els.chat.setAttribute('hidden', '');
+        }
     }
 
     function clearChatLog() {
@@ -746,14 +839,11 @@
 
     function renderDraft() {
         if (!draft.code || !els.frame) return;
-        els.frame.removeAttribute('src');
-        els.frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
-        els.frame.srcdoc = schema.wrapHtml(draft.code, {
+        setFrameHtml(schema.wrapHtml(draft.code, {
             theme: currentTheme(),
             allowNetwork: true,
             title: draft.title
-        });
-        setHidden(els.frame, false);
+        }), false);
         setHidden(els.empty, true);
     }
 
@@ -931,6 +1021,16 @@
         if (els.stopBtn) els.stopBtn.addEventListener('click', function () { stopGeneration(); });
         if (els.save) els.save.addEventListener('click', saveDraft);
         if (els.versions) els.versions.addEventListener('click', function () { openVersions(els.versions); });
+        if (els.endpointSelect) els.endpointSelect.addEventListener('change', onEndpointChange);
+        if (els.settingsBtn) {
+            els.settingsBtn.addEventListener('click', function () {
+                if (NC.settingsPanel && typeof NC.settingsPanel.open === 'function') {
+                    NC.settingsPanel.open('workshop');
+                } else {
+                    toast('设置面板未加载', 'error');
+                }
+            });
+        }
         if (els.chatClose) {
             els.chatClose.addEventListener('click', function () {
                 if (draft.streaming) stopGeneration();
@@ -1016,7 +1116,8 @@
             loading: $('ws-loading'), loadingText: $('ws-loading-text'),
             stopBtn: $('ws-stop-btn'), chat: $('ws-chat'), chatLog: $('ws-chat-log'),
             prompt: $('ws-prompt'), generateBtn: $('ws-generate-btn'), chatHint: $('ws-chat-hint'),
-            chatClose: $('ws-chat-close'), versions: $('ws-versions-btn')
+            chatClose: $('ws-chat-close'), versions: $('ws-versions-btn'),
+            endpointSelect: $('ws-endpoint-select'), settingsBtn: $('ws-settings-btn')
         };
         store = NC.store && NC.store.workshop;
         schema = NC.schema && NC.schema.workshop;
@@ -1062,6 +1163,7 @@
         refresh: function () { renderList(); renderActive(); },
         isReady: function () { return state.initialized; },
         select: selectItem,
-        getActiveId: function () { return state.activeId; }
+        getActiveId: function () { return state.activeId; },
+        getPreviewSource: function () { return lastPreviewHtml; }
     };
 })(window);

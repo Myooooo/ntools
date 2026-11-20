@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <!-- 内容安全策略：默认只允许同源（file:// 下显式放行 file:）。
          端点由用户配置，connect-src 必须放开；其余一律收紧。 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file:; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob: https: http:; font-src 'self' file: data:; connect-src *; media-src 'self' file: blob:; frame-src 'self' file:; object-src 'none'; base-uri 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: 'unsafe-inline'; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob: https: http:; font-src 'self' file: data:; connect-src *; media-src 'self' file: blob:; frame-src 'self' file: blob: data:; object-src 'none'; base-uri 'none'">
     <meta name="color-scheme" content="dark light">
     <meta name="theme-color" id="nc-theme-color" content="#0b0e13">
     <title>nTools · 工具箱</title>
@@ -109,7 +109,7 @@
             <button type="button" class="nc-btn nc-btn--icon nc-btn--ghost" id="app-menu-btn" aria-label="更多设置" title="更多设置">
                 <span data-icon="more"></span>
             </button>
-            <span class="tools-rail__version" id="rail-version" title="版本">v8.5</span>
+            <span class="tools-rail__version" id="rail-version" title="版本">v8.6</span>
         </div>
     </aside>
 
@@ -597,10 +597,16 @@
                     </div>
                     <aside class="ws-chat" id="ws-chat" aria-label="生成对话" hidden>
                         <div class="ws-chat__head">
-                            <span>用一句话描述</span>
-                            <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-chat-close" aria-label="收起对话" title="收起对话">
-                                <span data-icon="x" data-icon-size="15"></span>
-                            </button>
+                            <span class="ws-chat__title">用一句话描述</span>
+                            <div class="ws-chat__tools">
+                                <select id="ws-endpoint-select" class="nc-select ws-endpoint-select" aria-label="生成使用的模型端点" title="生成使用的模型端点"></select>
+                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-settings-btn" aria-label="创意工坊设置" title="创意工坊设置">
+                                    <span data-icon="settings" data-icon-size="15"></span>
+                                </button>
+                                <button type="button" class="nc-btn nc-btn--icon nc-btn--sm nc-btn--ghost" id="ws-chat-close" aria-label="收起对话" title="收起对话">
+                                    <span data-icon="x" data-icon-size="15"></span>
+                                </button>
+                            </div>
                         </div>
                         <div class="ws-chat__log nc-scroll" id="ws-chat-log" role="log" aria-live="polite"></div>
                         <div class="ws-chat__compose">

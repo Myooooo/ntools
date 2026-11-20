@@ -615,3 +615,39 @@ html[data-lite="true"] .ws-loading {
 .ws-item.is-drop-after {
     box-shadow: inset 0 -2px 0 var(--nc-accent);
 }
+
+/* ---------- 生成面板：端点选择与设置入口 ---------- */
+.ws-chat__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ws-chat__tools {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+.ws-endpoint-select {
+    max-width: 148px;
+    height: 28px;
+    padding: 0 26px 0 9px;
+    font-size: var(--nc-fs-xs);
+    border-radius: var(--nc-radius-sm);
+    text-overflow: ellipsis;
+}
+
+@media (max-width: 1280px) {
+    .ws-endpoint-select { max-width: 112px; }
+}
+
+@media (max-width: 720px) {
+    .ws-chat__head { height: auto; min-height: 56px; flex-wrap: wrap; padding-block: 8px; }
+    .ws-chat__tools { width: 100%; justify-content: flex-end; }
+    .ws-endpoint-select { max-width: none; flex: 1; }
+}

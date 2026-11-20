@@ -1347,19 +1347,6 @@
         var params = store.getParams();
         var defaults = schema.DEFAULT_PARAMS;
 
-        /* 库状态 */
-        var stats = store.stats();
-        var status = moduleCard('模块状态', '内置工具随包发布、不可编辑；自定义应用保存在本机 IndexedDB。');
-        moduleRows(status, [
-            ['自定义应用', stats.apps + ' 个'],
-            ['历史版本', stats.versions + ' 个'],
-            ['代码占用', util.formatBytes(stats.bytes)],
-            ['存储位置', store.getMode() === 'idb' ? 'IndexedDB（可用）' : 'localStorage 降级']
-        ]);
-        var statusBar = util.e('div', { class: 'sp-data-card__actions' });
-        statusBar.appendChild(button('打开创意工坊', { small: true, primary: true, icon: 'wand', onClick: function () { openModule('workshop'); } }));
-        status.appendChild(statusBar);
-        container.appendChild(status);
 
         /* 参数 */
         var card = moduleCard('生成参数', '只影响创意工坊的模型调用；nChat 使用「AI 端点」里的设置。');
@@ -1483,6 +1470,20 @@
             text: '部分网关不接受 reasoning_effort / max_tokens，首次报 400 时会自动去掉这些字段重试一次。'
         }));
         container.appendChild(card);
+
+        /* 库状态 */
+        var stats = store.stats();
+        var status = moduleCard('模块状态', '内置工具随包发布、不可编辑；自定义应用保存在本机 IndexedDB。');
+        moduleRows(status, [
+            ['自定义应用', stats.apps + ' 个'],
+            ['历史版本', stats.versions + ' 个'],
+            ['代码占用', util.formatBytes(stats.bytes)],
+            ['存储位置', store.getMode() === 'idb' ? 'IndexedDB（可用）' : 'localStorage 降级']
+        ]);
+        var statusBar = util.e('div', { class: 'sp-data-card__actions' });
+        statusBar.appendChild(button('打开创意工坊', { small: true, primary: true, icon: 'wand', onClick: function () { openModule('workshop'); } }));
+        status.appendChild(statusBar);
+        container.appendChild(status);
     }
 
     function renderEmailTransferCard() {
