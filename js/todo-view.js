@@ -311,6 +311,18 @@
             els.detailInner.addEventListener('change', onDetailChange);
             els.detailInner.addEventListener('input', onDetailInput);
             els.detailInner.addEventListener('blur', onDetailBlur, true);
+            /* 详情列从 display:none 展开时宽度才可测；宽度变化后重算标题高度 */
+            if (global.ResizeObserver) {
+                var lastDetailWidth = -1;
+                var detailObserver = new global.ResizeObserver(function (entries) {
+                    var width = entries[0] && entries[0].contentRect ? entries[0].contentRect.width : 0;
+                    if (!width || Math.abs(width - lastDetailWidth) < 1) return;
+                    lastDetailWidth = width;
+                    var titleEl = els.detailInner.querySelector('[data-field="title"]');
+                    if (titleEl) autoGrow(titleEl);
+                });
+                detailObserver.observe(els.detailInner);
+            }
         }
         if (els.scrim) {
             els.scrim.addEventListener('click', function () {
@@ -493,7 +505,10 @@
             var btn = node('button', 'nc-seg__btn', item.label);
             btn.type = 'button';
             attr(btn, 'data-mode', item.mode);
-            btn.addEventListener('click', function () { setMode(item.mode); });
+            btn.addEventListener('click', function (event) {
+                /* 键盘激活（detail=0）不播内容动画 */
+                setMode(item.mode, { animate: event.detail !== 0 });
+            });
             seg.appendChild(btn);
         });
         if (headText) {
@@ -512,15 +527,29 @@
         return true;
     }
 
-    /** 新视图内容淡入 + 4px 上移（标准模式；Lite/reduced 即时）。 */
-    function playModeEnter() {
+    /** 新视图方向性淡入 + 8px 位移 + 0.996 缩放（标准模式；Lite/reduced 即时）。 */
+    function playModeEnter(toMode) {
         if (!els.mainpane || !canAnimateMode()) return;
-        els.mainpane.classList.add('is-mode-entering');
+        var direction = toMode === 'timeline' ? 'is-mode-entering--next' : 'is-mode-entering--prev';
+        els.mainpane.classList.remove(
+            'is-mode-entering',
+            'is-mode-entering--next',
+            'is-mode-entering--prev'
+        );
+        /* 强制一次样式计算，快速连续切换也能从起点重播 */
+        void els.mainpane.offsetWidth;
+        els.mainpane.classList.add('is-mode-entering', direction);
         if (modeEnterTimer) global.clearTimeout(modeEnterTimer);
         modeEnterTimer = global.setTimeout(function () {
             modeEnterTimer = null;
-            if (els.mainpane) els.mainpane.classList.remove('is-mode-entering');
-        }, 260);
+            if (els.mainpane) {
+                els.mainpane.classList.remove(
+                    'is-mode-entering',
+                    'is-mode-entering--next',
+                    'is-mode-entering--prev'
+                );
+            }
+        }, 280);
     }
 
     function setSegActive(mode) {
@@ -547,7 +576,7 @@
         if (store.getUi().selectedId || store.getUi().drawerOpen) store.clearSelection();
         setSegActive(mode);
         store.updateSettings({ viewMode: mode });
-        if (opts.animate !== false) playModeEnter();
+        if (opts.animate !== false) playModeEnter(mode);
         return true;
     }
 
@@ -1822,7 +1851,8 @@
         textarea.style.height = 'auto';
         var next = textarea.scrollHeight || 0;
         if (next < 32) next = 32;
-        textarea.style.height = Math.min(140, next) + 'px';
+        /* 标题换行后完整展开：不再截到 140px；详情面板自身可滚动 */
+        textarea.style.height = (next + 2) + 'px';
     }
 
     function scheduleDetailSave(field, apply, wait) {

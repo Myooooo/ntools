@@ -631,12 +631,6 @@
       color: var(--ink-secondary);
     }
 
-    .bar-sub {
-      color: var(--ink-muted);
-      font-size: 12.5px;
-      letter-spacing: 0.002em;
-    }
-
     .bar-actions {
       gap: 8px;
     }
@@ -1064,4 +1058,101 @@ html, body {
     font-weight: 650;
     letter-spacing: var(--nc-track-display);
   }
+}
+
+/* ==========================================================================
+ * v8.4 页头：恢复 logo + 工具箱标题，与主应用工具栏同高同字阶
+ * ========================================================================== */
+.app-bar {
+    height: 56px;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    background: var(--nc-glass-bg);
+    -webkit-backdrop-filter: var(--nc-glass-blur);
+    backdrop-filter: var(--nc-glass-blur);
+    border-bottom: 1px solid var(--nc-border);
+    box-shadow: inset 0 1px 0 var(--nc-glass-highlight);
+}
+
+.bar-inner {
+    width: 100%;
+    max-width: 1360px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.bar-head {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.bar-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    color: var(--ink-primary);
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.bar-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    border-radius: 8px;
+    background: var(--brand-soft);
+    color: var(--brand);
+}
+
+.bar-logo i,
+.bar-logo svg {
+    display: inline-flex;
+    width: 16px;
+    height: 16px;
+}
+
+.bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+@media (max-width: 700px) {
+    .app-bar {
+        height: auto;
+        min-height: 56px;
+        padding: 8px 16px;
+    }
+
+    .bar-inner {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .bar-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    .app-bar {
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+        background: var(--nc-surface);
+        box-shadow: none;
+    }
 }

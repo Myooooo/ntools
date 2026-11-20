@@ -820,7 +820,11 @@
     gap: 8px;
     height: 56px;
     padding: 0 12px 0 20px;
-    border-bottom: 1px solid var(--nc-border-faint);
+    border-bottom: 1px solid var(--nc-border);
+    background: var(--nc-glass-bg);
+    -webkit-backdrop-filter: var(--nc-glass-blur);
+    backdrop-filter: var(--nc-glass-blur);
+    box-shadow: inset 0 1px 0 var(--nc-glass-highlight);
 }
 
 .notes-title-wrap {
@@ -830,17 +834,6 @@
     justify-content: center;
     gap: 0;
     min-width: 0;
-}
-
-.notes-subtitle {
-    padding-left: 8px;
-    color: var(--nc-text-3);
-    font-size: var(--nc-fs-2xs);
-    line-height: 1.35;
-    letter-spacing: var(--nc-track-meta);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .notes-head__toggle {
@@ -857,9 +850,9 @@
     border-radius: var(--nc-radius-sm);
     background: transparent;
     color: var(--nc-text);
-    font-size: var(--nc-fs-2xl);
-    font-weight: 650;
-    letter-spacing: var(--nc-track-display);
+    font-size: 15.5px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
     line-height: 1.2;
     outline: none;
 }
@@ -4501,15 +4494,32 @@ html[data-lite="true"] .todo-shell.is-timeline .todo-detail {
     pointer-events: none !important;
 }
 
-/* 模式切换：新视图内容 180ms opacity + 4px（--nc-enter-y 在页面层为 4px） */
+/* 模式切换：方向性淡入 + 8px 位移 + 0.996 缩放（Apple 风格分段切换） */
 .todo-mainpane.is-mode-entering .todo-scroll,
 .todo-mainpane.is-mode-entering .todo-timeline {
-    animation: nc-rise-in var(--nc-dur-page) var(--nc-ease-out) both;
+    animation: nc-view-in var(--nc-dur-slow) var(--nc-ease-out) both;
+}
+
+.todo-mainpane.is-mode-entering--next .todo-scroll,
+.todo-mainpane.is-mode-entering--next .todo-timeline {
+    --nc-view-x: 8px;
+}
+
+.todo-mainpane.is-mode-entering--prev .todo-scroll,
+.todo-mainpane.is-mode-entering--prev .todo-timeline {
+    --nc-view-x: -8px;
 }
 
 html[data-lite="true"] .todo-mainpane.is-mode-entering .todo-scroll,
 html[data-lite="true"] .todo-mainpane.is-mode-entering .todo-timeline {
     animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .todo-mainpane.is-mode-entering .todo-scroll,
+    .todo-mainpane.is-mode-entering .todo-timeline {
+        animation: nc-fade-in 140ms linear both;
+    }
 }
 
 @media (max-width: 1100px) {
@@ -5159,20 +5169,16 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
 }
 
 
-/* v8：笔记页头与主模板对齐（24px 标题 + 12px 副标题） */
+/* v8.4：笔记页头与 nChat / 工坊工具栏同高同字阶 */
 @media (max-width: 560px) {
     .notes-head {
-        height: 52px;
+        height: 56px;
         padding-left: 12px;
     }
 
-    .notes-subtitle {
-        display: none;
-    }
-
     .notes-title {
-        font-size: var(--nc-fs-xl);
-        height: 30px;
+        font-size: 15.5px;
+        height: 32px;
     }
 }
 

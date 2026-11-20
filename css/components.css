@@ -672,6 +672,43 @@ html[data-lite="true"] .nc-switch__track::after {
     box-shadow: none;
 }
 
+.nc-seg__btn:active {
+    transform: scale(0.97);
+}
+
+html[data-lite="true"] .nc-seg__btn:active {
+    transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nc-seg__btn:active {
+        transform: none;
+    }
+}
+
+/* 视图切换：方向性淡入 + 轻微位移/缩放（Apple 风格分段切换） */
+.nc-view-enter {
+    animation: nc-view-in var(--nc-dur-slow) var(--nc-ease-out) both;
+}
+
+.nc-view-enter--next {
+    --nc-view-x: 8px;
+}
+
+.nc-view-enter--prev {
+    --nc-view-x: -8px;
+}
+
+html[data-lite="true"] .nc-view-enter {
+    animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nc-view-enter {
+        animation: nc-fade-in 140ms linear both;
+    }
+}
+
 /* --------------------------------------------------------------------------
  * 空状态 / 加载
  * -------------------------------------------------------------------------- */
@@ -2437,8 +2474,8 @@ html[data-lite="true"] .nc-dt__pop.is-open {
     box-shadow: var(--nc-shadow-1);
     transform: translateX(0);
     transition:
-        transform var(--nc-dur) var(--nc-ease-out),
-        width var(--nc-dur) var(--nc-ease-out),
+        transform var(--nc-dur-slow) var(--nc-ease-out),
+        width var(--nc-dur-slow) var(--nc-ease-out),
         opacity var(--nc-dur-fast) var(--nc-ease);
     pointer-events: none;
     z-index: 0;
@@ -2447,6 +2484,10 @@ html[data-lite="true"] .nc-dt__pop.is-open {
 .nc-seg__btn {
     position: relative;
     z-index: 1;
+    transition:
+        background-color var(--nc-dur-fast) var(--nc-ease),
+        color var(--nc-dur-fast) var(--nc-ease),
+        transform var(--nc-dur-press) var(--nc-ease-out);
     background: transparent;
 }
 

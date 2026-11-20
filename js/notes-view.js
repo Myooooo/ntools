@@ -23,6 +23,7 @@
     var schema = null;
     var unsubscribe = null;
     var commitTimer = null;
+    var modeEnterTimer = null;
     var renderTick = null;
     var bound = false;
 
@@ -966,11 +967,40 @@
         renderStatus();
     }
 
-    function toggleMode(force) {
+    function canAnimateMode() {
+        if (document.documentElement.getAttribute('data-lite') === 'true') return false;
+        return !(NC.util && NC.util.prefersReducedMotion && NC.util.prefersReducedMotion());
+    }
+
+    /** 编辑/阅读切换：方向性淡入 + 8px 位移 + 0.996 缩放。 */
+    function playModeEnter(prev, next) {
+        if (!canAnimateMode() || !els.editor || !els.preview) return;
+        var target = next === 'read' ? els.preview : els.editor;
+        if (!target || target.hidden) return;
+        var direction = prev === 'edit' && next === 'read' ? 'next' : 'prev';
+        [els.editor, els.preview].forEach(function (node) {
+            node.classList.remove('nc-view-enter', 'nc-view-enter--next', 'nc-view-enter--prev');
+        });
+        /* 强制一次样式计算，快速连续切换也能从起点重播 */
+        void target.offsetWidth;
+        target.classList.add('nc-view-enter', 'nc-view-enter--' + direction);
+        if (modeEnterTimer) global.clearTimeout(modeEnterTimer);
+        modeEnterTimer = global.setTimeout(function () {
+            modeEnterTimer = null;
+            [els.editor, els.preview].forEach(function (node) {
+                node.classList.remove('nc-view-enter', 'nc-view-enter--next', 'nc-view-enter--prev');
+            });
+        }, 260);
+    }
+
+    function toggleMode(force, options) {
         acHide();
+        var prev = state.mode;
         state.mode = typeof force === 'string' ? force : (state.mode === 'read' ? 'edit' : 'read');
         if (state.mode === 'read') commitNow();
         applyMode();
+        var animate = !options || options.animate !== false;
+        if (prev !== state.mode && animate) playModeEnter(prev, state.mode);
     }
 
     function toggleSide(force) {
@@ -1913,7 +1943,8 @@
                 if (!btn) return;
                 var mode = btn.getAttribute('data-mode');
                 if (!mode || mode === state.mode) return;
-                toggleMode(mode);
+                /* 键盘触发（detail=0）不播内容动画，点击分段控件才播 */
+                toggleMode(mode, { animate: event.detail !== 0 });
             });
         }
         if (els.filterClear) {
@@ -1995,7 +2026,7 @@
                 if (els.filter) { els.filter.focus(); els.filter.select(); }
             }
             else if (key === 'n' && !event.shiftKey) { event.preventDefault(); newNote(); }
-            else if (key === 'e') { event.preventDefault(); toggleMode(); }
+            else if (key === 'e') { event.preventDefault(); toggleMode(undefined, { animate: false }); }
             else if (key === 's') { event.preventDefault(); commitNow(); store.flush(); toast('已保存', 'success'); }
             else if (key === 'z' && !event.shiftKey) { event.preventDefault(); var label = store.undo(); if (label) toast('已撤销：' + label); }
             else if (key === 'z' && event.shiftKey) { event.preventDefault(); var redoLabel = store.redo(); if (redoLabel) toast('已重做：' + redoLabel); }
