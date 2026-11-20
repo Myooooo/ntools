@@ -319,6 +319,8 @@
         var util = NC.util;
         if (!util || typeof util.loadScript !== 'function') return Promise.reject(new Error('loader unavailable'));
         settingsPromise = util.loadScript('js/settings-panel.js').then(function () {
+            return util.loadScript('js/settings-workshop.js').catch(function () { return null; });
+        }).then(function () {
             settingsLoaded = true;
             if (NC.settingsPanel && typeof NC.settingsPanel.init === 'function') NC.settingsPanel.init();
             return true;
