@@ -1807,3 +1807,34 @@ html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
         padding-bottom: calc(40px + var(--nc-safe-bottom));
     }
 }
+
+/* ==========================================================================
+ * v9.0 移动端设置：可视视口高度 + 键盘 + 左右安全区
+ * visualViewport 由 settings-panel.js 写入 --nc-vv-height；无 JS 时回退 dvh/vh。
+ * ========================================================================== */
+@media (max-width: 900px) {
+    .settings-sheet__panel {
+        height: var(--nc-vv-height, 100vh);
+        height: var(--nc-vv-height, 100dvh);
+        max-height: var(--nc-vv-height, 100vh);
+        max-height: var(--nc-vv-height, 100dvh);
+    }
+
+    .settings-sheet__head {
+        padding-left: calc(18px + var(--nc-safe-left));
+        padding-right: calc(10px + var(--nc-safe-right));
+    }
+
+    .settings-sheet__nav {
+        padding-left: calc(12px + var(--nc-safe-left));
+        padding-right: calc(12px + var(--nc-safe-right));
+        overscroll-behavior-x: contain;
+    }
+
+    .settings-sheet__body {
+        padding-left: calc(18px + var(--nc-safe-left));
+        padding-right: calc(18px + var(--nc-safe-right));
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+}

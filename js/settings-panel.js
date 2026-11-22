@@ -30,6 +30,8 @@
     var pickerBtn = null;
     var pickerLabel = null;
     var settleTimer = null;
+    var vvHandler = null;
+    var vvRaf = 0;
 
     function store() { return NC.store && NC.store.llm; }
     function ai() { return NC.ai; }
@@ -1223,6 +1225,16 @@
         sheet.addEventListener('keydown', function (event) {
             if (event.key === 'Escape') { event.stopPropagation(); close(); }
         });
+        sheet.addEventListener('focusin', function (event) {
+            var target = event.target;
+            if (!target || !/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+            global.setTimeout(function () {
+                if (!open) return;
+                try {
+                    target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+                } catch (err) { /* ignore */ }
+            }, 280);
+        });
         built = true;
     }
 
@@ -1248,6 +1260,42 @@
             settleTimer = null;
             if (open) sheet.classList.add('is-settled');
         }, 360);
+        bindViewport();
+        syncViewport();
+        global.setTimeout(syncViewport, 60);
+    }
+
+    function syncViewport() {
+        if (!open || !sheet) return;
+        var viewport = global.visualViewport;
+        var height = viewport && viewport.height ? viewport.height : global.innerHeight;
+        if (!height || height < 240) return;
+        sheet.style.setProperty('--nc-vv-height', Math.round(height) + 'px');
+    }
+
+    function bindViewport() {
+        var viewport = global.visualViewport;
+        if (!viewport || vvHandler) return;
+        vvHandler = function () {
+            if (vvRaf) return;
+            vvRaf = global.requestAnimationFrame(function () {
+                vvRaf = 0;
+                syncViewport();
+            });
+        };
+        viewport.addEventListener('resize', vvHandler);
+        viewport.addEventListener('scroll', vvHandler);
+    }
+
+    function unbindViewport() {
+        var viewport = global.visualViewport;
+        if (viewport && vvHandler) {
+            viewport.removeEventListener('resize', vvHandler);
+            viewport.removeEventListener('scroll', vvHandler);
+        }
+        vvHandler = null;
+        if (vvRaf) { global.cancelAnimationFrame(vvRaf); vvRaf = 0; }
+        if (sheet) sheet.style.removeProperty('--nc-vv-height');
     }
 
     function finishClose() {
@@ -1263,6 +1311,7 @@
         sheet.classList.remove('is-settled');
         sheet.classList.add('is-closing');
         sheet.classList.remove('is-open');
+        unbindViewport();
         if (releaseTrap) { releaseTrap(); releaseTrap = null; }
         var panel = sheet.querySelector('.settings-sheet__panel');
         var done = false;
