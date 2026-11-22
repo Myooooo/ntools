@@ -214,6 +214,15 @@ fieldset {
     }
 }
 
+/* 粗指针（手机/平板）输入字号至少 16px：避免 iOS Safari 聚焦自动缩放 */
+@media (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+    textarea,
+    select {
+        font-size: 16px;
+    }
+}
+
 /* 应用壳：移动端地址栏随动；Chromium 102 会忽略 dvh，保留 vh 兜底 */
 .nc-app,
 .tools-app,

@@ -5002,7 +5002,7 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
         align-items: center;
         gap: 8px;
         width: 100%;
-        padding: 8px 12px;
+        padding: calc(8px + var(--nc-safe-top)) calc(12px + var(--nc-safe-right)) 8px calc(12px + var(--nc-safe-left));
         border-right: 0;
         border-bottom: 1px solid var(--nc-border);
         background: var(--nc-material-chrome-bg);
@@ -5053,7 +5053,7 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
         flex-direction: row;
         align-items: stretch;
         gap: 2px;
-        width: min(520px, calc(100vw - 20px));
+        width: min(520px, calc(100vw - 20px - var(--nc-safe-left) - var(--nc-safe-right)));
         height: auto;
         min-height: 60px;
         padding: 6px;
@@ -5178,7 +5178,7 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
 /* 超窄屏（≤380）：标签再收一点，保证 5 项不挤 */
 @media (max-width: 380px) {
     .tools-nav {
-        width: calc(100vw - 12px);
+        width: calc(100vw - 12px - var(--nc-safe-left) - var(--nc-safe-right));
         border-radius: 22px;
         padding: 5px;
     }

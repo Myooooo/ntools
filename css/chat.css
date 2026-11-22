@@ -1324,6 +1324,7 @@ html[data-lite="true"] .chat-msg__actions {
     flex-direction: column;
     width: min(580px, 100%);
     max-height: calc(100vh - 48px);
+    max-height: calc(100dvh - 48px);
     padding: var(--nc-space-5);
     border: 1px solid var(--nc-border-strong);
     border-radius: var(--nc-radius-xl);

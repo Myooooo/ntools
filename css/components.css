@@ -799,6 +799,7 @@ html[data-lite="true"] .nc-view-enter {
 .nc-modal {
     width: min(520px, 100%);
     max-height: calc(100vh - 48px);
+    max-height: calc(100dvh - 48px);
     display: flex;
     flex-direction: column;
     background: var(--nc-elevated);

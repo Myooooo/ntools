@@ -1146,6 +1146,7 @@
     position: relative;
     width: min(980px, calc(100vw - 72px));
     height: min(760px, calc(100vh - 72px));
+    height: min(760px, calc(100dvh - 72px));
     max-height: none;
     border: 1px solid var(--nc-border-strong);
     border-left: 1px solid var(--nc-border-strong);
@@ -1569,6 +1570,7 @@ html[data-lite="true"] .settings-sheet__backdrop {
 .settings-sheet__panel {
     width: min(920px, calc(100vw - 64px));
     height: min(760px, calc(100vh - 64px));
+    height: min(760px, calc(100dvh - 64px));
     max-height: none;
     opacity: 0;
     transform: translateY(10px) scale(0.985);
@@ -1781,4 +1783,27 @@ html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
 @media (max-width: 600px) {
     .sp-trash-row { align-items: flex-start; flex-direction: column; }
     .sp-trash-row__actions { width: 100%; justify-content: flex-end; }
+}
+
+
+/* ==========================================================================
+ * v9.0 移动端平台基线：动态视口 + 安全区
+ * Chromium 102 不识别 dvh 时保留上一行 vh；Safari/新 Chrome 使用可视高度。
+ * ========================================================================== */
+@media (max-width: 900px) {
+    .settings-sheet__panel {
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100vh;
+        max-height: 100dvh;
+    }
+
+    .settings-sheet__head {
+        height: calc(52px + var(--nc-safe-top));
+        padding-top: var(--nc-safe-top);
+    }
+
+    .settings-sheet__body {
+        padding-bottom: calc(40px + var(--nc-safe-bottom));
+    }
 }
