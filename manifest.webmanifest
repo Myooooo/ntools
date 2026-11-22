@@ -1,0 +1,56 @@
+{
+  "id": "./ntools.html",
+  "name": "nTools · 工具箱",
+  "short_name": "nTools",
+  "description": "本地优先的个人工具箱：待办、邮箱、笔记、对话与创意工坊。",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./ntools.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0b0e13",
+  "theme_color": "#0b0e13",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "./img/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./img/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./img/pwa-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "待办事项",
+      "short_name": "待办",
+      "url": "./ntools.html#todo",
+      "icons": [{ "src": "./img/pwa-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "笔记本",
+      "short_name": "笔记",
+      "url": "./ntools.html#md",
+      "icons": [{ "src": "./img/pwa-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "nChat",
+      "short_name": "nChat",
+      "url": "./ntools.html#nchat",
+      "icons": [{ "src": "./img/pwa-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

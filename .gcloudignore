@@ -1,0 +1,13 @@
+# 不部署开发/文档/测试产物
+.git/
+.gitignore
+.gcloudignore
+docs/
+tools/
+checks/
+README.md
+DEPLOYMENT.md
+LICENSE
+img/main.png
+*.log
+.DS_Store

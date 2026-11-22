@@ -77,6 +77,10 @@
 
 > 注意：自动备份跟着浏览器存储走——清空浏览器数据会一起消失；API Key 在勾选导出时是明文。重要数据请同时下载 ZIP 存到磁盘。
 
+## 外部部署 / PWA
+
+完整步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)：GCS 静态网站 + Cloudflare 代理/Access、缓存头、Service Worker、PWA 安装与更新、数据迁移。
+
 ## 部署到内网（信创 ARM / 麒麟 / Chromium 102）
 
 - 拷贝 `ntools.html`、`css/`、`js/`（含 `js/workshop/builtin/`）、`img/`、`checks/` 到目标目录，保持结构不变。
