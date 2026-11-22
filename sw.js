@@ -58,6 +58,7 @@ var CORE_ASSETS = [
     './js/notes-view.js',
     './js/ntools-app.js',
     './js/polyfills.js',
+    './js/pwa-head.js',
     './js/pwa.js',
     './js/prefs.js',
     './js/preview-host.js',

@@ -441,99 +441,6 @@
 }
 
 /* ==========================================================================
- * 4. 二维码工作台
- * ========================================================================== */
-/* 二维码工作台：与图片工具同构的「发丝外框双栏面板」，不再居中悬浮 */
-.tool-layout--qr {
-    flex: 1;
-    min-height: 0;
-    grid-template-columns: minmax(0, 1fr) 320px;
-    align-items: stretch;
-    align-content: stretch;
-    width: 100%;
-    max-width: none;
-    margin: 0;
-    gap: 0;
-    border: 1px solid var(--nc-border);
-    border-radius: var(--nc-radius-lg);
-    background: var(--nc-surface);
-    overflow: hidden;
-}
-
-.qr-stage-card {
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    padding: 24px;
-}
-
-.qr-stage {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: min(340px, 100%);
-    aspect-ratio: 1 / 1;
-    padding: 16px;
-    border-radius: var(--nc-radius-lg);
-    border: 1px solid var(--nc-border);
-    background: #ffffff;
-    box-shadow: none;
-}
-
-.qr-output {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-}
-
-.qr-output img,
-.qr-output canvas {
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
-    max-width: 100%;
-    object-fit: contain;
-}
-
-.qr-placeholder {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    padding: 24px;
-    color: #6d7a8a;
-    font-size: var(--nc-fs-sm);
-    line-height: 1.5;
-    text-align: center;
-}
-
-.qr-placeholder[hidden] {
-    display: none;
-}
-
-.qr-placeholder__icon {
-    display: inline-flex;
-    color: #9aa7b8;
-}
-
-.qr-form {
-    gap: 14px;
-    padding: 20px;
-    align-self: stretch;
-    border-left: 1px solid var(--nc-border);
-}
-
-.qr-form .nc-field {
-    gap: 6px;
-}
-
-/* ==========================================================================
  * 5. 笔记（原 Markdown 工作台）
  *   三栏：笔记栏 / 编辑·阅读 / 信息面板；≤1100px 时后两者变为覆盖层。
  * ========================================================================== */
@@ -1456,160 +1363,6 @@ html[data-lite="true"] .notes-ac {
 .md-preview img {
     max-width: 100%;
     border-radius: var(--nc-radius-md);
-}
-
-/* ==========================================================================
- * 6. 图片工作台
- * ========================================================================== */
-.image-drop {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    flex: 0 0 auto;
-    padding: 14px 18px;
-    border: 1px dashed var(--nc-border-strong);
-    border-radius: var(--nc-radius-md);
-    background: transparent;
-    color: var(--nc-text-2);
-    cursor: pointer;
-    transition: border-color var(--nc-dur-fast) var(--nc-ease), background-color var(--nc-dur-fast) var(--nc-ease);
-}
-
-.image-drop.is-dragover {
-    border-color: var(--nc-accent);
-    background: var(--nc-accent-faint);
-}
-
-.image-drop__icon {
-    display: inline-flex;
-    color: var(--nc-text-3);
-}
-
-.image-drop__text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    color: var(--nc-text-3);
-    font-size: var(--nc-fs-sm);
-}
-
-.image-drop__text strong {
-    color: var(--nc-text);
-    font-size: var(--nc-fs-md);
-    font-weight: 600;
-}
-
-.tool-layout--image {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    flex: 1;
-    min-height: 0;
-    align-content: stretch;
-    overflow: hidden;
-    border: 1px solid var(--nc-border);
-    border-radius: var(--nc-radius-lg);
-    background: var(--nc-surface);
-}
-
-.image-pane {
-    min-width: 0;
-    min-height: 0;
-    gap: 12px;
-    padding: 16px;
-}
-
-.image-pane + .image-pane {
-    border-left: 1px solid var(--nc-border);
-}
-
-.image-pane__head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    color: var(--nc-text-2);
-    font-size: var(--nc-fs-sm);
-    font-weight: 500;
-}
-
-.image-preview-wrap {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-    min-height: 170px;
-    overflow: hidden;
-    border: 1px solid var(--nc-border-faint);
-    border-radius: var(--nc-radius-md);
-    background-color: var(--nc-bg-soft);
-    background-image:
-        linear-gradient(45deg, var(--nc-border-faint) 25%, transparent 25%, transparent 75%, var(--nc-border-faint) 75%),
-        linear-gradient(45deg, var(--nc-border-faint) 25%, transparent 25%, transparent 75%, var(--nc-border-faint) 75%);
-    background-size: 16px 16px;
-    background-position: 0 0, 8px 8px;
-}
-
-#img-preview {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
-}
-
-#img-preview:not([src]) {
-    display: none;
-}
-
-.image-preview-placeholder {
-    color: var(--nc-text-3);
-    font-size: var(--nc-fs-sm);
-}
-
-#img-preview[src] + .image-preview-placeholder {
-    display: none;
-}
-
-.image-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.range-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.range-row .nc-label {
-    flex: 0 0 auto;
-    margin: 0;
-}
-
-.range-row__value {
-    flex: 0 0 44px;
-    color: var(--nc-text-2);
-    font-family: var(--nc-font-mono);
-    font-size: var(--nc-fs-sm);
-    font-variant-numeric: tabular-nums;
-    text-align: right;
-}
-
-/* 滑杆外观统一由公共组件 .nc-range 提供（components.css）；
- * 这里只补布局，不再覆盖轨道/滑块，避免同一控件两套皮。 */
-.range-row .nc-range {
-    flex: 1;
-    width: auto;
-}
-
-.image-output {
-    flex: 1;
-    min-height: 170px;
-    font-family: var(--nc-font-mono);
-    font-size: var(--nc-fs-xs);
-    line-height: 1.6;
-    color: var(--nc-text-2);
-    word-break: break-all;
 }
 
 /* ==========================================================================
@@ -3323,11 +3076,6 @@ html[data-lite="true"] .notes-ac {
         background: var(--nc-surface-2);
     }
 
-    .image-drop:hover {
-        border-color: var(--nc-accent-ring);
-        background: var(--nc-accent-faint);
-    }
-
     .detail-tag button:hover {
         color: var(--nc-danger);
         background: var(--nc-danger-soft);
@@ -3437,21 +3185,6 @@ html[data-lite="true"] .todo-scroll {
     .detail-close {
         display: inline-flex;
     }
-
-    .tool-layout--image {
-        grid-template-columns: minmax(0, 1fr);
-        overflow-y: auto;
-    }
-
-    .image-pane + .image-pane {
-        border-left: 0;
-        border-top: 1px solid var(--nc-border);
-    }
-
-    .tool-layout--qr {
-        grid-template-columns: minmax(0, 1fr) 310px;
-        gap: 22px;
-    }
 }
 
 @media (max-width: 900px) {
@@ -3549,17 +3282,6 @@ html[data-lite="true"] .todo-scroll {
     .tools-page .todo-mainpane .tools-head__actions {
         width: auto;
         flex-wrap: nowrap;
-    }
-
-    .tool-layout--qr,
-    .tool-layout--image {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    .qr-form {
-        padding: 16px 0 0;
-        border-left: 0;
-        border-top: 1px solid var(--nc-border-faint);
     }
 
     .todo-foot__hints {
@@ -3956,27 +3678,9 @@ html[data-lite="true"] .todo-scroll {
         min-height: 20px;
     }
 
-    /* 工具页：单列并排成纵向工作台 */
-    .tool-layout--qr {
-        margin-top: 4px;
-        align-content: start;
-    }
-
     .notes-editor,
     .notes-preview {
         min-height: 180px;
-    }
-
-    .qr-stage {
-        width: min(240px, 100%);
-    }
-
-    .tool-layout--image {
-        border-radius: var(--nc-radius-md);
-    }
-
-    .image-presentation {
-        min-height: 150px;
     }
 
     .todo-ai-textarea {
@@ -4069,17 +3773,12 @@ html[data-lite="true"] .todo-scroll {
         font-size: var(--nc-fs-2xs);
     }
 
-    .tool-card,
-    .image-pane {
+    .tool-card {
         padding: 12px;
     }
 
     .md-preview {
         padding: 14px 14px 22px;
-    }
-
-    .qr-form {
-        padding-top: 14px;
     }
 
     .import-preview__key,
@@ -4892,56 +4591,6 @@ html[data-lite="true"] .notes-info.is-closing {
     .notes-info.is-closing {
         animation: none;
     }
-}
-
-/* ==========================================================================
- * 20. v6.0：工具页底部状态条（与 .todo-foot 同构）
- * 让二维码 / 图片工具也有「我在哪、能怎么操作」的常驻提示。
- * ========================================================================== */
-.tool-foot {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    min-height: 24px;
-    padding: 0 2px;
-    color: var(--nc-text-3);
-    font-size: var(--nc-fs-2xs);
-    font-variant-numeric: tabular-nums;
-}
-
-.tool-foot__note {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.tool-foot__hints {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    flex: 0 0 auto;
-}
-
-.tool-foot__hints > span {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    white-space: nowrap;
-}
-
-.tool-foot__hints .nc-kbd {
-    min-width: 17px;
-    height: 17px;
-    font-size: 9.5px;
-}
-
-/* 图片工具主操作与二维码保持同一层级：内联按钮，不做通栏大块 */
-.image-controls .nc-btn--block {
-    width: auto;
-    align-self: flex-start;
 }
 
 /* ---- 19.7 快速切换面板：键盘高频动作，只做 120ms 极短入场 ---- */
