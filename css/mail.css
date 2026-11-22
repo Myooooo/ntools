@@ -1156,3 +1156,20 @@ html, body {
         box-shadow: none;
     }
 }
+
+/* ==========================================================================
+ * v9.0 移动端邮箱 iframe：16px 输入 + 悬浮底栏 inset
+ * ========================================================================== */
+@media (pointer: coarse) {
+    body input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+    body textarea,
+    body select {
+        font-size: 16px !important;
+    }
+}
+
+@media (max-width: 960px) {
+    .app-shell {
+        padding-bottom: var(--nc-mobile-tabbar-inset);
+    }
+}

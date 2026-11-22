@@ -5412,3 +5412,31 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
 .detail-refs .nc-ref { padding: 1px 6px; font-size: 11.5px; }
 .detail-refs--broken { color: var(--nc-warn, #b45309); }
 .detail-refs--broken .nc-btn { margin-left: 4px; }
+
+/* ==========================================================================
+ * v9.0 移动端模块收口：横向索引提示 / 抽屉/详情底部 inset
+ * ========================================================================== */
+@media (max-width: 768px) {
+    .todo-views {
+        position: relative;
+    }
+
+    .todo-views::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 2;
+        width: 22px;
+        background: linear-gradient(90deg, transparent, var(--nc-bg));
+        pointer-events: none;
+    }
+
+    .todo-detail__inner,
+    .notes-side,
+    .ws-side,
+    .chat-sessions {
+        padding-bottom: calc(18px + var(--nc-mobile-tabbar-inset));
+    }
+}

@@ -500,6 +500,22 @@
         if (global.addEventListener) {
             global.addEventListener('resize', updatePlaceholder);
         }
+        /* 软键盘打开时把 composer 保持在可视区（iOS visualViewport 不改变 layout viewport） */
+        function keepComposerVisible() {
+            var viewport = global.visualViewport;
+            if (!viewport || !el.inputArea) return;
+            if (viewport.height >= global.innerHeight - 80) return;
+            global.setTimeout(function () {
+                try { el.inputArea.scrollIntoView({ block: 'end', inline: 'nearest', behavior: 'smooth' }); }
+                catch (err) { /* ignore */ }
+            }, 80);
+        }
+        el.textarea.addEventListener('focus', keepComposerVisible);
+        if (global.visualViewport) {
+            global.visualViewport.addEventListener('resize', function () {
+                if (document.activeElement === el.textarea) keepComposerVisible();
+            });
+        }
     }
 
     NC.view = NC.view || {};
