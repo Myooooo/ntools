@@ -41,6 +41,9 @@
     --nc-safe-right: env(safe-area-inset-right, 0px);
     --nc-safe-bottom: env(safe-area-inset-bottom, 0px);
     --nc-safe-left: env(safe-area-inset-left, 0px);
+    --nc-mobile-tabbar-h: 62px;
+    --nc-mobile-tabbar-gap: 8px;
+    --nc-mobile-tabbar-inset: calc(var(--nc-mobile-tabbar-h) + var(--nc-mobile-tabbar-gap) + var(--nc-safe-bottom));
 
     /* ---------- 间距（4px 栅格） ---------- */
     --nc-space-1: 4px;

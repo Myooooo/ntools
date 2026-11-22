@@ -818,6 +818,7 @@
 
 /* ---------- 中：编辑 / 阅读 ---------- */
 .notes-main {
+    position: relative;
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -3590,6 +3591,20 @@ html[data-lite="true"] .todo-scroll {
         }
     }
 
+    /* 顶栏玻璃放在伪元素上：避免 backdrop-filter 让内部 fixed 底栏相对顶栏定位 */
+    .tools-app .tools-rail::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background: var(--nc-glass-bg);
+        -webkit-backdrop-filter: var(--nc-glass-blur);
+        backdrop-filter: var(--nc-glass-blur);
+        border-bottom: 1px solid var(--nc-border);
+        box-shadow: inset 0 1px 0 var(--nc-glass-highlight);
+        pointer-events: none;
+    }
+
     .tools-app .tools-rail__brand {
         flex: 1;
         min-height: 0;
@@ -5005,9 +5020,12 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
         padding: calc(8px + var(--nc-safe-top)) calc(12px + var(--nc-safe-right)) 8px calc(12px + var(--nc-safe-left));
         border-right: 0;
         border-bottom: 1px solid var(--nc-border);
-        background: var(--nc-material-chrome-bg);
+        background: transparent;
         -webkit-backdrop-filter: none;
         backdrop-filter: none;
+        border-bottom-color: transparent;
+        box-shadow: none;
+        isolation: isolate;
         overflow: visible;
         z-index: var(--nc-z-sticky);
     }
@@ -5136,7 +5154,48 @@ html[data-lite="true"] .todo-detail.is-detail-leaving {
 
     /* 内容为悬浮 Tab Bar 让出空间（内容仍可从玻璃下方滚过） */
     .tools-main {
-        padding-bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+        padding-bottom: 0;
+    }
+
+    .tools-page:not([data-page="todo"]):not(.tools-page--nchat):not(.tools-page--notes):not(.tools-page--workshop):not(.tools-page--email) {
+        padding-bottom: calc(var(--nc-mobile-tabbar-inset) + 12px);
+    }
+
+    /* 触屏底栏是悬浮层：隐藏桌面键盘提示/状态条，内容可滚到玻璃下方 */
+    .todo-foot,
+    .notes-status {
+        display: none;
+    }
+
+    .todo-scroll {
+        padding-bottom: calc(var(--nc-mobile-tabbar-inset) + 8px);
+    }
+
+    .notes-head {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 5;
+    }
+
+    .notes-body {
+        padding-top: 0;
+    }
+
+    .notes-editor,
+    .notes-preview {
+        padding-top: 72px;
+        padding-bottom: calc(var(--nc-mobile-tabbar-inset) + 24px);
+    }
+
+    .notes-empty {
+        padding-top: var(--nc-mobile-tabbar-inset);
+    }
+
+    /* nChat 有固定 composer：先保证 composer 在玻璃上方，消息区仍可滚动 */
+    .chat-app--embed {
+        padding-bottom: var(--nc-mobile-tabbar-inset);
     }
 
     .nc-toasts {
