@@ -151,27 +151,30 @@
     --nc-priority-high-soft: rgba(232, 164, 90, 0.16);
     --nc-priority-urgent-soft: rgba(255, 122, 114, 0.18);
 
-    /* ---------- 材质 / 效果（标准模式；Lite 会全部移除） ---------- */
-    --nc-glass: rgba(15, 20, 27, 0.66);
-    --nc-glass-bg: rgba(15, 20, 27, 0.60);
-    --nc-glass-blur: saturate(150%) blur(20px);
-    --nc-glass-panel: rgba(22, 29, 40, 0.76);
-    --nc-glass-panel-blur: saturate(150%) blur(22px);
-    --nc-scrim-blur: saturate(120%) blur(8px);
-    --nc-glass-highlight: rgba(255, 255, 255, 0.10);
-    --nc-overlay: rgba(4, 6, 10, 0.62);
+    /* ---------- 材质 / 效果（标准模式：Apple Liquid Glass 拟态玻璃；Lite 会全部移除） ---------- */
+    --nc-glass: rgba(18, 24, 34, 0.62);
+    --nc-glass-bg: rgba(18, 24, 34, 0.56);
+    --nc-glass-blur: saturate(180%) blur(20px);
+    --nc-glass-panel: rgba(24, 31, 44, 0.70);
+    --nc-glass-panel-blur: saturate(180%) blur(22px);
+    --nc-scrim-blur: saturate(135%) blur(8px);
+    --nc-glass-highlight: rgba(255, 255, 255, 0.16);
+    --nc-overlay: rgba(4, 6, 10, 0.58);
 
-    /* ---------- 材质档位（v8） ---------- */
-    --nc-material-chrome-bg: rgba(15, 20, 27, 0.86);
-    --nc-material-float-bg: rgba(22, 29, 40, 0.76);
-    --nc-material-sheet-bg: rgba(19, 26, 35, 0.84);
-    --nc-material-modal-bg: rgba(24, 32, 44, 0.72);
+    /* ---------- 材质档位（Apple Liquid Glass：高饱和通透 + 双层镜面边缘高光） ---------- */
+    --nc-material-chrome-bg: rgba(16, 22, 31, 0.76);
+    --nc-material-float-bg: rgba(24, 31, 44, 0.66);
+    --nc-material-sheet-bg: rgba(19, 26, 36, 0.80);
+    --nc-material-modal-bg: rgba(26, 34, 48, 0.68);
     --nc-material-scrim: var(--nc-overlay);
-    --nc-material-edge: rgba(255, 255, 255, 0.10);
-    --nc-material-rim: rgba(255, 255, 255, 0.16);
-    --nc-material-sheen: linear-gradient(160deg, rgba(255, 255, 255, 0.07), transparent 42%);
-    --nc-material-saturate: 150%;
-    --nc-blur-chrome: 10px;
+    --nc-material-edge: rgba(255, 255, 255, 0.14);
+    --nc-material-rim: rgba(255, 255, 255, 0.28);
+    --nc-material-specular: rgba(255, 255, 255, 0.24);
+    --nc-material-inner-ring: rgba(255, 255, 255, 0.08);
+    --nc-material-bottom-shade: rgba(0, 0, 0, 0.24);
+    --nc-material-sheen: linear-gradient(148deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.02) 44%, rgba(255, 255, 255, 0.05) 100%);
+    --nc-material-saturate: 180%;
+    --nc-blur-chrome: 14px;
     --nc-blur-float: 20px;
     --nc-blur-sheet: 0px; /* 面板由 scrim 提供模糊，避免玻璃叠玻璃 */
     --nc-blur-scrim: 8px;
@@ -261,23 +264,27 @@ html[data-theme="light"] {
     --nc-priority-high-soft: rgba(138, 92, 18, 0.12);
     --nc-priority-urgent-soft: rgba(197, 59, 59, 0.12);
 
-    --nc-glass: rgba(255, 255, 255, 0.74);
-    --nc-glass-bg: rgba(255, 255, 255, 0.68);
-    --nc-glass-blur: saturate(150%) blur(20px);
-    --nc-glass-panel: rgba(255, 255, 255, 0.86);
-    --nc-glass-panel-blur: saturate(150%) blur(22px);
-    --nc-scrim-blur: saturate(110%) blur(8px);
-    --nc-glass-highlight: rgba(255, 255, 255, 0.85);
-    --nc-overlay: rgba(15, 18, 24, 0.3);
+    --nc-glass: rgba(255, 255, 255, 0.70);
+    --nc-glass-bg: rgba(255, 255, 255, 0.64);
+    --nc-glass-blur: saturate(175%) blur(18px);
+    --nc-glass-panel: rgba(255, 255, 255, 0.80);
+    --nc-glass-panel-blur: saturate(175%) blur(20px);
+    --nc-scrim-blur: saturate(125%) blur(8px);
+    --nc-glass-highlight: rgba(255, 255, 255, 0.92);
+    --nc-overlay: rgba(15, 18, 24, 0.28);
 
-    --nc-material-chrome-bg: rgba(250, 251, 252, 0.92);
-    --nc-material-float-bg: rgba(255, 255, 255, 0.86);
-    --nc-material-sheet-bg: rgba(252, 252, 253, 0.90);
-    --nc-material-modal-bg: rgba(255, 255, 255, 0.88);
+    --nc-material-chrome-bg: rgba(252, 253, 255, 0.82);
+    --nc-material-float-bg: rgba(255, 255, 255, 0.74);
+    --nc-material-sheet-bg: rgba(252, 253, 255, 0.86);
+    --nc-material-modal-bg: rgba(255, 255, 255, 0.78);
     --nc-material-scrim: var(--nc-overlay);
-    --nc-material-edge: rgba(255, 255, 255, 0.9);
-    --nc-material-rim: rgba(255, 255, 255, 0.95);
-    --nc-material-sheen: linear-gradient(160deg, rgba(255, 255, 255, 0.55), transparent 46%);
+    --nc-material-edge: rgba(255, 255, 255, 0.92);
+    --nc-material-rim: rgba(255, 255, 255, 0.98);
+    --nc-material-specular: rgba(255, 255, 255, 0.95);
+    --nc-material-inner-ring: rgba(255, 255, 255, 0.65);
+    --nc-material-bottom-shade: rgba(16, 24, 40, 0.08);
+    --nc-material-sheen: linear-gradient(148deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0.16) 46%, rgba(255, 255, 255, 0.34) 100%);
+    --nc-material-saturate: 175%;
     --nc-elev-border: var(--nc-border);
     --nc-ambient:
         repeating-linear-gradient(0deg, transparent 0 31px, rgba(20, 24, 32, 0.022) 31px 32px),
@@ -336,6 +343,9 @@ html[data-lite="true"] {
     --nc-material-scrim: var(--nc-overlay);
     --nc-material-edge: transparent;
     --nc-material-rim: transparent;
+    --nc-material-specular: transparent;
+    --nc-material-inner-ring: transparent;
+    --nc-material-bottom-shade: transparent;
     --nc-material-sheen: none;
     --nc-blur-chrome: 0px;
     --nc-blur-float: 0px;

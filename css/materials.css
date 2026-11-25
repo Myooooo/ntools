@@ -4,11 +4,11 @@
  * 约束：Safari 需要 -webkit-；Lite 下全部转实色；禁止玻璃叠玻璃。
  * ========================================================================== */
 
-/* ---------- 浮层：菜单 / 下拉 / Toast / 小面板 ---------- */
+/* ---------- 浮层：菜单 / 下拉 / Toast / 小面板（Apple Liquid Glass 镜面双高光） ---------- */
 .nc-material-float {
     background-color: var(--nc-material-float-bg);
     background-image:
-        radial-gradient(120% 80% at 18% 0%, rgba(255, 255, 255, 0.055), transparent 56%),
+        radial-gradient(130% 90% at 16% 0%, rgba(255, 255, 255, 0.12), transparent 54%),
         var(--nc-material-sheen);
     -webkit-backdrop-filter: blur(var(--nc-blur-float)) saturate(var(--nc-material-saturate));
     backdrop-filter: blur(var(--nc-blur-float)) saturate(var(--nc-material-saturate));
@@ -16,18 +16,22 @@
     border-top-color: var(--nc-material-rim);
     box-shadow:
         var(--nc-shadow-float),
-        inset 0 1px 0 var(--nc-material-edge),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+        inset 0 1px 0 var(--nc-material-specular),
+        inset 0 0 0 1px var(--nc-material-inner-ring),
+        inset 0 -1px 0 var(--nc-material-bottom-shade);
 }
 
 /* ---------- 页头 / 导轨 / 状态栏：静态 chrome ---------- */
 .nc-material-chrome {
-    background: var(--nc-material-chrome-bg);
+    background-color: var(--nc-material-chrome-bg);
+    background-image: var(--nc-material-sheen);
     border-color: var(--nc-border);
-    box-shadow: inset 0 1px 0 var(--nc-material-edge);
+    box-shadow:
+        inset 0 1px 0 var(--nc-material-edge),
+        inset 0 -1px 0 var(--nc-material-bottom-shade);
 }
 
-/* ---------- 模态 / 设置面板：厚材质（不叠模糊） ---------- */
+/* ---------- 模态 / 设置面板：厚材质（不叠模糊，保留镜面高光环） ---------- */
 .nc-material-sheet {
     background-color: var(--nc-material-sheet-bg);
     background-image: var(--nc-material-sheen);
@@ -35,20 +39,23 @@
     border-top-color: var(--nc-material-rim);
     box-shadow:
         var(--nc-shadow-sheet),
-        inset 0 1px 0 var(--nc-material-edge),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.22);
+        inset 0 1px 0 var(--nc-material-specular),
+        inset 0 0 0 1px var(--nc-material-inner-ring),
+        inset 0 -1px 0 var(--nc-material-bottom-shade);
 }
 
-/* 确认框：比大面板更透一点，小面积玻璃感更明显 */
+/* 确认框：小面积苹果拟态玻璃，高光折射与景深更清晰 */
 .nc-modal {
     background-color: var(--nc-material-modal-bg);
     background-image:
-        radial-gradient(120% 90% at 18% 0%, rgba(255, 255, 255, 0.09), transparent 56%),
+        radial-gradient(130% 95% at 18% 0%, rgba(255, 255, 255, 0.14), transparent 56%),
         var(--nc-material-sheen);
+    border-top-color: var(--nc-material-rim);
     box-shadow:
         var(--nc-shadow-sheet),
-        inset 0 1px 0 rgba(255, 255, 255, 0.16),
-        inset 0 -1px 0 rgba(0, 0, 0, 0.24);
+        inset 0 1px 0 var(--nc-material-specular),
+        inset 0 0 0 1px var(--nc-material-inner-ring),
+        inset 0 -1px 0 var(--nc-material-bottom-shade);
 }
 
 /* ---------- 遮罩：模糊由这一层负责，面板不要再叠 ---------- */
@@ -104,18 +111,14 @@
     }
 }
 
-/* ---------- Lite：全部转实色，不叠模糊与阴影 ---------- */
-html[data-lite="true"] .nc-modal {
-    background-color: var(--nc-elevated);
-    background-image: none;
-    box-shadow: none;
-}
-
+/* ---------- Lite：严格保持几何布局不变，全部转实色、零模糊、零重阴影 ---------- */
+html[data-lite="true"] .nc-modal,
 html[data-lite="true"] .nc-material-float,
 html[data-lite="true"] .nc-material-scrim,
-html[data-lite="true"] .nc-material-sheet {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
+html[data-lite="true"] .nc-material-sheet,
+html[data-lite="true"] .nc-liquid {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
     background-color: var(--nc-elevated);
     background-image: none;
     box-shadow: none;
@@ -127,7 +130,10 @@ html[data-lite="true"] .nc-material-scrim {
 }
 
 html[data-lite="true"] .nc-material-chrome {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
     background: var(--nc-surface);
+    background-image: none;
     box-shadow: none;
 }
 

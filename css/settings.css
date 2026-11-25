@@ -1502,25 +1502,7 @@
 }
 
 
-/* ==========================================================================
- * v6.4.1 设置遮罩：背景与模糊一起渐入（原来 blur 瞬间出现，很突兀）
- * 只过渡一次（偶发打开），Lite/reduced-motion 下即时。
- * ========================================================================== */
-.settings-sheet__backdrop {
-    background: rgba(4, 6, 10, 0);
-    -webkit-backdrop-filter: saturate(100%) blur(0px);
-    backdrop-filter: saturate(100%) blur(0px);
-    transition:
-        background-color var(--nc-dur-panel) var(--nc-ease-out),
-        -webkit-backdrop-filter var(--nc-dur-panel) var(--nc-ease-out),
-        backdrop-filter var(--nc-dur-panel) var(--nc-ease-out);
-}
-
-.settings-sheet.is-open .settings-sheet__backdrop {
-    background: var(--nc-overlay);
-    -webkit-backdrop-filter: var(--nc-scrim-blur);
-    backdrop-filter: var(--nc-scrim-blur);
-}
+/* v6.4.1 遮罩过渡收口：仅过渡 opacity，禁止逐帧动画 backdrop-filter 半径 */
 
 html[data-lite="true"] .settings-sheet__backdrop {
     transition: none;
@@ -1637,10 +1619,10 @@ html[data-lite="true"] .settings-sheet__backdrop {
     }
 }
 
-/* 落位后再叠一层柔和模糊（18px）：避免打开动画期间逐帧重算大面板 */
+/* 落位后再叠一层苹果拟态玻璃饱和模糊：避免打开动画期间逐帧重算大面板 */
 .settings-sheet.is-settled .settings-sheet__panel {
-    -webkit-backdrop-filter: blur(18px) saturate(150%);
-    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(var(--nc-material-saturate));
+    backdrop-filter: blur(20px) saturate(var(--nc-material-saturate));
 }
 
 /* 面板内容透出玻璃底：导航与主区不再铺实色 */
