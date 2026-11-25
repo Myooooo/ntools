@@ -18,10 +18,11 @@
     var util = NC.util;
 
     var DEFAULTS = {
-        connectTimeout: 15000,      // 建立连接（拿到响应头）
-        firstEventTimeout: 30000,   // 拿到响应头到首个 SSE 事件
-        idleTimeout: 45000,         // 事件之间的最大静默
-        maxDuration: 180000,        // 单次请求总时长上限（心跳不能无限续命）
+        connectTimeout: 20000,      // 建立连接（拿到响应头）
+        firstEventTimeout: 60000,   // 拿到响应头到首个 SSE 事件（适配内网推理模型长 prefill）
+        idleTimeout: 60000,         // 事件之间的最大静默
+        maxDuration: 600000,        // 单次请求总时长上限（10 分钟，适配长推理链）
+        maxRawJsonBytes: 8 * 1024 * 1024,
         maxRetries: 2,              // 仅对"尚未产出任何内容"的 429/5xx/网络抖动作退避重试
         retryBaseDelay: 500,
         maxBodyPreview: 2000
@@ -880,15 +881,23 @@
                         armIdle();
                         var textChunk = decoder.decode(chunk.value, { stream: true });
                         if (!sniffed) {
-                            sniffed = true;
                             var head = textChunk.replace(/^\ufeff/, '').replace(/^\s+/, '');
-                            var first = head.charAt(0);
-                            if (first === '{' || first === '[') {
-                                rawJsonMode = true;
-                                jsonMode = true;
+                            if (head.length > 0) {
+                                sniffed = true;
+                                var first = head.charAt(0);
+                                if (first === '{' || first === '[') {
+                                    rawJsonMode = true;
+                                    jsonMode = true;
+                                }
+                            } else {
+                                continue;
                             }
                         }
                         if (rawJsonMode) {
+                            if (rawJson.length + textChunk.length > DEFAULTS.maxRawJsonBytes) {
+                                try { reader.cancel(); } catch (err) { /* ignore */ }
+                                return errorResult({ type: 'parse', message: '服务端返回 JSON 体积超过上限（8MB）' });
+                            }
                             rawJson += textChunk;
                             continue;
                         }
@@ -897,6 +906,11 @@
                             try { reader.cancel(); } catch (err) { /* ignore */ }
                             break;
                         }
+                    }
+                    var tailChunk = decoder.decode();
+                    if (tailChunk) {
+                        if (rawJsonMode) rawJson += tailChunk;
+                        else if (!parser.isDone()) parser.feed(tailChunk);
                     }
                     if (rawJsonMode) {
                         var parsedWhole = null;

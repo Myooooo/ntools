@@ -216,7 +216,7 @@
   els.copy.addEventListener('click', function () {
     var text = els.output.value;
     if (!text) { toast('没有可复制的内容'); return; }
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { toast('已复制'); }, function () { toast('复制失败'); });
+    if (window.ncBuiltinCopy) window.ncBuiltinCopy(text).then(function (ok) { toast(ok ? '已复制' : '复制失败'); });
     else { els.output.select(); try { document.execCommand('copy'); toast('已复制'); } catch (err) { toast('复制失败'); } }
   });
   els.download.addEventListener('click', function () {

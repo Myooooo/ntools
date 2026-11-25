@@ -36,7 +36,7 @@
         contextLimit: 256000,
         outputLimit: 25600,
         endpointId: '',
-        allowNetwork: true
+        allowNetwork: false
     };
 
     var EFFORTS = ['low', 'medium', 'high'];
@@ -249,14 +249,15 @@
      */
     function wrapHtml(code, options) {
         var opts = options || {};
-        var allowNetwork = opts.allowNetwork !== false;
+        var allowNetwork = opts.allowNetwork === true;
+        var net = allowNetwork ? ' http: https:' : '';
         var connect = allowNetwork ? 'http: https:' : "'none'";
         var source = String(code == null ? '' : code).trim();
 
         var csp = '<meta http-equiv="Content-Security-Policy" content="default-src ' + "'none'" + '; ' +
-            'img-src data: blob: http: https:; media-src data: blob: http: https:; ' +
-            'style-src ' + "'unsafe-inline'" + ' http: https:; ' +
-            'script-src ' + "'unsafe-inline'" + ' http: https:; font-src data: http: https:; ' +
+            'img-src data: blob:' + net + '; media-src data: blob:' + net + '; ' +
+            'style-src ' + "'unsafe-inline'" + net + '; ' +
+            'script-src ' + "'unsafe-inline'" + net + '; font-src data:' + net + '; ' +
             'connect-src ' + connect + ';' + '">';
         var viewport = '<meta name="viewport" content="width=device-width,initial-scale=1">';
         var theme = '<style>' + themeCss(opts.theme) + '</style>';

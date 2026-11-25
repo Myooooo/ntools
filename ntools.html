@@ -7,7 +7,7 @@
          端点由用户配置，connect-src 必须放开；其余一律收紧。 -->
     <!-- CSP 说明见 docs/security-model.md：script-src 的 unsafe-inline 是生成页脚本可执行的必要取舍；
          生成物只跑在无 allow-same-origin 的 blob 沙箱里，禁止再放宽 object-src / base-uri。 -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: 'unsafe-inline'; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob: https: http:; font-src 'self' file: data:; connect-src *; media-src 'self' file: blob:; frame-src 'self' file: blob: data:; object-src 'none'; base-uri 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' file:; script-src 'self' file: 'unsafe-inline'; style-src 'self' file: 'unsafe-inline'; img-src 'self' file: data: blob:; font-src 'self' file: data:; connect-src *; media-src 'self' file: blob:; frame-src 'self' file: blob: data:; object-src 'none'; base-uri 'none'">
     <meta name="color-scheme" content="dark light">
     <meta name="theme-color" id="nc-theme-color" content="#0b0e13">
     <title>nTools · 工具箱</title>

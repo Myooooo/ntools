@@ -189,7 +189,8 @@
   }
   function copyText(text) {
     if (!text) return Promise.resolve(false);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
+    if (window.ncBuiltinCopy) return window.ncBuiltinCopy(text);
+    if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
       return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return false; });
     }
     try {

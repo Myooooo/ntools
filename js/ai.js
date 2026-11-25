@@ -307,10 +307,12 @@
             messages: messages,
             stream: false
         };
+        var NO_SAMPLING_RE = /^(o1|o3|o4|gpt-5)([-.]|$)|reasoner$/i;
+        var allowSampling = !NO_SAMPLING_RE.test(String(profile.modelId || '').trim());
         var temperature = Number(opts.temperature);
         var topP = Number(opts.topP);
-        if (isFinite(temperature)) payload.temperature = Math.min(2, Math.max(0, temperature));
-        if (isFinite(topP)) payload.top_p = Math.min(2, Math.max(0, topP));
+        if (allowSampling && isFinite(temperature)) payload.temperature = Math.min(2, Math.max(0, temperature));
+        if (allowSampling && isFinite(topP)) payload.top_p = Math.min(2, Math.max(0, topP));
         if (profile.apiFormat === 'bocai' && profile.sessionId) payload.sessionId = profile.sessionId;
 
         var headers = { 'Content-Type': 'application/json' };

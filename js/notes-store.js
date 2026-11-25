@@ -539,7 +539,9 @@
             createdAt: Date.now()
         };
         state.folders.set(folder.id, folder);
-        db().putFolder(folder).catch(function () { /* ignore */ });
+        db().putFolder(folder).catch(function (err) {
+            events.emit(NC.eventNames.notesError, { code: 'folder-save-failed', message: '文件夹保存失败：' + (err && err.message ? err.message : err) });
+        });
         notify('folder:create', { id: folder.id });
         return folder;
     }
@@ -548,7 +550,9 @@
         var folder = state.folders.get(id);
         if (!folder || state.readOnly) return false;
         folder.name = schema().normalizeTitle(name) || folder.name;
-        db().putFolder(folder).catch(function () { /* ignore */ });
+        db().putFolder(folder).catch(function (err) {
+            events.emit(NC.eventNames.notesError, { code: 'folder-save-failed', message: '文件夹重命名保存失败：' + (err && err.message ? err.message : err) });
+        });
         notify('folder:rename', { id: id });
         return true;
     }
@@ -641,7 +645,9 @@
         var id = s.newId('img');
         var record = { id: id, name: fileName, type: blob.type || '', size: blob.size || 0 };
         state.files.set(fileName.toLowerCase(), record);
-        db().putFile(id, blob, record).catch(function () { /* ignore */ });
+        db().putFile(id, blob, record).catch(function (err) {
+            events.emit(NC.eventNames.notesError, { code: 'file-save-failed', message: '图片保存失败（可能超出配额）：' + (err && err.message ? err.message : err) });
+        });
         persistFileIndex();
         return fileName;
     }
@@ -676,6 +682,10 @@
         state.files.forEach(function (record, key) {
             if (referenced[key]) return;
             state.files.delete(key);
+            var cachedUrl = state.fileUrls.get(record.id);
+            if (cachedUrl && global.URL && URL.revokeObjectURL) {
+                try { URL.revokeObjectURL(cachedUrl); } catch (err) { /* ignore */ }
+            }
             state.fileUrls.delete(record.id);
             db().deleteFile(record.id).catch(function () { /* ignore */ });
             removed += 1;
@@ -984,7 +994,7 @@
         if (state.lifecycleBound) return;
         state.lifecycleBound = true;
         if (!global.addEventListener) return;
-        global.addEventListener('pagehide', function () { flush(); });
+        global.addEventListener('pagehide', function () { flush(); revokeFileUrls(); });
         document.addEventListener('visibilitychange', function () {
             if (document.hidden) flush();
         });

@@ -663,9 +663,8 @@
   });
   els.copyResp.addEventListener('click', function () {
     if (!state.last) return;
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(state.last);
-    else { var area = document.createElement('textarea'); area.value = state.last; document.body.appendChild(area); area.select(); document.execCommand('copy'); document.body.removeChild(area); }
-    setStatus('已复制响应');
+    if (window.ncBuiltinCopy) window.ncBuiltinCopy(state.last).then(function (ok) { setStatus(ok ? '已复制响应' : '复制失败'); });
+    else { var area = document.createElement('textarea'); area.value = state.last; document.body.appendChild(area); area.select(); document.execCommand('copy'); document.body.removeChild(area); setStatus('已复制响应'); }
   });
   els.downloadResp.addEventListener('click', function () {
     if (!state.last) return;

@@ -258,6 +258,29 @@
         Array.prototype.forEach.call(scope.querySelectorAll('select'), enhance);
     }
 
+    window.ncBuiltinCopy = function (text) {
+        var value = String(text == null ? '' : text);
+        function fallback() {
+            try {
+                var area = document.createElement('textarea');
+                area.value = value;
+                area.setAttribute('readonly', 'readonly');
+                area.style.position = 'fixed';
+                area.style.left = '-9999px';
+                area.style.top = '0';
+                document.body.appendChild(area);
+                area.select();
+                var ok = document.execCommand('copy');
+                document.body.removeChild(area);
+                return ok;
+            } catch (err) { return false; }
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+            return navigator.clipboard.writeText(value).then(function () { return true; }).catch(fallback);
+        }
+        return Promise.resolve(fallback());
+    };
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () { enhanceAll(); });
     } else {

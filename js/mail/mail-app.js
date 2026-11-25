@@ -421,7 +421,7 @@
       const item = (id, label, count, icon) => {
         const active = state.currentGroupId === id;
         return `
-          <button class="nav-item ${active ? 'active' : ''}" onclick="setFilterGroup('${id}')">
+          <button class="nav-item ${active ? 'active' : ''}" onclick="setFilterGroup('${jsArg(id)}')">
             <span class="l"><i data-icon="${icon}" data-w="14" data-h="14"></i><span title="${escapeHtml(label)}">${escapeHtml(label)}</span></span>
             <span class="nav-count">${count}</span>
           </button>`;
@@ -823,15 +823,39 @@
         </span>`).join('');
     }
 
+    function safeCopyText(text) {
+      const value = String(text == null ? '' : text);
+      const fallback = () => {
+        try {
+          const area = document.createElement('textarea');
+          area.value = value;
+          area.setAttribute('readonly', 'readonly');
+          area.style.position = 'fixed';
+          area.style.left = '-9999px';
+          area.style.top = '0';
+          document.body.appendChild(area);
+          area.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(area);
+          return ok;
+        } catch (err) { return false; }
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+        return navigator.clipboard.writeText(value).then(() => true).catch(() => fallback());
+      }
+      return Promise.resolve(fallback());
+    }
+
     function copyGeneratedRecipients() {
       const text = document.getElementById('recipient-result-text').value;
       if (!text) return;
-      navigator.clipboard.writeText(text).then(() => {
+      safeCopyText(text).then((ok) => {
+        if (!ok) { showToast('复制失败，请手动复制', 'error'); return; }
         showToast('收件人列表已复制', 'success');
         const btn = document.getElementById('copy-recip-btn-text');
         btn.textContent = '已复制 ✓';
         setTimeout(() => { btn.textContent = '一键复制收件人列表'; }, 2000);
-      }).catch(() => showToast('复制失败，请手动复制', 'error'));
+      });
     }
 
     // 收件人弹窗：另存为 .txt（复用 downloadTextFile）
@@ -844,9 +868,9 @@
     function copySingleFormat(id) {
       const item = state.emails.find(e => e.id === id);
       if (!item) return;
-      navigator.clipboard.writeText(formatEmailItem(item, 'standard')).then(() => {
-        showToast('已复制标准格式', 'success');
-      }).catch(() => showToast('复制失败', 'error'));
+      safeCopyText(formatEmailItem(item, 'standard')).then((ok) => {
+        showToast(ok ? '已复制标准格式' : '复制失败', ok ? 'success' : 'error');
+      });
     }
 
     // 点击行内描述/邮箱/分类标签时复制对应内容
@@ -857,9 +881,10 @@
 
     function copyText(text, label) {
       if (!text) return;
-      navigator.clipboard.writeText(text).then(() => {
-        showToast((label ? label + '，' : '') + '已复制到剪贴板', 'success');
-      }).catch(() => showToast('复制失败', 'error'));
+      safeCopyText(text).then((ok) => {
+        if (ok) showToast((label ? label + '，' : '') + '已复制到剪贴板', 'success');
+        else showToast('复制失败', 'error');
+      });
     }
 
     /* ==================== 主题（深色/浅色） ====================
@@ -1298,8 +1323,7 @@
     function copyExportContent() {
       const text = document.getElementById('batch-export-textarea').value;
       if (!text) return;
-      navigator.clipboard.writeText(text).then(() => showToast('导出文本已复制', 'success'))
-        .catch(() => showToast('复制失败', 'error'));
+      safeCopyText(text).then((ok) => showToast(ok ? '导出文本已复制' : '复制失败', ok ? 'success' : 'error'));
     }
 
     function downloadTextFile(text, filename) {
@@ -1311,7 +1335,7 @@
       a.href = url;
       a.download = (filename || '邮箱导出_') + dateStamp() + '.txt';
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 30000);
     }
 
     function dateStamp() {
@@ -1333,7 +1357,7 @@
       a.href = url;
       a.download = '邮箱工具备份_' + dateStamp() + '.json';
       a.click();
-      URL.revokeObjectURL(url);
+      setTimeout(() => { try { URL.revokeObjectURL(url); } catch (e) {} }, 30000);
       showToast('备份文件已下载', 'success');
     }
 

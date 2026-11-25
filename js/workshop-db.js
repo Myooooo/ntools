@@ -34,7 +34,14 @@
                 if (!db.objectStoreNames.contains(STORES.turns)) db.createObjectStore(STORES.turns, { keyPath: 'id' });
                 if (!db.objectStoreNames.contains(STORES.meta)) db.createObjectStore(STORES.meta, { keyPath: 'key' });
             };
-            request.onsuccess = function () { resolve(request.result); };
+            request.onsuccess = function () {
+                var db = request.result;
+                db.onversionchange = function () {
+                    try { db.close(); } catch (err) { /* ignore */ }
+                    dbPromise = null;
+                };
+                resolve(db);
+            };
             request.onerror = function () { dbPromise = null; reject(request.error || new Error('open failed')); };
             request.onblocked = function () { dbPromise = null; reject(new Error('blocked')); };
         });
@@ -128,18 +135,34 @@
             doc.turns = doc.turns.filter(function (turn) { return turn.appId !== id; });
             return writeFallback(doc);
         }
-        return tx(STORES.apps, true, function (store) { store.delete(id); }).then(function () {
-            return Promise.all([
-                getAll(STORES.versions).then(function (versions) {
-                    var mine = versions.filter(function (ver) { return ver.appId === id; });
-                    return tx(STORES.versions, true, function (store) { mine.forEach(function (ver) { store.delete(ver.id); }); });
-                }),
-                getAll(STORES.turns).then(function (turns) {
-                    var mine = turns.filter(function (turn) { return turn.appId === id; });
-                    return tx(STORES.turns, true, function (store) { mine.forEach(function (turn) { store.delete(turn.id); }); });
-                })
-            ]);
-        }).then(function () { return true; });
+        return openIdb().then(function (db) {
+            return new Promise(function (resolve, reject) {
+                var transaction = db.transaction([STORES.apps, STORES.versions, STORES.turns], 'readwrite');
+                transaction.objectStore(STORES.apps).delete(id);
+                [STORES.versions, STORES.turns].forEach(function (storeName) {
+                    var store = transaction.objectStore(storeName);
+                    if (typeof store.openCursor === 'function') {
+                        var req = store.openCursor();
+                        req.onsuccess = function () {
+                            var cursor = req.result;
+                            if (!cursor) return;
+                            if (cursor.value && cursor.value.appId === id) cursor.delete();
+                            cursor.continue();
+                        };
+                    } else {
+                        var allReq = store.getAll();
+                        allReq.onsuccess = function () {
+                            (allReq.result || []).forEach(function (item) {
+                                if (item && item.appId === id) store.delete(item.id);
+                            });
+                        };
+                    }
+                });
+                transaction.oncomplete = function () { resolve(true); };
+                transaction.onerror = function () { reject(transaction.error || new Error('deleteApp failed')); };
+                transaction.onabort = function () { reject(transaction.error || new Error('deleteApp aborted')); };
+            });
+        });
     }
 
     function getAllVersions() {

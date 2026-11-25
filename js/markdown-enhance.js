@@ -134,21 +134,30 @@
     }
 
     function copyText(text) {
-        if (global.navigator && global.navigator.clipboard && global.navigator.clipboard.writeText) {
-            return global.navigator.clipboard.writeText(text);
+        if (NC.util && typeof NC.util.copyText === 'function') {
+            return NC.util.copyText(text).then(function (ok) {
+                if (!ok) throw new Error('copy failed');
+            });
         }
-        return new Promise(function (resolve, reject) {
-            try {
-                var area = document.createElement('textarea');
-                area.value = text;
-                area.className = 'nc-sr-only';
-                document.body.appendChild(area);
-                area.select();
-                var ok = document.execCommand('copy');
-                document.body.removeChild(area);
-                ok ? resolve() : reject(new Error('copy failed'));
-            } catch (err) { reject(err); }
-        });
+        function fallback() {
+            return new Promise(function (resolve, reject) {
+                try {
+                    var area = document.createElement('textarea');
+                    area.value = String(text == null ? '' : text);
+                    area.setAttribute('readonly', 'readonly');
+                    area.className = 'nc-sr-only';
+                    document.body.appendChild(area);
+                    area.select();
+                    var ok = document.execCommand('copy');
+                    document.body.removeChild(area);
+                    ok ? resolve() : reject(new Error('copy failed'));
+                } catch (err) { reject(err); }
+            });
+        }
+        if (global.navigator && global.navigator.clipboard && global.navigator.clipboard.writeText && global.isSecureContext) {
+            return global.navigator.clipboard.writeText(text).catch(fallback);
+        }
+        return fallback();
     }
 
     function enhanceCodeBlocks(root) {

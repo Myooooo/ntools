@@ -198,9 +198,16 @@
             if (global.marked && global.marked.setOptions) {
                 global.marked.setOptions({ gfm: true, breaks: true });
             }
-            var html = global.marked ? global.marked.parse(source) : source;
-            if (global.DOMPurify) {
-                html = global.DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+            var html = global.marked ? global.marked.parse(source) : escapeHtml(source);
+            if (global.DOMPurify && typeof global.DOMPurify.sanitize === 'function') {
+                html = global.DOMPurify.sanitize(html, {
+                    USE_PROFILES: { html: true },
+                    ADD_ATTR: ['target', 'rel'],
+                    FORBID_TAGS: ['style', 'form', 'iframe', 'object', 'embed', 'video', 'audio', 'select', 'textarea'],
+                    FORBID_ATTR: ['style']
+                });
+            } else {
+                html = escapeHtml(source);
             }
             host.innerHTML = html;
             if (truncated) {
@@ -219,9 +226,14 @@
             hydrateEmbeds(host);
             var images = host.querySelectorAll('img[src]');
             for (var j = 0; j < images.length; j += 1) {
-                if (/^https?:/i.test(images[j].getAttribute('src') || '')) {
-                    images[j].setAttribute('referrerpolicy', 'no-referrer');
-                    images[j].setAttribute('loading', 'lazy');
+                var imgSrc = images[j].getAttribute('src') || '';
+                if (/^https?:/i.test(imgSrc)) {
+                    var fallbackLink = document.createElement('a');
+                    fallbackLink.href = imgSrc;
+                    fallbackLink.target = '_blank';
+                    fallbackLink.rel = 'noopener noreferrer';
+                    fallbackLink.textContent = '[外链图片] ' + (images[j].getAttribute('alt') || imgSrc);
+                    if (images[j].parentNode) images[j].parentNode.replaceChild(fallbackLink, images[j]);
                 }
             }
             if (NC.mdEnhance && typeof NC.mdEnhance.enhance === 'function') {
@@ -1190,7 +1202,7 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            global.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+            global.setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
             toast('已导出 .md', 'success');
         } catch (err) {
             toast('导出失败：' + (err && err.message ? err.message : err), 'error');
@@ -1209,7 +1221,7 @@
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            global.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+            global.setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
             return true;
         } catch (err) {
             toast('下载失败：' + (err && err.message ? err.message : err), 'error');

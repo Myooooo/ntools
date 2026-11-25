@@ -171,7 +171,7 @@
     var text = els.text.value;
     if (!text) return;
     var done = function () { toast('已复制'); };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function () { toast('复制失败'); });
+    if (window.ncBuiltinCopy) window.ncBuiltinCopy(text).then(function (ok) { if (ok) done(); else toast('复制失败'); });
     else { els.text.select(); try { document.execCommand('copy'); done(); } catch (err) { toast('复制失败'); } }
   });
 

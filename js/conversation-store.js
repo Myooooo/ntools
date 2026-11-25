@@ -478,6 +478,12 @@
     }
 
     function flush() {
+        if (NC.durability && NC.durability.lease) {
+            if (!NC.durability.lease.claim('ntools.chat.lease')) {
+                events.emit(NC.eventNames.conversationSaveFailed, { reason: 'other-window' });
+                return Promise.resolve(false);
+            }
+        }
         if (useLocal) {
             persistLocal();
             return Promise.resolve(true);
@@ -949,7 +955,12 @@
         });
         if (!incoming.length) return Promise.resolve({ ok: false, reason: 'empty' });
         var previous = { version: VERSION, activeByEndpoint: clone(state.activeByEndpoint), sessions: clone(state.sessions) };
-        try { storage.set(KEY + '.preimport', previous); } catch (err) { /* 尽力而为 */ }
+        try {
+            if (NC.durability && NC.durability.snapshot) {
+                NC.durability.snapshot.configure({ prefix: 'chat-preimport', slots: 2, namespace: 'chat' });
+                NC.durability.snapshot.push('chat-preimport', previous, { sessions: state.sessions.length });
+            }
+        } catch (err) { /* 尽力而为，绝不把 IDB 全量聊天塞进 localStorage 撑爆配额 */ }
 
         state.sessions = incoming;
         if (util.isPlainObject(data.activeByEndpoint)) {

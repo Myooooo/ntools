@@ -349,7 +349,7 @@
             setTimeout(function () {
                 try { document.body.removeChild(link); } catch (err) { /* ignore */ }
                 URL.revokeObjectURL(url);
-            }, 1500);
+            }, 30000);
             return true;
         } catch (err) {
             console.error('[NC] download failed', err);
