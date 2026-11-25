@@ -55,8 +55,9 @@
 
     function dosTime(date) {
         var d = date || new Date();
+        var year = Math.max(1980, Math.min(2107, d.getFullYear()));
         var time = ((d.getHours() & 0x1F) << 11) | ((d.getMinutes() & 0x3F) << 5) | ((Math.floor(d.getSeconds() / 2)) & 0x1F);
-        var day = (((d.getFullYear() - 1980) & 0x7F) << 9) | (((d.getMonth() + 1) & 0x0F) << 5) | (d.getDate() & 0x1F);
+        var day = (((year - 1980) & 0x7F) << 9) | (((d.getMonth() + 1) & 0x0F) << 5) | (d.getDate() & 0x1F);
         return { time: time, date: day };
     }
 
@@ -65,7 +66,7 @@
      * @param {{date?:Date}} [options]
      * @returns {Uint8Array}
      */
-    function build(files, options) {
+    function buildParts(files, options) {
         var opts = options || {};
         var stamp = dosTime(opts.date);
         var entries = [];
@@ -141,23 +142,29 @@
         endView.setUint32(16, offset, true);
         endView.setUint16(20, 0, true);
 
-        var total = offset + centralSize + end.length;
-        var out = new Uint8Array(total);
+        return { parts: localParts.concat(centralParts, [end]), total: offset + centralSize + end.length };
+    }
+
+    function build(files, options) {
+        var built = buildParts(files, options);
+        var out = new Uint8Array(built.total);
         var cursor = 0;
-        localParts.forEach(function (part) {
+        built.parts.forEach(function (part) {
             out.set(part, cursor);
             cursor += part.length;
         });
-        centralParts.forEach(function (part) {
-            out.set(part, cursor);
-            cursor += part.length;
-        });
-        out.set(end, cursor);
         return out;
+    }
+
+    /** 零拷贝构造 ZIP Blob：避免弱机大备份时双倍连续内存分配导致 OOM */
+    function buildBlob(files, options) {
+        var built = buildParts(files, options);
+        return new Blob(built.parts, { type: 'application/zip' });
     }
 
     NC.zip = {
         build: build,
+        buildBlob: buildBlob,
         crc32: crc32
     };
 })(window);

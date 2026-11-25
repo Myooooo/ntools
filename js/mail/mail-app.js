@@ -728,7 +728,10 @@
     function toggleEmailSelection(id, checked) {
       if (checked) state.selectedEmailIds.add(id);
       else state.selectedEmailIds.delete(id);
-      renderEmailList();
+      const container = document.getElementById('email-list-container');
+      const row = container && container.querySelector('.row[data-id="' + jsArg(id) + '"]');
+      if (row) row.classList.toggle('selected', !!checked);
+      else renderEmailList();
       updateSelectedUI();
     }
 
@@ -1588,11 +1591,22 @@
       renderAll();
     }
 
+    let searchDebounceTimer = null;
     function handleSearch(val) {
       state.searchQuery = val.trim();
       document.getElementById('search-clear-btn').classList.toggle('hidden', !state.searchQuery);
-      renderEmailList();
-      updateSelectedUI();
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+      if (!state.searchQuery) {
+        searchDebounceTimer = null;
+        renderEmailList();
+        updateSelectedUI();
+        return;
+      }
+      searchDebounceTimer = setTimeout(() => {
+        searchDebounceTimer = null;
+        renderEmailList();
+        updateSelectedUI();
+      }, 150);
     }
 
     function clearSearch() {

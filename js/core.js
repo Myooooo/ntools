@@ -197,20 +197,27 @@
 
     function debounce(fn, wait) {
         var timer = null;
+        var lastArgs = null;
+        var lastSelf = null;
         function debounced() {
-            var args = arguments, self = this;
+            lastArgs = arguments;
+            lastSelf = this;
             clearTimeout(timer);
             timer = setTimeout(function () {
                 timer = null;
+                var args = lastArgs, self = lastSelf;
+                lastArgs = null; lastSelf = null;
                 fn.apply(self, args);
             }, wait || 150);
         }
-        debounced.cancel = function () { clearTimeout(timer); timer = null; };
+        debounced.cancel = function () { clearTimeout(timer); timer = null; lastArgs = null; lastSelf = null; };
         debounced.flush = function () {
             if (timer) {
                 clearTimeout(timer);
                 timer = null;
-                fn();
+                var args = lastArgs, self = lastSelf;
+                lastArgs = null; lastSelf = null;
+                fn.apply(self, args);
             }
         };
         return debounced;
@@ -273,6 +280,7 @@
             el.onload = function () { resolve(src); };
             el.onerror = function () {
                 delete scriptCache[src];
+                if (el.parentNode) el.parentNode.removeChild(el);
                 reject(new Error('script failed: ' + src));
             };
             document.head.appendChild(el);
@@ -290,6 +298,7 @@
             link.onload = function () { resolve(href); };
             link.onerror = function () {
                 delete styleCache[href];
+                if (link.parentNode) link.parentNode.removeChild(link);
                 reject(new Error('style failed: ' + href));
             };
             document.head.appendChild(link);

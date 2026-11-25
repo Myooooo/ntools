@@ -249,6 +249,7 @@
         });
 
         if (updateHash) setHash(target);
+        if (target === 'email' && typeof emailFrameState.ensureLoaded === 'function') emailFrameState.ensureLoaded();
         if (target === 'nchat') initChat();
         if (target === 'md') initNotes();
         if (target === 'workshop') initWorkshop();
@@ -662,7 +663,7 @@
             ['运行方式', (features.fileProtocol ? '本地文件 file://' : (features.protocol || '未知协议')) + ' · 无后端'],
             ['内核', 'Chromium ' + (features.chromeVersion || '未知')],
             ['存储', features.storage ? 'localStorage 可用' : '不可用（内存模式）'],
-            ['主题', (NC.theme.isLight() ? '浅色' : '深色') + (NC.theme.isLite() ? ' · Light' : '')],
+            ['主题', (NC.theme.isLight() ? '浅色' : '深色') + (NC.theme.isLite() ? ' · Lite' : '')],
             ['待办数据', counts ? (counts.total + ' 条任务 / ' + counts.trash + ' 条回收站') : '未加载']
         ];
         rows.forEach(function (pair) {
@@ -743,13 +744,13 @@
      * iframe 失败时不触发 error 事件（file:// 下尤其如此），所以用
      * 页面主动 postMessage 握手 + 超时兜底来判断，而不是猜 contentDocument。
      * ------------------------------------------------------------------ */
-    var emailFrameState = { ready: false, timer: null, loadedOnce: false };
+    var emailFrameState = { ready: false, timer: null, loadedOnce: false, ensureLoaded: null };
 
     function bindEmailFrame() {
         var frame = document.getElementById('email-frame');
         var missing = document.getElementById('email-missing');
         if (!frame || !missing) return;
-        var EMAIL_SRC = 'js/mail/email-manager.html';
+        var EMAIL_SRC = frame.getAttribute('data-src') || 'js/mail/email-manager.html';
 
         function showMissing(show) {
             missing.hidden = !show;
@@ -760,10 +761,25 @@
             if (emailFrameState.timer) global.clearTimeout(emailFrameState.timer);
             emailFrameState.timer = global.setTimeout(function () {
                 if (!emailFrameState.ready) showMissing(true);
-            }, 3500);
+            }, 5000);
         }
 
+        function ensureLoaded() {
+            if (emailFrameState.loadedOnce) return;
+            emailFrameState.loadedOnce = true;
+            emailFrameState.ready = false;
+            showMissing(false);
+            frame.src = EMAIL_SRC;
+            armTimeout();
+        }
+        emailFrameState.ensureLoaded = ensureLoaded;
+
         function reload() {
+            if (!emailFrameState.loadedOnce) {
+                if (currentTab !== 'email') return;
+                ensureLoaded();
+                return;
+            }
             emailFrameState.ready = false;
             showMissing(false);
             frame.src = EMAIL_SRC + '?r=' + Date.now();
@@ -773,7 +789,7 @@
         /* 主题与 Lite 由主应用统一控制：邮件页不再自己选主题 */
         function postTheme() {
             try {
-                if (!frame.contentWindow) return;
+                if (!emailFrameState.loadedOnce || !frame.contentWindow) return;
                 frame.contentWindow.postMessage({
                     type: 'ntools-theme',
                     theme: NC.theme.isLight() ? 'light' : 'dark',
@@ -823,7 +839,6 @@
         if (dismiss) dismiss.addEventListener('click', function () { showMissing(false); });
 
         NC.events.on(NC.eventNames.emailImported, reload);
-        armTimeout();
     }
 
     /* ------------------------------------------------------------------ *

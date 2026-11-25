@@ -1270,8 +1270,10 @@
                     }).catch(function () { return null; });
                 })).then(function (pairs) {
                     var entries = files.concat(pairs.filter(Boolean));
-                    var bytes = NC.zip.build(entries);
-                    downloadBlob(new Blob([bytes], { type: 'application/zip' }), stampName('zip'));
+                    var zipBlob = (typeof NC.zip.buildBlob === 'function')
+                        ? NC.zip.buildBlob(entries)
+                        : new Blob([NC.zip.build(entries)], { type: 'application/zip' });
+                    downloadBlob(zipBlob, stampName('zip'));
                     toast('已导出 ' + bundle.notes.length + ' 篇' +
                         (pairs.length ? ' + ' + pairs.length + ' 张图片' : '') + '（ZIP）', 'success');
                 });

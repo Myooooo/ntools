@@ -213,11 +213,11 @@
         return util.loadScript('js/zip.js').then(function () { return !!NC.zip; });
     }
 
-    function buildZip(bundle) {
+    function buildZip(bundle, options) {
         var payloadBundle = bundle;
         return ensureZip().then(function (ok) {
             if (!ok) throw new Error('zip 模块未加载');
-            return doBuildZip(payloadBundle);
+            return doBuildZip(payloadBundle, options);
         });
     }
 
@@ -260,7 +260,8 @@
         });
     }
 
-    function doBuildZip(bundle) {
+    function doBuildZip(bundle, options) {
+        var opts = options || {};
         if (!NC.zip) return Promise.reject(new Error('zip 模块未加载'));
         var payload = bundle.payload;
         var files = bundle.files || [];
@@ -318,6 +319,9 @@
                         ''
                     ].join('\n')
                 });
+                if (opts.asBlob && typeof NC.zip.buildBlob === 'function') {
+                    return NC.zip.buildBlob(allEntries);
+                }
                 return NC.zip.build(allEntries);
             });
         });
@@ -329,17 +333,17 @@
         return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes());
     }
 
-    /** 立即备份并下载 ZIP */
+    /** 立即备份并下载 ZIP（零拷贝 Blob，降低 ARM 弱机内存峰值） */
     function downloadZip(options) {
         var opts = options || {};
         return collect({ includeKeys: opts.includeKeys === true }).then(function (bundle) {
-            return buildZip(bundle).then(function (bytes) {
+            return buildZip(bundle, { asBlob: true }).then(function (result) {
                 var name = 'ntools-backup-' + stamp() + '.zip';
-                var blob = new Blob([bytes], { type: 'application/zip' });
+                var blob = (result instanceof Blob) ? result : new Blob([result], { type: 'application/zip' });
                 var ok = util.downloadBlob(name, blob, 'application/zip');
                 if (!ok) throw new Error('浏览器阻止了下载');
                 writeCfg({ lastAt: nowTs(), lastKind: 'zip' });
-                return { ok: true, bytes: bytes.length, name: name };
+                return { ok: true, bytes: blob.size, name: name };
             });
         });
     }

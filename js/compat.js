@@ -79,8 +79,25 @@
             var liteStored = null;
             try { liteStored = global.localStorage.getItem('nchat-lite-mode'); } catch (err) { liteStored = null; }
             if (liteStored === null) {
-                var lowEnd = (global.navigator && global.navigator.hardwareConcurrency && global.navigator.hardwareConcurrency <= 4);
-                if (features.reducedMotion || lowEnd) {
+                var nav = global.navigator || {};
+                var lowCpu = !!(nav.hardwareConcurrency && nav.hardwareConcurrency <= 4);
+                var lowMem = !!(nav.deviceMemory && nav.deviceMemory <= 4);
+                var softGpu = false;
+                try {
+                    var canvas = document.createElement('canvas');
+                    var gl = canvas && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+                    if (!gl) {
+                        softGpu = true;
+                    } else {
+                        var dbg = gl.getExtension('WEBGL_debug_renderer_info');
+                        var renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '') : '';
+                        if (/llvmpipe|swiftshader|softpipe|mesa offscreen|software/i.test(renderer)) {
+                            softGpu = true;
+                        }
+                    }
+                } catch (err) { /* ignore */ }
+                features.softwareRenderer = softGpu;
+                if (features.reducedMotion || lowCpu || lowMem || softGpu) {
                     root.setAttribute('data-lite', 'true');
                 }
             }

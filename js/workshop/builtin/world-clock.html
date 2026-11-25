@@ -399,7 +399,8 @@
     save(); render();
   });
   render();
-  setInterval(tick, 1000);
+  setInterval(function () { if (!document.hidden) tick(); }, 1000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) tick(); });
 })();
 </script>
 </body>

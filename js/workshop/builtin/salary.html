@@ -415,7 +415,8 @@
   load();
   // 10fps：入场累加与每秒飘字需要更细的步进；稳定后开销仍然很低
   render();
-  var tickTimer = setInterval(render, 100);
+  var tickTimer = setInterval(function () { if (!document.hidden) render(); }, 100);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) render(); });
   window.addEventListener('pagehide', function () { clearInterval(tickTimer); });
 })();
 </script>

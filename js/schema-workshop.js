@@ -235,10 +235,7 @@
             'var v=Math.max(d?d.scrollHeight:0,b?b.scrollHeight:0);' +
             "try{parent.postMessage({type:'nc-ws-height',h:v},'*');}catch(e){}" +
             '}' +
-            'try{if(window.ResizeObserver){new ResizeObserver(h).observe(document.documentElement);}' +
-            'else{setInterval(h,600);}}catch(e){setInterval(h,600);}' +
             "window.addEventListener('load',function(){h();try{parent.postMessage({type:'nc-ws-ready'},'*');}catch(e){}});" +
-            "setTimeout(h,60);setTimeout(h,400);" +
             '})();</script>';
     }
 
