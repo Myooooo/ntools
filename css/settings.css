@@ -1666,6 +1666,7 @@ html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
 
     .settings-sheet__panel {
         width: 100vw;
+        height: 100%;
         height: 100vh;
         max-height: 100vh;
         border: 0;
@@ -1674,6 +1675,8 @@ html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
 
     .settings-sheet__head {
         border-radius: 0;
+        padding-top: env(safe-area-inset-top, 0px);
+        height: calc(52px + env(safe-area-inset-top, 0px));
     }
 }
 

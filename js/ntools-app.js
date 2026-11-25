@@ -227,9 +227,31 @@
         });
     }
 
+    var switchingTabGuard = false;
+
     function switchTab(tab, updateHash) {
         var target = normalizeTab(tab);
         if (!target) return;
+        if (currentTab === 'workshop' && target !== 'workshop' &&
+            NC.view && NC.view.workshop && typeof NC.view.workshop.confirmLeave === 'function') {
+            if (switchingTabGuard) return;
+            switchingTabGuard = true;
+            NC.view.workshop.confirmLeave().then(function (ok) {
+                switchingTabGuard = false;
+                if (ok) {
+                    applySwitchTab(target, updateHash);
+                } else if (!updateHash) {
+                    setHash('workshop');
+                }
+            }, function () {
+                switchingTabGuard = false;
+            });
+            return;
+        }
+        applySwitchTab(target, updateHash);
+    }
+
+    function applySwitchTab(target, updateHash) {
         // 切页前先关掉菜单/下拉/工具提示，避免浮层悬在新页面上
         if (NC.ui && NC.ui.closeAllPopovers) NC.ui.closeAllPopovers('route');
         currentTab = target;

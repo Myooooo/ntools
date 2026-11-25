@@ -1593,7 +1593,7 @@ html[data-lite="true"] .chat-msg__actions {
     }
 
     .chat-composer {
-        padding: var(--nc-space-2) var(--nc-space-3) calc(var(--nc-space-2) + env(safe-area-inset-bottom, 0px));
+        padding: var(--nc-space-2) var(--nc-space-3);
     }
 
     .chat-previews {
@@ -1678,11 +1678,18 @@ html[data-lite="true"] .chat-msg__actions {
  * 15. Lite 性能模式：只保留结构、颜色语义与即时反馈
  * -------------------------------------------------------------------------- */
 html[data-lite="true"] .chat-toolbar--embed,
-html[data-lite="true"] .chat-composer {
+html[data-lite="true"] .chat-composer,
+html[data-lite="true"] .chat-lightbox,
+html[data-lite="true"] .chat-prompt-sheet {
     background: var(--nc-surface);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     box-shadow: none;
+}
+
+html[data-lite="true"] .chat-lightbox,
+html[data-lite="true"] .chat-prompt-sheet {
+    background: var(--nc-overlay);
 }
 
 html[data-lite="true"] .chat-app--embed {

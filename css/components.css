@@ -2573,3 +2573,25 @@ html[data-lite="true"] .nc-toast {
     background-color: var(--nc-elevated);
     background-image: none;
 }
+
+html[data-lite="true"] .nc-btn:active {
+    transform: none;
+}
+
+@media (max-width: 560px) {
+    .nc-modal-overlay {
+        padding: 12px;
+    }
+
+    .nc-modal__head {
+        padding: 16px 16px 4px;
+    }
+
+    .nc-modal__body {
+        padding: 8px 16px 4px;
+    }
+
+    .nc-modal__foot {
+        padding: 14px 16px 16px;
+    }
+}

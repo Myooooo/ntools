@@ -12,6 +12,7 @@
     var view = NC.view = NC.view || {};
 
     var ACTIVE_KEY = 'ntools.workshop.active';
+    var DRAFT_ID = '__ws_draft__';
 
     var els = {};
     var store = null;
@@ -42,6 +43,14 @@
         startedAt: 0,
         timer: null
     };
+
+    function hasDraftItem() {
+        return !!(draft.active && !draft.appId && (draft.code || draft.turns.length || draft.streaming));
+    }
+
+    function hasUnsavedDraft() {
+        return !!(draft.active && !draft.appId && draft.code);
+    }
 
     function $(id) { return document.getElementById(id); }
     function icon(name, size) {
@@ -160,8 +169,11 @@
     }
 
     function itemRow(item) {
+        var isActive = item.isDraft
+            ? (draft.active && !draft.appId)
+            : (item.id === state.activeId && !(draft.active && !draft.appId));
         var row = document.createElement('div');
-        row.className = 'ws-item' + (item.id === state.activeId ? ' is-active' : '');
+        row.className = 'ws-item' + (isActive ? ' is-active' : '') + (item.isDraft ? ' is-draft' : '');
         row.setAttribute('role', 'listitem');
         row.setAttribute('data-ws-id', item.id);
 
@@ -169,7 +181,7 @@
         main.type = 'button';
         main.className = 'ws-item__main';
         main.setAttribute('data-ws-id', item.id);
-        if (item.id === state.activeId) main.setAttribute('aria-current', 'true');
+        if (isActive) main.setAttribute('aria-current', 'true');
 
         var iconBox = document.createElement('span');
         iconBox.className = 'ws-item__icon';
@@ -184,11 +196,19 @@
         text.appendChild(title);
         var desc = document.createElement('span');
         desc.className = 'ws-item__desc';
-        desc.textContent = item.kind === 'builtin' ? (item.desc || '') : '自定义应用';
+        desc.textContent = item.isDraft ? '未保存草稿' : (item.kind === 'builtin' ? (item.desc || '') : '自定义应用');
         text.appendChild(desc);
         main.appendChild(text);
 
-        if (item.pinned) {
+        if (item.isDraft) {
+            var draftFlags = document.createElement('span');
+            draftFlags.className = 'ws-item__flags';
+            var badge = document.createElement('span');
+            badge.className = 'ws-item__badge';
+            badge.textContent = '草稿';
+            draftFlags.appendChild(badge);
+            main.appendChild(draftFlags);
+        } else if (item.pinned) {
             var flags = document.createElement('span');
             flags.className = 'ws-item__flags';
             flags.appendChild(icon('pin', 12));
@@ -208,7 +228,7 @@
         });
         row.appendChild(more);
 
-        bindDrag(row, item);
+        if (!item.isDraft) bindDrag(row, item);
         // 行本身也可点（padding/空白区域），键盘仍走 main 按钮的 click 冒泡
         row.addEventListener('click', function (event) {
             if (event.target && event.target.closest && event.target.closest('.ws-item__more')) return;
@@ -222,12 +242,29 @@
         els.list.textContent = '';
         var items = groupedItems();
         var free = items.filter(function (item) { return !item.pinned; });
+        var customList = free.filter(function (item) { return item.kind === 'custom'; });
+        if (hasDraftItem()) {
+            var draftTitle = draft.title || '新应用';
+            var draftFilter = state.filter.toLowerCase();
+            if (!draftFilter || (draftTitle + ' 草稿 未保存').toLowerCase().indexOf(draftFilter) > -1) {
+                customList.unshift({
+                    id: DRAFT_ID,
+                    title: draftTitle,
+                    kind: 'custom',
+                    category: 'custom',
+                    desc: '未保存草稿',
+                    icon: 'wand',
+                    isDraft: true,
+                    pinned: false
+                });
+            }
+        }
         var groups = [];
         var pinned = items.filter(function (item) { return item.pinned; });
         if (pinned.length) groups.push({ key: 'pinned', label: '置顶', list: pinned });
         groups.push(
             { key: 'builtin', label: '内置', list: free.filter(function (item) { return item.kind === 'builtin'; }) },
-            { key: 'custom', label: '自定义', list: free.filter(function (item) { return item.kind === 'custom'; }) }
+            { key: 'custom', label: '自定义', list: customList }
         );
         var rendered = 0;
         groups.forEach(function (group) {
@@ -395,10 +432,82 @@
         else openCustom(item);
     }
 
-    function selectItem(id) {
+    function resetDraftState() {
+        if (draft.streaming) stopGeneration();
+        stopTimer();
+        draft.active = false;
+        draft.appId = null;
+        draft.title = '';
+        draft.code = '';
+        draft.turns = [];
+        draft.streaming = false;
+        draft.controller = null;
+        draft.startedAt = 0;
+    }
+
+    function confirmLeaveDraft(actionText) {
+        if (!hasUnsavedDraft()) return Promise.resolve(true);
+        var verb = actionText || '离开';
+        var title = draft.title || '未命名应用';
+        if (!NC.ui || typeof NC.ui.openModal !== 'function') {
+            return Promise.resolve(global.confirm ? global.confirm('「' + title + '」尚未保存，确定要' + verb + '吗？') : true);
+        }
+        return new Promise(function (resolve) {
+            var settled = false;
+            function finish(ok) {
+                if (settled) return;
+                settled = true;
+                resolve(ok);
+            }
+            NC.ui.openModal({
+                title: '保存当前草稿？',
+                message: '「' + title + '」尚未保存到创意工坊，直接' + verb + '会丢失当前生成内容。',
+                size: 'sm',
+                actions: [
+                    { label: '取消', kind: 'ghost', onClick: function () { finish(false); } },
+                    {
+                        label: '不保存并' + verb,
+                        kind: 'danger',
+                        onClick: function () {
+                            resetDraftState();
+                            renderList();
+                            finish(true);
+                        }
+                    },
+                    {
+                        label: '保存并' + verb,
+                        kind: 'primary',
+                        onClick: function () {
+                            var saved = saveDraft({ keepView: true });
+                            finish(!!saved);
+                        }
+                    }
+                ],
+                onClose: function () { finish(false); }
+            });
+        });
+    }
+
+    function performSelectItem(id) {
         if (!id) return;
+        if (id === DRAFT_ID) {
+            if (draft.active && !draft.appId) {
+                showChat(true);
+                renderDraft();
+                renderList();
+                if (state.sideOpen) toggleSide(false);
+            }
+            return;
+        }
+        if (state.activeId === id && draft.active && draft.appId === id) {
+            showChat(true);
+            renderList();
+            if (state.sideOpen) toggleSide(false);
+            return;
+        }
         if (draft.streaming) stopGeneration();
         draft.active = false;
+        draft.appId = null;
         showChat(false);
         if (els.save) els.save.hidden = true;
         if (els.exportBtn) els.exportBtn.hidden = true;
@@ -414,6 +523,21 @@
             renderActive();
         }
         if (state.sideOpen) toggleSide(false);
+    }
+
+    function selectItem(id) {
+        if (!id) return;
+        if (id === DRAFT_ID) {
+            performSelectItem(id);
+            return;
+        }
+        if (hasUnsavedDraft()) {
+            confirmLeaveDraft('切换').then(function (ok) {
+                if (ok) performSelectItem(id);
+            });
+            return;
+        }
+        performSelectItem(id);
     }
 
     function reloadFrame() {
@@ -492,6 +616,36 @@
     }
 
     function openItemMenu(item, anchor) {
+        if (item.isDraft) {
+            NC.ui.openMenu(anchor, [
+                {
+                    label: '保存草稿',
+                    icon: 'check',
+                    disabled: !draft.code,
+                    onSelect: function () { saveDraft(); }
+                },
+                {
+                    label: '放弃草稿',
+                    icon: 'trash',
+                    danger: true,
+                    onSelect: function () {
+                        NC.ui.confirm('放弃当前未保存的草稿「' + (draft.title || '新应用') + '」？', { title: '放弃草稿', confirmText: '放弃', danger: true })
+                            .then(function (ok) {
+                                if (!ok) return;
+                                resetDraftState();
+                                showChat(false);
+                                var all = store.list();
+                                state.activeId = all.length ? all[0].id : null;
+                                writeActive(state.activeId || '');
+                                renderList();
+                                renderActive();
+                                toast('已放弃草稿', 'info');
+                            });
+                    }
+                }
+            ]);
+            return;
+        }
         var items = [
             {
                 label: item.pinned ? '取消置顶' : '置顶',
@@ -580,7 +734,7 @@
     }
 
     function profileReady(profile) {
-        return !!(profile && profile.baseUrl && profile.modelId);
+        return !!(profile && (profile.baseUrl || profile.apiUrl) && profile.modelId);
     }
 
     function renderEndpointOptions() {
@@ -704,7 +858,7 @@
         return text.length > 16 ? text.slice(0, 16) + '…' : text;
     }
 
-    function enterDraft() {
+    function performEnterDraft() {
         if (draft.streaming) stopGeneration();
         draft.active = true;
         draft.appId = null;
@@ -740,6 +894,16 @@
         setChatHint('Enter 发送 · Shift+Enter 换行');
         if (els.generateBtn) { els.generateBtn.disabled = false; els.generateBtn.textContent = '生成'; }
         appendChat('bot', '说说你想要的小工具：用来做什么、大概长什么样。我会直接生成一个可运行的单页应用。');
+    }
+
+    function enterDraft() {
+        if (hasUnsavedDraft()) {
+            confirmLeaveDraft('新建').then(function (ok) {
+                if (ok) performEnterDraft();
+            });
+            return;
+        }
+        performEnterDraft();
     }
 
     /** 打开已保存的自定义应用：进入可对话调整的编辑态（改动自动落库） */
@@ -834,7 +998,7 @@
             els.generateBtn.disabled = on;
             els.generateBtn.textContent = on ? '生成中…' : '生成';
         }
-        if (els.save) els.save.hidden = on || !draft.code;
+        if (els.save) els.save.hidden = on || !draft.code || !!draft.appId;
         setChatHint(on ? '正在生成，可随时停止' : 'Enter 发送 · Shift+Enter 换行');
     }
 
@@ -873,10 +1037,12 @@
             return;
         }
         draft.code = parsed.code;
-        if (!draft.appId) draft.title = deriveTitle(prompt || draft.title);
-        /* 标题优先用页面 <title> */
-        var titleMatch = /<title[^>]*>([^<]{1,40})<\/title>/i.exec(parsed.code);
-        if (titleMatch && titleMatch[1].trim()) draft.title = titleMatch[1].trim();
+        if (!draft.appId) {
+            draft.title = deriveTitle(prompt || draft.title);
+            /* 标题优先用页面 <title> */
+            var titleMatch = /<title[^>]*>([^<]{1,40})<\/title>/i.exec(parsed.code);
+            if (titleMatch && titleMatch[1].trim()) draft.title = titleMatch[1].trim();
+        }
         if (draft.appId) {
             var updated = store.updateCode(draft.appId, parsed.code, '对话调整');
             if (!updated || !updated.ok) {
@@ -886,7 +1052,10 @@
             }
             store.addTurn(draft.appId, 'user', prompt);
             store.addTurn(draft.appId, 'assistant', '已更新页面');
+            draft.turns.push({ role: 'user', content: prompt });
+            draft.turns.push({ role: 'assistant', content: '已更新页面' });
             if (els.title) els.title.textContent = draft.title;
+            if (els.save) els.save.hidden = true;
             if (els.versions) els.versions.hidden = false;
             renderDraft();
             renderList();
@@ -894,10 +1063,13 @@
             toast('已更新「' + draft.title + '」', 'success');
             return;
         }
+        draft.turns.push({ role: 'user', content: prompt });
         draft.turns.push({ role: 'assistant', content: '已生成页面「' + draft.title + '」' });
         if (els.title) els.title.textContent = draft.title;
+        if (els.kind) { els.kind.hidden = false; els.kind.textContent = '草稿'; }
         if (els.save) els.save.hidden = false;
         if (els.exportBtn) els.exportBtn.hidden = false;
+        renderList();
         renderDraft();
         appendChat('bot', '已生成「' + draft.title + '」，可以直接在左侧使用；想改哪里，继续告诉我。', '耗时 ' + seconds + 's');
         toast('已生成「' + draft.title + '」，可继续调整或保存', 'success');
@@ -985,7 +1157,7 @@
 
         draft.controller = global.AbortController ? new global.AbortController() : null;
         var messages = buildMessages(prompt, draft.code);
-        draft.turns.push({ role: 'user', content: prompt });
+        renderList();
         NC.api.chat({
             config: runtime,
             messages: messages,
@@ -1003,13 +1175,19 @@
                         var partial = schema.extractHtml(buffer);
                         if (partial && partial.code) {
                             draft.code = partial.code;
+                            if (!draft.appId) {
+                                draft.turns.push({ role: 'user', content: prompt });
+                                draft.turns.push({ role: 'assistant', content: '已停止，保留了已生成的部分' });
+                            }
+                            renderList();
                             renderDraft();
-                            if (els.save) els.save.hidden = false;
+                            if (els.save) els.save.hidden = !!draft.appId;
                             appendChat('bot', '已停止，保留了已生成的部分，可以继续调整。', '耗时 ' + seconds + 's');
                             toast('已停止，保留已生成的部分', 'info');
                             return;
                         }
                     }
+                    renderList();
                     appendChat('error', '已停止生成。');
                     toast('已停止生成', 'info');
                     return;
@@ -1018,6 +1196,7 @@
             },
             onError: function (error) {
                 draft.controller = null;
+                renderList();
                 var message = error && error.message ? error.message : '生成失败，请检查网络或端点配置';
                 if (error && error.type === 'abort') message = '已停止生成';
                 finishWithError(message, !!lastFailedPrompt);
@@ -1070,21 +1249,48 @@
         reader.readAsText(file);
     }
 
-    function saveDraft() {
-        if (!draft.code) { toast('还没有生成内容', 'warn'); return; }
+    function saveDraft(options) {
+        var opts = options || {};
+        if (!draft.code) { toast('还没有生成内容', 'warn'); return false; }
+        /* 已保存到创意工坊的应用：原地更新代码，绝不重复创建新应用 */
+        if (draft.appId) {
+            var updated = store.updateCode(draft.appId, draft.code, '手动保存');
+            if (!updated || !updated.ok) {
+                toast('保存修改失败' + (updated && updated.reason === 'too-big' ? '：超过体积上限' : ''), 'error');
+                return false;
+            }
+            if (els.save) els.save.hidden = true;
+            if (els.kind) { els.kind.hidden = false; els.kind.textContent = '自定义'; }
+            if (els.versions) els.versions.hidden = false;
+            renderList();
+            toast('已保存修改', 'success');
+            return true;
+        }
         var created = store.createApp({ title: draft.title || '未命名应用', code: draft.code });
         if (!created || !created.ok) {
             toast(created && created.message ? created.message : '保存失败', 'error');
-            return;
+            return false;
         }
         var appId = created.app.id;
         draft.turns.forEach(function (turn) {
             if (turn.role === 'user' || turn.role === 'assistant') store.addTurn(appId, turn.role, turn.content);
         });
-        draft.active = false;
-        showChat(false);
-        selectItem(appId);
+        draft.appId = appId;
+        state.activeId = appId;
+        writeActive(appId);
+        if (els.save) els.save.hidden = true;
+        if (els.kind) { els.kind.hidden = false; els.kind.textContent = '自定义'; }
+        if (els.pin) els.pin.disabled = false;
+        if (els.versions) els.versions.hidden = false;
+        if (els.editBtn) els.editBtn.hidden = false;
+        renderList();
+        if (!opts.keepView) {
+            draft.active = false;
+            showChat(false);
+            performSelectItem(appId);
+        }
         toast('已保存到创意工坊', 'success');
+        return true;
     }
 
     function bind() {
@@ -1187,6 +1393,12 @@
             NC.events.on(NC.eventNames.themeChanged, function () { syncFrameTheme(); });
             NC.events.on(NC.eventNames.liteChanged, function () { syncFrameTheme(); });
         }
+        global.addEventListener('beforeunload', function (event) {
+            if (!hasUnsavedDraft()) return;
+            event.preventDefault();
+            event.returnValue = '';
+            return '';
+        });
     }
 
     /* ------------------------------------------------------------------ *
@@ -1278,6 +1490,8 @@
         isReady: function () { return state.initialized; },
         select: selectItem,
         getActiveId: function () { return state.activeId; },
-        getPreviewSource: function () { return host ? host.getSource() : ''; }
+        getPreviewSource: function () { return host ? host.getSource() : ''; },
+        hasUnsavedDraft: hasUnsavedDraft,
+        confirmLeave: function () { return confirmLeaveDraft('离开'); }
     };
 })(window);

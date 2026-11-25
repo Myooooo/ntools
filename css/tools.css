@@ -3403,6 +3403,7 @@ html[data-lite="true"] .todo-scroll {
 
     .tools-banner {
         margin: 8px 14px 0;
+        flex-wrap: wrap;
     }
 
     .tools-title {
@@ -3802,14 +3803,18 @@ html[data-lite="true"] .todo-composer__extra {
     animation: none;
 }
 
-html[data-lite="true"] .todo-detail {
+html[data-lite="true"] .todo-detail,
+html[data-lite="true"] .todo-scrim,
+html[data-lite="true"] .notes-scrim {
     transition: none;
 }
 
 html[data-lite="true"] .todo-item__actions .nc-btn,
 html[data-lite="true"] .todo-quick-chip,
 html[data-lite="true"] .todo-view-item,
-html[data-lite="true"] .tools-nav__item {
+html[data-lite="true"] .tools-nav__item,
+html[data-lite="true"] .todo-group__toggle .nc-icon,
+html[data-lite="true"] .todo-composer__more {
     transition: background-color 0s, color 0s, border-color 0s;
 }
 
@@ -3820,7 +3825,12 @@ html[data-lite="true"] .tools-nav__item {
         animation: none;
     }
 
-    .todo-detail {
+    .todo-detail,
+    .todo-scrim,
+    .notes-side,
+    .notes-scrim,
+    .todo-group__toggle .nc-icon,
+    .todo-composer__more {
         transition: none;
     }
 }
