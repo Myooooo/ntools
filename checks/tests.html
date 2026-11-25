@@ -63,6 +63,8 @@
 <script defer src="../js/api.js"></script>
 <script defer src="../js/llm-store.js"></script>
 <script defer src="../js/ai.js"></script>
+<script defer src="../js/zip.js"></script>
+<script defer src="../js/backup.js"></script>
 <script defer src="../js/todo-time.js"></script>
 <script defer src="../js/todo-ai.js"></script>
 </head>
@@ -728,13 +730,14 @@
             eq(f(''), null);
         });
         t('workshop', 'wrapHtml：CSP / 主题 / 高度桥', function () {
-            var w = NC.schema.workshop.wrapHtml('<div>hi</div>', { theme: 'dark' });
+            var w = NC.schema.workshop.wrapHtml('<div>hi</div>', { theme: 'dark', allowNetwork: true });
             assert(w.indexOf("Content-Security-Policy") > -1, '应注入 CSP');
             assert(w.indexOf('connect-src http: https:') > -1, '联网放开时 connect-src 为 http/https');
             assert(w.indexOf('--ws-bg:#0b0e13') > -1, '深色主题变量');
             assert(w.indexOf('nc-ws-height') > -1, '应注入高度回传');
-            var w2 = NC.schema.workshop.wrapHtml('<div>hi</div>', { theme: 'light', allowNetwork: false });
-            assert(w2.indexOf("connect-src 'none'") > -1, '禁网时 connect-src 为 none');
+            var w2 = NC.schema.workshop.wrapHtml('<div>hi</div>', { theme: 'light' });
+            assert(w2.indexOf("connect-src 'none'") > -1, '默认禁网时 connect-src 为 none');
+            assert(w2.indexOf("script-src 'unsafe-inline';") > -1, '默认禁网时拦截外链脚本');
             assert(w2.indexOf('--ws-bg:#f4f5f7') > -1, '浅色主题变量');
         });
         t('workshop', 'wrapHtml 保留完整文档的 head 样式与脚本', function () {
@@ -788,49 +791,6 @@
                 assert(item.file.indexOf('js/workshop/builtin/') === 0, item.id + ' 路径');
                 assert(!!NC.workshopBuiltin.byId(item.id), item.id + ' 可按 id 查');
             });
-        });
-        t('workshop', 'wrapHtml 保留完整文档的 head 样式与脚本', function () {
-            var w = NC.schema.workshop.wrapHtml(
-                '<!DOCTYPE html><html><head><title>T</title><style>.a{color:red}</style><script>window.x=1<\/script></head><body><div class="a">hi</div></body></html>',
-                { theme: 'dark' });
-            assert(w.indexOf('.a{color:red}') > -1, 'head 里的 style 不能丢');
-            assert(w.indexOf('window.x=1') > -1, 'head 里的 script 不能丢');
-            assert(w.indexOf('<div class="a">hi</div>') > -1, 'body 内容保留');
-            assert(w.indexOf('Content-Security-Policy') > -1, '仍注入 CSP');
-            assert(w.indexOf('nc-ws-height') > -1, '仍注入高度桥');
-            assert(w.indexOf('<title>T</title>') > -1, '原 title 保留');
-        });
-        t('workshop', 'buildSystemPrompt：网络策略随开关变化', function () {
-            var on = NC.schema.workshop.buildSystemPrompt({ allowNetwork: true });
-            var off = NC.schema.workshop.buildSystemPrompt({ allowNetwork: false });
-            assert(on.indexOf('单页 HTML') > -1 || on.indexOf('单页') > -1);
-            assert(on.indexOf('http/https') > -1);
-            assert(off.indexOf('不得发起任何网络请求') > -1);
-        });
-        t('workshop', 'normalizeApp / normalizeVersion 形状', function () {
-            var s = NC.schema.workshop;
-            var app = s.normalizeApp({ title: '  测试  ', code: 'x' }, { now: 1000 });
-            eq(app.title, '测试');
-            eq(app.createdAt, 1000);
-            eq(app.pinned, false);
-            assert(app.id.length > 0);
-            var ver = s.normalizeVersion({ appId: app.id, code: 'c' });
-            eq(ver.appId, app.id);
-            eq(ver.code, 'c');
-            assert(ver.id.length > 0);
-        });
-        t('workshop', 'mergeList：置顶优先、自定义归入 custom、顺序可覆盖', function () {
-            var builtins = [
-                { id: 'b1', category: 'office', title: 'B1', order: 10 },
-                { id: 'b2', category: 'fun', title: 'B2', order: 20 }
-            ];
-            var apps = [{ id: 'a1', title: 'A1', code: '', updatedAt: 1 }];
-            var list = NC.schema.workshop.mergeList(builtins, apps, { order: { b2: 5 }, pinned: { a1: true } });
-            eq(list.length, 3);
-            eq(list[0].id, 'a1', '置顶排第一');
-            eq(list[0].category, 'custom');
-            eq(list[1].id, 'b2', 'b2 顺序被覆盖为 5');
-            eq(list[2].id, 'b1');
         });
         t('refs', '引用解析：笔记 / 待办 / 别名 / 锚点', function () {
             var a = NC.refs.parseRef('[[todo:t-1|买菜]]');
@@ -1825,6 +1785,35 @@
             store.setWorkEndTime('17:30');
             store.setTodoAi({ systemPrompt: store.DEFAULT_TODO_PROMPT });
         }, [TA, LLM]);
+
+        /* ================= 审计加固回归（备份 / 租约 / ZIP / debounce） ================= */
+        t('core.util', 'debounce.flush 透传参数与 this', function () {
+            var got = null;
+            var box = { tag: 'ok', fn: NC.util.debounce(function (a, b) { got = this.tag + ':' + a + ':' + b; }, 300) };
+            box.fn('x', 7);
+            box.fn.flush();
+            eq(got, 'ok:x:7');
+        });
+        t('zip', 'buildBlob 零拷贝与 1970 RTC 年份钳制', function () {
+            var d = new Date(1970, 0, 1);
+            var blob = NC.zip.buildBlob([{ name: 't.txt', data: 'hello' }], { date: d });
+            var bytes = NC.zip.build([{ name: 't.txt', data: 'hello' }], { date: d });
+            assert(blob instanceof Blob && blob.size === bytes.length, 'buildBlob 与 build 字节数一致');
+            var dosDate = new DataView(bytes.buffer).getUint16(12, true);
+            eq((dosDate >> 9) & 0x7F, 0, '1970 应钳制到 1980');
+        }, ['NC.zip']);
+        t('backup', '偏好白名单绝不泄漏 ntools.llm.v1 明文密钥', function () {
+            var prevLlm = localStorage.getItem('ntools.llm.v1');
+            localStorage.setItem('ntools.llm.v1', JSON.stringify({ profiles: [{ apiKey: 'sk-test-leak-guard' }] }));
+            return NC.backup.collect({ includeKeys: false }).then(function (bundle) {
+                if (prevLlm == null) localStorage.removeItem('ntools.llm.v1');
+                else localStorage.setItem('ntools.llm.v1', prevLlm);
+                assert(!('ntools.llm.v1' in bundle.payload.prefs), 'prefs 不得包含 ntools.llm.v1');
+            });
+        }, ['NC.backup']);
+        t('durability', '租约 TTL 适配后台节流（20s）', function () {
+            eq(NC.durability.leaseTtl, 20000);
+        }, ['NC.durability']);
     }
 
     /* ------------------------------------------------------------------ *
