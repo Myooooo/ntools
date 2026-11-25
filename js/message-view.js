@@ -83,8 +83,8 @@
                     FORBID_ATTR: ['style']
                 });
             }
-        } catch (err) { /* 落到原文转义 */ }
-        return html;
+        } catch (err) { /* fail-closed：落到原文转义 */ }
+        return util.escapeHtml(html);
     }
 
     /** 单块装饰：外链、图片降级、表格包裹、代码/公式增强。作用于某一个容器。 */
@@ -969,33 +969,37 @@
         if (!article) return;
         var streamingFlag = streaming || !!message.streaming;
         var content = contentEl(article);
-        if (patch && (patch.content !== undefined || patch.reasoning !== undefined
-            || patch.reasoningStreaming !== undefined || patch.reasoningTime !== undefined
-            || patch.stats !== undefined)) {
+        if (patch && (patch.content !== undefined || patch.attachments !== undefined)) {
             if (message.role === 'user') {
                 renderUserContent(content, message);
             } else {
                 renderAssistantContent(content, message);
             }
-            if (patch.stats !== undefined) {
-                var footer = article.querySelector('.chat-msg__actions');
-                if (footer) {
-                    var newFooter = buildFooter(message);
-                    footer.parentNode.replaceChild(newFooter, footer);
-                    if (streamingFlag) setMutatingDisabled(article, true);
-                }
+        }
+        if (patch && patch.stats !== undefined) {
+            var footer = article.querySelector('.chat-msg__actions');
+            if (footer) {
+                var newFooter = buildFooter(message);
+                footer.parentNode.replaceChild(newFooter, footer);
+                if (streamingFlag) setMutatingDisabled(article, true);
             }
+        }
+        if (patch && (patch.reasoning !== undefined || patch.reasoningStreaming !== undefined || patch.reasoningTime !== undefined)) {
             if (typeof message.reasoning === 'string' && message.reasoning) {
                 var details = ensureReasoning(article);
                 var body = details.querySelector('.chat-reasoning__body');
-                renderMarkdownInto(body, message.reasoning);
+                if (patch.reasoning !== undefined || patch.reasoningStreaming !== undefined) {
+                    if (message.reasoningStreaming === true) renderMarkdownStreaming(body, message.reasoning);
+                    else renderMarkdownInto(body, message.reasoning);
+                }
                 applyReasoningSummary(details, message);
                 if (message.reasoningStreaming) details.open = true;
                 else if (message.streaming !== true) details.open = false;
             } else {
                 var staleReasoning = article.querySelector('.chat-reasoning');
-                if (staleReasoning && staleReasoning.parentNode) {
-                    staleReasoning.parentNode.removeChild(staleReasoning);
+                if (staleReasoning) {
+                    stopThinkTimer(staleReasoning);
+                    if (staleReasoning.parentNode) staleReasoning.parentNode.removeChild(staleReasoning);
                 }
             }
         }
@@ -1054,6 +1058,7 @@
         Object.keys(elById).forEach(function (id) {
             if (!seen[id]) {
                 var article = elById[id];
+                stopThinkTimer(article.querySelector('.chat-reasoning'));
                 if (article.parentNode) article.parentNode.removeChild(article);
                 delete elById[id];
             }

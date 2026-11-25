@@ -95,8 +95,9 @@
         }
     }
 
-    function setRaw(key, raw) {
-        var size = estimateBytes(raw);
+    function setRaw(key, raw, options) {
+        var opts = options || {};
+        var size = opts.skipUsageCheck ? (typeof raw === 'string' ? raw.length * 2 : 0) : estimateBytes(raw);
         if (size > MAX_BYTES) {
             events.emit(NC.eventNames.quotaWarning, { key: key, bytes: size, limit: MAX_BYTES, reason: 'budget' });
         }
@@ -107,7 +108,7 @@
             } else {
                 memory[key] = raw;         // 内存模式：这就是唯一副本，不能删
             }
-            checkUsage();
+            if (!opts.skipUsageCheck) checkUsage();
             return { ok: true, bytes: size, memoryMode: !available };
         } catch (err) {
             // 写入失败时仍保留内存副本，保证当前会话可用（getRaw 会优先返回它）
@@ -157,7 +158,7 @@
             for (var i = 0; i < global.localStorage.length; i++) {
                 var name = global.localStorage.key(i);
                 var value = name ? global.localStorage.getItem(name) : null;
-                used += estimateBytes(value || '') + estimateBytes(name || '');
+                used += ((value ? value.length : 0) + (name ? name.length : 0)) * 2;
             }
         } catch (err) { return 0; }
         return used;
@@ -174,7 +175,7 @@
     function checkUsage() {
         if (!available) return;
         var now = Date.now();
-        if (now - usageCheckAt < 1500) return;
+        if (now - usageCheckAt < 30000) return;
         usageCheckAt = now;
         var used = usageBytes();
         if (used >= MAX_BYTES * 0.8) {
@@ -202,7 +203,7 @@
         }
     }
 
-    function set(key, value) {
+    function set(key, value, options) {
         var raw;
         try {
             raw = JSON.stringify(value);
@@ -210,7 +211,7 @@
             emitStorageError('serialize', key, err);
             return { ok: false, error: err };
         }
-        return setRaw(key, raw);
+        return setRaw(key, raw, options);
     }
 
     function remove(key) {

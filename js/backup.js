@@ -24,14 +24,21 @@
     var MAX_AUTO = 3;
     var DEFAULT_INTERVAL_HOURS = 24;
 
-    /* 这些键本身是数据或临时租约，不进"偏好"段 */
-    var PREF_SKIP = [
-        'ntools.todo.v2', 'ntools.todo.v2_backup', 'ntools.todo.v1_backup', 'ntools_todo',
-        'ntools_md', 'ntools.email.v1', 'ntools.email.v1.preimport',
-        'ntools.notes.fallback.v1', 'ntools.notes.lease', 'ntools.todo.lease',
-        'ntools.tab-id', 'ntools.backup.cfg'
+    /* 仅导出明确白名单内的界面偏好键，杜绝 ntools.llm.v1（含 API Key）、损坏备份或租约键泄漏进 prefs */
+    var PREF_ALLOW = [
+        'nchat-theme',
+        'nchat-lite-mode',
+        'nchat-sessions-collapsed',
+        'ntools.rail-collapsed',
+        'ntools.startTab',
+        'ntools.todo.defaultView',
+        'ntools.notes.mode',
+        'ntools.notes.side',
+        'ntools.notes.welcomeSeeded',
+        'ntools.workshop.active',
+        'ntools.workshop.side',
+        'boc_email_system_theme'
     ];
-    var PREF_PREFIX_OK = ['ntools-', 'ntools.', 'nchat-', 'boc_email_system'];
 
     var running = null;
     var timer = null;
@@ -107,17 +114,11 @@
     function collectPrefs() {
         var out = {};
         try {
-            for (var i = 0; i < global.localStorage.length; i += 1) {
-                var key = global.localStorage.key(i);
-                if (!key) continue;
-                if (PREF_SKIP.indexOf(key) > -1) continue;
-                if (key.indexOf('ntools.snap.') === 0 || key.indexOf('ntools.todo-original') === 0) continue;
-                var allowed = PREF_PREFIX_OK.some(function (prefix) { return key.indexOf(prefix) === 0; });
-                if (!allowed) continue;
+            PREF_ALLOW.forEach(function (key) {
                 var value = global.localStorage.getItem(key);
-                if (value == null || value.length > 32 * 1024) continue;
+                if (value == null || value.length > 32 * 1024) return;
                 out[key] = value;
-            }
+            });
         } catch (err) { /* ignore */ }
         return out;
     }
@@ -161,7 +162,7 @@
         };
         var files = [];
 
-        return ensureChat().then(function () {
+        return Promise.all([ensureChat(), ensureNotes(), ensureWorkshop()]).then(function () {
             try {
                 if (NC.store && NC.store.todo && typeof NC.store.todo.exportData === 'function') {
                     payload.todo = NC.store.todo.exportData();
@@ -178,8 +179,6 @@
                 }
             } catch (err) { payload.llm = null; }
             payload.email = readEmailDoc();
-            return ensureWorkshop();
-        }).then(function () {
             try {
                 if (NC.store && NC.store.notes && typeof NC.store.notes.exportBundle === 'function') {
                     payload.notes = NC.store.notes.exportBundle();
@@ -291,36 +290,35 @@
             entries.push({ name: wname, data: code });
         });
 
-        return buildManifest(entries, payload).then(function (manifest) {
-            entries.push({ name: 'manifest.json', data: manifest });
-            entries.push({
-                name: 'README.txt',
-            data: [
-                'nTools 全量备份',
-                '导出时间：' + payload.exportedAt,
-                '版本：' + payload.version,
-                '',
-                '文件说明：',
-                '  ntools-backup.json  结构化备份（待办 / 聊天 / 邮箱 / 端点 / 笔记正文 / 偏好）',
-                '  notes/*.md          每篇笔记的纯文本副本',
-                '  files/*             笔记里的图片附件',
-                '  workshop/*.html     创意工坊里保存的自定义应用',
-                '  manifest.json       文件清单 / 大小 / SHA-256 校验和',
-                '',
-                '恢复：打开 nTools → 设置 → 数据 → 从备份恢复（选择 ntools-backup.json）。',
-                '注意：JSON 里若包含 API Key，请妥善保管该压缩包。',
-                ''
-                ].join('\n')
-            });
-
-            return Promise.all(files.map(function (file) {
-                if (!file.blob || !file.blob.arrayBuffer) return null;
-                return file.blob.arrayBuffer().then(function (buffer) {
-                    return { name: 'files/' + safeName(file.name), data: new Uint8Array(buffer) };
-                }).catch(function () { return null; });
-            })).then(function (extra) {
-                var all = entries.concat(extra.filter(Boolean));
-                return NC.zip.build(all);
+        return Promise.all(files.map(function (file) {
+            if (!file.blob || !file.blob.arrayBuffer) return null;
+            return file.blob.arrayBuffer().then(function (buffer) {
+                return { name: 'files/' + safeName(file.name), data: new Uint8Array(buffer) };
+            }).catch(function () { return null; });
+        })).then(function (extra) {
+            var allEntries = entries.concat(extra.filter(Boolean));
+            return buildManifest(allEntries, payload).then(function (manifest) {
+                allEntries.push({ name: 'manifest.json', data: manifest });
+                allEntries.push({
+                    name: 'README.txt',
+                    data: [
+                        'nTools 全量备份',
+                        '导出时间：' + payload.exportedAt,
+                        '版本：' + payload.version,
+                        '',
+                        '文件说明：',
+                        '  ntools-backup.json  结构化备份（待办 / 聊天 / 邮箱 / 端点 / 笔记正文 / 偏好）',
+                        '  notes/*.md          每篇笔记的纯文本副本',
+                        '  files/*             笔记里的图片附件',
+                        '  workshop/*.html     创意工坊里保存的自定义应用',
+                        '  manifest.json       文件清单 / 大小 / SHA-256 校验和',
+                        '',
+                        '恢复：打开 nTools → 设置 → 数据 → 从备份恢复（选择 ntools-backup.json）。',
+                        '注意：JSON 里若包含 API Key，请妥善保管该压缩包。',
+                        ''
+                    ].join('\n')
+                });
+                return NC.zip.build(allEntries);
             });
         });
     }
@@ -361,7 +359,14 @@
                 var db = event.target.result;
                 if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
             };
-            request.onsuccess = function () { resolve(request.result); };
+            request.onsuccess = function () {
+                var db = request.result;
+                db.onversionchange = function () {
+                    try { db.close(); } catch (err) { /* ignore */ }
+                    dbPromise = null;
+                };
+                resolve(db);
+            };
             request.onerror = function () { dbPromise = null; reject(request.error || new Error('open failed')); };
             request.onblocked = function () { dbPromise = null; reject(new Error('blocked')); };
         });
@@ -385,11 +390,24 @@
     function listAuto() {
         return withStore('readonly', function (store) {
             var box = { value: [] };
-            var req = store.getAll();
+            var req = store.openCursor ? store.openCursor() : store.getAll();
             req.onsuccess = function () {
-                box.value = (req.result || []).map(function (item) {
-                    return { id: item.id, at: item.at, kind: item.kind || 'auto', notes: item.notes, chats: item.chats, bytes: item.bytes };
-                }).sort(function (a, b) { return b.at - a.at; });
+                if (store.openCursor) {
+                    var cursor = req.result;
+                    if (cursor) {
+                        var item = cursor.value;
+                        if (item) {
+                            box.value.push({ id: item.id, at: item.at, kind: item.kind || 'auto', notes: item.notes, chats: item.chats, bytes: item.bytes });
+                        }
+                        cursor.continue();
+                    } else {
+                        box.value.sort(function (a, b) { return b.at - a.at; });
+                    }
+                } else {
+                    box.value = (req.result || []).map(function (item) {
+                        return { id: item.id, at: item.at, kind: item.kind || 'auto', notes: item.notes, chats: item.chats, bytes: item.bytes };
+                    }).sort(function (a, b) { return b.at - a.at; });
+                }
             };
             return box;
         }).then(function (box) { return (box && box.value) || []; });
@@ -408,6 +426,9 @@
     function runAuto(reason) {
         if (running) return running;
         running = collect({ includeKeys: false }).then(function (bundle) {
+            var payloadBytes = 0;
+            try { payloadBytes = JSON.stringify(bundle.payload).length; } catch (err) { payloadBytes = 0; }
+            var fileBytes = (bundle.files || []).reduce(function (sum, f) { return sum + (f && f.blob ? (f.blob.size || 0) : 0); }, 0);
             var record = {
                 id: 'auto-' + nowTs(),
                 at: nowTs(),
@@ -416,7 +437,7 @@
                 files: bundle.files,
                 notes: bundle.payload.notes ? bundle.payload.notes.notes.length : 0,
                 chats: bundle.payload.chats && bundle.payload.chats.sessions ? bundle.payload.chats.sessions.length : 0,
-                bytes: 0
+                bytes: payloadBytes + fileBytes
             };
             return withStore('readwrite', function (store) { store.put(record); }).then(function () {
                 writeCfg({ lastAt: nowTs(), lastKind: reason || 'auto' });

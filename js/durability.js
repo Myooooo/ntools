@@ -69,9 +69,11 @@
     /* ================================================================== *
      * 单写者租约
      * 记录形如 {tabId, at}；超过 TTL 未续租视为过期（崩溃/强杀也能自愈）。
+     * 20s TTL / 5s 续租：兼顾后台标签页定时器节流与弱机短时卡顿，避免误判失联。
      * ================================================================== */
-    var LEASE_TTL = 6000;
-    var LEASE_RENEW = 2000;
+    var LEASE_TTL = 20000;
+    var LEASE_RENEW = 5000;
+    var LEASE_SET_OPTS = { skipUsageCheck: true };
 
     var renewTimers = Object.create(null);
 
@@ -105,13 +107,17 @@
         return leaseRecord(name);
     }
 
+    function renewOne(name) {
+        var rec = leaseRecord(name);
+        if (!rec) { stopRenew(name); return; }
+        if (!rec.mine) { stopRenew(name); return; }
+        storage.set(name, { tabId: TAB_ID, at: Date.now() }, LEASE_SET_OPTS);
+    }
+
     function startRenew(name) {
         if (renewTimers[name] || !global.setInterval) return;
         renewTimers[name] = global.setInterval(function () {
-            var rec = leaseRecord(name);
-            if (!rec) { stopRenew(name); return; }
-            if (!rec.mine) { stopRenew(name); return; }
-            storage.set(name, { tabId: TAB_ID, at: Date.now() });
+            renewOne(name);
         }, LEASE_RENEW);
     }
 
@@ -125,7 +131,7 @@
     function claim(name) {
         var rec = leaseRecord(name);
         if (rec && !rec.expired && !rec.mine) return false;
-        var result = storage.set(name, { tabId: TAB_ID, at: Date.now() });
+        var result = storage.set(name, { tabId: TAB_ID, at: Date.now() }, LEASE_SET_OPTS);
         if (!result || result.ok === false) {
             // 连租约都写不进去（配额满）：不阻断本地写入，但要让上层知道
             events.emit(NC.eventNames.leaseDegraded, { name: name, error: result && result.error });
@@ -136,7 +142,7 @@
 
     /** 强制夺取写权（用户显式点「接管编辑」时使用）。另一窗口会收到 storage 事件转为只读。 */
     function steal(name) {
-        var result = storage.set(name, { tabId: TAB_ID, at: Date.now() });
+        var result = storage.set(name, { tabId: TAB_ID, at: Date.now() }, LEASE_SET_OPTS);
         startRenew(name);
         return !!(result && result.ok !== false);
     }
@@ -164,6 +170,13 @@
     if (global.addEventListener) {
         global.addEventListener('pagehide', releaseAll);
         global.addEventListener('beforeunload', releaseAll);
+    }
+    if (global.document && global.document.addEventListener) {
+        global.document.addEventListener('visibilitychange', function () {
+            if (global.document.visibilityState === 'visible') {
+                Object.keys(renewTimers).forEach(renewOne);
+            }
+        });
     }
 
     /* ================================================================== *
@@ -227,7 +240,6 @@
                 db.onversionchange = function () {
                     try { db.close(); } catch (err) { /* ignore */ }
                     cfg.dbPromise = null;
-                    cfg.localOnly = true;
                 };
                 resolve(db);
             };
@@ -262,12 +274,36 @@
         });
     }
 
-    function idbAll(cfg) {
+    function idbMetaList(cfg) {
         return idbTx(cfg, 'readonly').then(function (tx) {
             return new Promise(function (resolve, reject) {
-                var request = tx.objectStore(SNAP_STORE).getAll();
-                request.onsuccess = function () { resolve(request.result || []); };
-                request.onerror = function () { reject(request.error || new Error('idb read failed')); };
+                var store = tx.objectStore(SNAP_STORE);
+                var prefix = cfg.prefix + ':';
+                var out = [];
+                if (typeof store.openCursor === 'function') {
+                    var req = store.openCursor();
+                    req.onsuccess = function () {
+                        var cursor = req.result;
+                        if (!cursor) { resolve(out); return; }
+                        var item = cursor.value;
+                        if (item && item.key && item.key.indexOf(prefix) === 0) {
+                            out.push({ key: item.key, slot: item.slot, at: item.at, bytes: item.bytes, summary: item.summary || null });
+                        }
+                        cursor.continue();
+                    };
+                    req.onerror = function () { reject(req.error || new Error('idb read failed')); };
+                } else {
+                    var request = store.getAll();
+                    request.onsuccess = function () {
+                        (request.result || []).forEach(function (item) {
+                            if (item && item.key && item.key.indexOf(prefix) === 0) {
+                                out.push({ key: item.key, slot: item.slot, at: item.at, bytes: item.bytes, summary: item.summary || null });
+                            }
+                        });
+                        resolve(out);
+                    };
+                    request.onerror = function () { reject(request.error || new Error('idb read failed')); };
+                }
             });
         });
     }
@@ -352,10 +388,7 @@
             return { ok: true, slot: slot, bytes: bytes, backend: 'local' };
         }
 
-        return idbAll(cfg).then(function (all) {
-            var existing = (all || []).filter(function (item) {
-                return item && item.key && item.key.indexOf(cfg.prefix + ':') === 0;
-            });
+        return idbMetaList(cfg).then(function (existing) {
             var slot = pickSlot(existing, cfg.slots);
             var record = {
                 key: snapKey(cfg, slot), slot: slot, at: Date.now(), bytes: bytes,
@@ -374,11 +407,8 @@
         function shape(item) {
             return { slot: item.slot, at: item.at, bytes: item.bytes, summary: item.summary || null };
         }
-        return idbAll(cfg).then(function (all) {
-            var out = (all || []).filter(function (item) {
-                return item && item.key && item.key.indexOf(cfg.prefix + ':') === 0;
-            }).map(shape);
-            return out.sort(function (a, b) { return b.at - a.at; });
+        return idbMetaList(cfg).then(function (items) {
+            return (items || []).map(shape).sort(function (a, b) { return b.at - a.at; });
         }).catch(function () {
             return localRecords(cfg).map(shape).sort(function (a, b) { return b.at - a.at; });
         });
