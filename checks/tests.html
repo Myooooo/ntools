@@ -2012,6 +2012,18 @@
                 assert(r && r.ok === false && r.error, '应拒绝非法输入: ' + bad);
             });
         }, ['NCCalcEngine']);
+        t('calcEngine', '付款增值税：单税率多次付款与混合税率（6% + 13%）', function () {
+            var ev = window.NCCalcEngine.evaluate;
+            var rSingle = ev('(¥10,600 + ¥15,900 + ¥5,300) ÷ (1 + 6%)', { percentMode: 'value' });
+            eq(rSingle.ok, true);
+            eq(rSingle.value, 30000, '31800 / 1.06 = 30000');
+            assert(rSingle.steps.length >= 4, '应包含求和、百分比、加1与除法步骤');
+            var rMixed = ev('(¥21,200 + ¥10,600) ÷ (1 + 6%) + (¥11,300 + ¥5,650) ÷ (1 + 13%)', { percentMode: 'value' });
+            eq(rMixed.ok, true);
+            eq(rMixed.value, 45000, '30000 + 15000 = 45000');
+            var stepVals = rMixed.steps.map(function (s) { return s.value; });
+            assert(stepVals.indexOf('30000') > -1 && stepVals.indexOf('15000') > -1, '应展示两组各自的不含税中间结果');
+        }, ['NCCalcEngine']);
     }
 
     /* ------------------------------------------------------------------ *
