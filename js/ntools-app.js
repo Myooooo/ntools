@@ -322,6 +322,8 @@
     function bindTabsShortcut() {
         document.addEventListener('keydown', function (event) {
             if (!event.altKey || event.ctrlKey || event.metaKey) return;
+            var target = event.target;
+            if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/i.test(target.tagName))) return;
             var index = parseInt(event.key, 10);
             if (!isFinite(index) || index < 1 || index > TABS.length) return;
             event.preventDefault();
@@ -452,7 +454,10 @@
         }
         notesBundlePromise = NOTES_SCRIPTS.reduce(function (chain, src) {
             return chain.then(function () { return util.loadScript(src); });
-        }, Promise.resolve());
+        }, Promise.resolve()).catch(function (err) {
+            notesBundlePromise = null;
+            throw err;
+        });
         return notesBundlePromise;
     }
 
@@ -495,7 +500,10 @@
         if (!util || typeof util.loadScript !== 'function') return Promise.reject(new Error('loader unavailable'));
         workshopBundlePromise = WORKSHOP_SCRIPTS.reduce(function (chain, src) {
             return chain.then(function () { return util.loadScript(src); });
-        }, Promise.resolve());
+        }, Promise.resolve()).catch(function (err) {
+            workshopBundlePromise = null;
+            throw err;
+        });
         return workshopBundlePromise;
     }
 
@@ -740,15 +748,15 @@
             });
         }
         NC.events.on(NC.eventNames.quotaWarning, function () {
-            showBanner('本地存储空间接近上限（3.5 MB），建议导出备份并清理旧任务。', {
-                actionLabel: '导出待办备份',
-                onAction: exportTodoBackup
+            showBanner('本地存储空间接近上限（3.5 MB），建议导出备份并清理旧数据。', {
+                actionLabel: '前往备份',
+                onAction: function () { openSettings('data'); }
             });
         });
         NC.events.on(NC.eventNames.storageError, function () {
             showBanner('本地存储读写异常，修改可能无法保存，请及时导出备份。', {
-                actionLabel: '导出待办备份',
-                onAction: exportTodoBackup
+                actionLabel: '前往备份',
+                onAction: function () { openSettings('data'); }
             });
         });
         NC.events.on(NC.eventNames.storageCorrupt, function () {
@@ -1074,28 +1082,6 @@
         } catch (err) {
             showBanner('待办模块初始化失败，其它工具仍可使用。可刷新页面重试。', { persistent: true });
         }
-    }
-
-    function initLeafModule(name, pageId, noteId) {
-        var panel = document.getElementById(pageId);
-        var note = document.getElementById(noteId);
-        var module = NC.tools && NC.tools[name];
-        if (module && typeof module.init === 'function') {
-            try {
-                module.init();
-                if (note) note.hidden = true;
-                if (panel) panel.setAttribute('data-module', 'ready');
-                return true;
-            } catch (err) {
-                /* 模块内部错误：降级提示，不影响其它工具 */
-            }
-        }
-        if (panel) panel.setAttribute('data-module', 'missing');
-        if (note) {
-            note.hidden = false;
-            note.textContent = '该工具模块尚未加载（js/' + (name === 'markdown' ? 'markdown' : name) + '.js），界面已就绪，模块就位后刷新页面即可使用。';
-        }
-        return false;
     }
 
     /* ------------------------------------------------------------------ *

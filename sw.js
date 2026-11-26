@@ -4,7 +4,7 @@
  */
 'use strict';
 
-var CACHE_VERSION = 'ntools-v9.0.0';
+var CACHE_VERSION = 'ntools-v9.1.0';
 var CACHE_NAME = CACHE_VERSION;
 var CORE_ASSETS = [
     './css/base.css',
@@ -12,6 +12,26 @@ var CORE_ASSETS = [
     './css/chat.css',
     './css/components.css',
     './css/email-tab.css',
+    './css/fonts/KaTeX_AMS-Regular.woff2',
+    './css/fonts/KaTeX_Caligraphic-Bold.woff2',
+    './css/fonts/KaTeX_Caligraphic-Regular.woff2',
+    './css/fonts/KaTeX_Fraktur-Bold.woff2',
+    './css/fonts/KaTeX_Fraktur-Regular.woff2',
+    './css/fonts/KaTeX_Main-Bold.woff2',
+    './css/fonts/KaTeX_Main-BoldItalic.woff2',
+    './css/fonts/KaTeX_Main-Italic.woff2',
+    './css/fonts/KaTeX_Main-Regular.woff2',
+    './css/fonts/KaTeX_Math-BoldItalic.woff2',
+    './css/fonts/KaTeX_Math-Italic.woff2',
+    './css/fonts/KaTeX_SansSerif-Bold.woff2',
+    './css/fonts/KaTeX_SansSerif-Italic.woff2',
+    './css/fonts/KaTeX_SansSerif-Regular.woff2',
+    './css/fonts/KaTeX_Script-Regular.woff2',
+    './css/fonts/KaTeX_Size1-Regular.woff2',
+    './css/fonts/KaTeX_Size2-Regular.woff2',
+    './css/fonts/KaTeX_Size3-Regular.woff2',
+    './css/fonts/KaTeX_Size4-Regular.woff2',
+    './css/fonts/KaTeX_Typewriter-Regular.woff2',
     './css/interaction.css',
     './css/katex.min.css',
     './css/mail.css',
@@ -95,6 +115,8 @@ var CORE_ASSETS = [
     './js/workshop-db.js',
     './js/workshop-store.js',
     './js/workshop-view.js',
+    './js/workshop/builtin/_controls.css',
+    './js/workshop/builtin/_shared.css',
     './js/workshop/builtin/_shared.js',
     './js/workshop/builtin/color-contrast.html',
     './js/workshop/builtin/countdown.html',

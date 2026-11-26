@@ -433,7 +433,7 @@
             state.notes.forEach(function (other) {
                 if (other.id === id) return;
                 var content = other.content || '';
-                if (content.indexOf('[[' + before) === -1) return;
+                if (content.indexOf('[[') === -1) return;
                 var updated = content.replace(/\[\[\s*([^[\]|#\n]+?)\s*(\|[^[\]\n]*)?(\#[^[\]\n]*)?\]\]/g, function (raw, name, alias, anchor) {
                     var plain = String(name).trim();
                     if (plain.toLowerCase() !== before.toLowerCase()) return raw;

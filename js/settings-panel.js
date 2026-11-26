@@ -415,8 +415,17 @@
             if (kind === 'zip') {
                 if (!NC.zip) { toast('打包模块未加载', 'error'); return; }
                 var bundle = notesStore.exportBundle();
+                var usedNames = Object.create(null);
                 var files = (bundle.notes || []).map(function (note) {
-                    return { name: (note.title || '未命名') + '.md', data: note.content || '' };
+                    var base = String(note.title || '未命名').replace(/[\\/:*?"<>|]+/g, '-').replace(/^\.+|\.+$/g, '').trim() || '未命名';
+                    var candidate = base + '.md';
+                    var n = 2;
+                    while (usedNames[candidate.toLowerCase()]) {
+                        candidate = base + ' (' + n + ').md';
+                        n += 1;
+                    }
+                    usedNames[candidate.toLowerCase()] = true;
+                    return { name: candidate, data: note.content || '' };
                 });
                 files.push({ name: '_ntools-notes.json', data: JSON.stringify(bundle, null, 2) });
                 notesStore.flush().then(function () {
@@ -1001,19 +1010,22 @@
         panel.appendChild(layout);
         sheet.appendChild(panel);
 
-        sheet.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape') { event.stopPropagation(); close(); }
-        });
-        sheet.addEventListener('focusin', function (event) {
-            var target = event.target;
-            if (!target || !/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
-            global.setTimeout(function () {
-                if (!open) return;
-                try {
-                    target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
-                } catch (err) { /* ignore */ }
-            }, 280);
-        });
+        if (!sheet.__eventsBound) {
+            sheet.__eventsBound = true;
+            sheet.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') { event.stopPropagation(); close(); }
+            });
+            sheet.addEventListener('focusin', function (event) {
+                var target = event.target;
+                if (!target || !/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+                global.setTimeout(function () {
+                    if (!open) return;
+                    try {
+                        target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+                    } catch (err) { /* ignore */ }
+                }, 280);
+            });
+        }
         built = true;
     }
 

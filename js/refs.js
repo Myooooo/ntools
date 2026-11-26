@@ -137,7 +137,7 @@
                 level: 'inline',
                 start: function (src) {
                     var a = src.indexOf('[[');
-                    var b = src.indexOf('![[', a < 0 ? 0 : a);
+                    var b = src.indexOf('![[');
                     if (a < 0 && b < 0) return undefined;
                     if (a < 0) return b;
                     if (b < 0) return a;

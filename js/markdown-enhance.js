@@ -59,7 +59,7 @@
                         var dollar = /^\$([^$\n]+?)\$(?!\d)/.exec(src);
                         if (dollar) return { type: 'inlineMathDollar', raw: dollar[0], text: dollar[1] };
                         var paren = /^\\\(([\s\S]+?)\\\)/.exec(src);
-                        if (paren) return { type: 'inlineMathParen', raw: paren[0], text: paren[1] };
+                        if (paren) return { type: 'inlineMathDollar', raw: paren[0], text: paren[1] };
                         return undefined;
                     },
                     renderer: function (token) { return mathSpan(token.text, false); }

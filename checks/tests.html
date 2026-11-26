@@ -67,6 +67,9 @@
 <script defer src="../js/backup.js"></script>
 <script defer src="../js/todo-time.js"></script>
 <script defer src="../js/todo-ai.js"></script>
+<script defer src="../js/workshop-db.js"></script>
+<script defer src="../js/workshop-store.js"></script>
+<script defer src="../js/preview-host.js"></script>
 </head>
 <body>
 <div class="tt-wrap">
@@ -1814,6 +1817,138 @@
         t('durability', '租约 TTL 适配后台节流（20s）', function () {
             eq(NC.durability.leaseTtl, 20000);
         }, ['NC.durability']);
+
+        /* ================= 全量审查回归（创意工坊 / 备份 / 解析 / 预览宿主） ================= */
+        t('workshop', 'extractHtml：未闭合围栏与含空白结束标签', function () {
+            var f = NC.schema.workshop.extractHtml;
+            var a = f('说明\n```html\n<div>half</div>');
+            assert(a && a.fenced === true && a.code.indexOf('<div>half</div>') > -1, '未闭合围栏应提取内容');
+            var b = f('<!DOCTYPE html><html><body>hi</body></html  \n > 尾巴');
+            assert(b && b.code.indexOf('尾巴') === -1 && /<\/html\s*>$/i.test(b.code), '含空白 </html > 应正常截断');
+        });
+        t('workshop', 'wrapHtml：严格 allowNetwork、data-lite 与末个 </body> 注入', function () {
+            var w1 = NC.schema.workshop.wrapHtml(
+                '<!DOCTYPE html><html><body><script>var s="</body>";<\/script></body></html>',
+                { theme: 'light', lite: true, allowNetwork: 'false' }
+            );
+            assert(w1.indexOf("connect-src 'none'") > -1, '非布尔 true 的 allowNetwork 必须禁网');
+            assert(w1.indexOf('data-lite="true"') > -1, '应注入 data-lite="true"');
+            assert(w1.indexOf('var s="</body>";') > -1, '脚本字面量内的 </body> 不得被替换');
+            var lastClose = w1.lastIndexOf('</body>');
+            var bridgeAt = w1.lastIndexOf('nc-ws-ready');
+            assert(bridgeAt > -1 && bridgeAt < lastClose, '桥接脚本应注入在最后一个 </body> 之前');
+        });
+        t('workshop', 'mergeList：显式 pinMap[id] === false 覆盖 app.pinned', function () {
+            var list = NC.schema.workshop.mergeList([], [
+                { id: 'a1', title: 'A1', code: 'x', pinned: true, updatedAt: 1 }
+            ], { pinned: { a1: false }, order: {} });
+            eq(list.length, 1);
+            eq(list[0].pinned, false, '显式取消置顶应生效');
+        });
+        t('workshopDb', '版本与轮次按 id 幂等写入且可清理（local 模式）', function () {
+            var db = NC.workshopDb;
+            var appId = '__nctest_app__';
+            var prevFb = localStorage.getItem(db.FALLBACK_KEY);
+            Object.defineProperty(window, 'indexedDB', { configurable: true, get: function () { return null; } });
+            function restore() {
+                delete window.indexedDB;
+                if (prevFb == null) localStorage.removeItem(db.FALLBACK_KEY);
+                else localStorage.setItem(db.FALLBACK_KEY, prevFb);
+            }
+            return db.open().then(function (m) {
+                eq(m, 'local', '无 indexedDB 时应降级为 local 模式');
+                return db.putVersion({ id: '__nctest_v1__', appId: appId, code: 'v1', label: 'A', at: 100 });
+            }).then(function () {
+                return db.putVersion({ id: '__nctest_v1__', appId: appId, code: 'v2', label: 'B', at: 200 });
+            }).then(function () {
+                return db.putTurn({ id: '__nctest_t1__', appId: appId, role: 'user', text: '1', at: 100 });
+            }).then(function () {
+                return db.putTurn({ id: '__nctest_t1__', appId: appId, role: 'user', text: '2', at: 200 });
+            }).then(function () {
+                return Promise.all([db.getAllVersions(), db.getAllTurns()]);
+            }).then(function (pair) {
+                var vers = pair[0].filter(function (v) { return v.appId === appId; });
+                var turns = pair[1].filter(function (x) { return x.appId === appId; });
+                eq(vers.length, 1, '相同 id 版本不应重复堆积');
+                eq(vers[0].code, 'v2', '版本内容应就地更新');
+                eq(turns.length, 1, '相同 id 轮次不应重复堆积');
+                eq(turns[0].text, '2', '轮次内容应就地更新');
+                return Promise.all([db.deleteVersions(appId), db.deleteTurns(appId)]);
+            }).then(function () {
+                restore();
+            }, function (err) {
+                restore();
+                throw err;
+            });
+        }, ['NC.workshopDb']);
+        t('workshopStore', '单调 order 与 resetParams 保留 endpointId', function () {
+            var db = NC.workshopDb;
+            var ws = NC.store.workshop;
+            var prevFb = localStorage.getItem(db.FALLBACK_KEY);
+            Object.defineProperty(window, 'indexedDB', { configurable: true, get: function () { return null; } });
+            function restore() {
+                delete window.indexedDB;
+                if (prevFb == null) localStorage.removeItem(db.FALLBACK_KEY);
+                else localStorage.setItem(db.FALLBACK_KEY, prevFb);
+            }
+            return ws.init().then(function () {
+                var prevParams = Object.assign({}, ws.getParams());
+                var r1 = ws.createApp({ title: '__nctest_1', code: '<div>1</div>' });
+                var r2 = ws.createApp({ title: '__nctest_2', code: '<div>2</div>' });
+                assert(r1.ok && r2.ok, '创建测试应用成功');
+                assert(r2.app.order > r1.app.order, '连续创建的应用 order 应严格递增');
+                ws.deleteApp(r1.app.id);
+                ws.deleteApp(r2.app.id);
+                ws.setParams({ endpointId: '__test_ep__', temperature: 0.9 });
+                ws.resetParams();
+                var after = ws.getParams();
+                eq(after.endpointId, '__test_ep__', 'resetParams 应保留当前生成端点');
+                eq(after.temperature, NC.schema.workshop.DEFAULT_PARAMS.temperature, '其余参数恢复默认');
+                ws.setParams(prevParams);
+                restore();
+            }, function (err) {
+                restore();
+                throw err;
+            });
+        }, ['NC.store.workshop', 'NC.workshopDb']);
+        t('backup', '内置工具偏好白名单完整且过滤未知键', function () {
+            var prevWc = localStorage.getItem('ws-worldclock-v2');
+            var prevUnknown = localStorage.getItem('__nctest_unknown_pref');
+            localStorage.setItem('ws-worldclock-v2', '["Asia/Tokyo"]');
+            localStorage.setItem('__nctest_unknown_pref', 'leak');
+            return NC.backup.collect({ includeKeys: false }).then(function (bundle) {
+                if (prevWc == null) localStorage.removeItem('ws-worldclock-v2');
+                else localStorage.setItem('ws-worldclock-v2', prevWc);
+                if (prevUnknown == null) localStorage.removeItem('__nctest_unknown_pref');
+                else localStorage.setItem('__nctest_unknown_pref', prevUnknown);
+                eq(bundle.payload.prefs['ws-worldclock-v2'], '["Asia/Tokyo"]', '应包含新内置工具偏好');
+                assert(!('__nctest_unknown_pref' in bundle.payload.prefs), '未知键不得进入 prefs 导出');
+            });
+        }, ['NC.backup']);
+        t('refs', '![[嵌入]] 位于 [[普通链接]] 之前不漏匹配', function () {
+            var list = NC.refs.parse('前置 ![[图.png]] 中间 [[笔记A]]');
+            eq(list.length, 2, '应解析出嵌入和链接共 2 项');
+            eq(list[0].embed, true, '第一项应为嵌入');
+            eq(list[0].title, '图.png');
+            eq(list[1].embed, false, '第二项应为普通链接');
+            eq(list[1].title, '笔记A');
+        });
+        t('mdEnhance', '\\(...\\) 行内数学公式正常渲染为 .math-inline', function () {
+            NC.mdEnhance.install();
+            var html = window.marked.parse('公式 \\(a^2 + b^2\\) 结束');
+            assert(html.indexOf('math-inline') > -1 && html.indexOf('data-tex="a^2 + b^2"') > -1, html);
+        }, ['NC.mdEnhance', 'marked']);
+        t('previewHost', '可信挂载沙箱包含 allow-downloads', function () {
+            var iframe = document.createElement('iframe');
+            iframe.hidden = true;
+            document.body.appendChild(iframe);
+            var h = NC.previewHost.create(iframe);
+            h.mountUrl('about:blank', { trusted: true });
+            var sb = iframe.getAttribute('sandbox') || '';
+            h.destroy();
+            iframe.remove();
+            assert(sb.indexOf('allow-downloads') > -1, 'sandbox 缺少 allow-downloads: ' + sb);
+        }, ['NC.previewHost']);
     }
 
     /* ------------------------------------------------------------------ *

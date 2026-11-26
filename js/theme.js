@@ -81,14 +81,15 @@
         } else if (storedLite === 'true' || storedLite === 'false') {
             applyLite(storedLite === 'true');
         } else {
-            // 首次启动：内存 ≤4GB 或只有 2 核，默认 Lite；Safari 无 deviceMemory，不误判
-            var weak = false;
+            // 首次启动：内存 ≤4GB 或只有 2 核，默认 Lite；同时继承 compat.bootstrap() 在弱设备上设置的 data-lite
+            var weak = document.documentElement.getAttribute('data-lite') === 'true';
             try {
                 var mem = global.navigator && global.navigator.deviceMemory;
                 var cores = global.navigator && global.navigator.hardwareConcurrency;
-                weak = (typeof mem === 'number' && mem > 0 && mem <= 4) ||
+                weak = weak ||
+                    (typeof mem === 'number' && mem > 0 && mem <= 4) ||
                     (typeof cores === 'number' && cores > 0 && cores <= 2);
-            } catch (err) { weak = false; }
+            } catch (err) { /* ignore */ }
             applyLite(weak);
         }
         if (systemQuery) {
