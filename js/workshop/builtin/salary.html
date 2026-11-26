@@ -287,8 +287,12 @@
     setMood(MOODS[moodIndex], true);
   }
 
+  function isLite() {
+    return document.documentElement.getAttribute('data-lite') === 'true';
+  }
+
   function spawnCoin(delta) {
-    if (!els.coins) return;
+    if (!els.coins || isLite()) return;
     var item = document.createElement('span');
     item.className = 'coin-pop';
     var coin = document.createElement('i');
@@ -312,9 +316,12 @@
     var earned = Math.min(cfg.dailyWithMultiplier, cfg.perSecond * worked * 60);
     var ratio = cfg.dailyWithMultiplier ? Math.min(1, earned / cfg.dailyWithMultiplier) : 0;
 
-    /* 进入时快速累加到当前收入，之后平滑跟随每秒增量 */
+    /* 进入时快速累加到当前收入，之后平滑跟随每秒增量；Lite 模式跳过渐变与飘字粒子 */
     var perf = (window.performance && performance.now) ? performance.now() : Date.now();
-    if (!introDone) {
+    if (isLite()) {
+      introDone = true;
+      shown = earned;
+    } else if (!introDone) {
       var t = Math.min(1, (perf - introStart) / 700);
       var eased = 1 - Math.pow(1 - t, 3);
       shown = earned * eased;
@@ -406,9 +413,18 @@
   els.autoSave.addEventListener('change', save);
 
   load();
-  // 10fps：入场累加与每秒飘字需要更细的步进；稳定后开销仍然很低
+  // 标准模式 10fps 满足入场与飘字；Lite 模式降频至 1Hz 降低信创主机持续重绘开销
   render();
-  var tickTimer = setInterval(function () { if (!document.hidden) render(); }, 100);
+  var lastLiteTick = Date.now();
+  var tickTimer = setInterval(function () {
+    if (document.hidden) return;
+    if (isLite()) {
+      var nowTs = Date.now();
+      if (nowTs - lastLiteTick < 950) return;
+      lastLiteTick = nowTs;
+    }
+    render();
+  }, 100);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) render(); });
   window.addEventListener('pagehide', function () { clearInterval(tickTimer); });
 })();

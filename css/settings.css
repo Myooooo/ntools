@@ -1619,13 +1619,7 @@ html[data-lite="true"] .settings-sheet__backdrop {
     }
 }
 
-/* 落位后再叠一层苹果拟态玻璃饱和模糊：避免打开动画期间逐帧重算大面板 */
-.settings-sheet.is-settled .settings-sheet__panel {
-    -webkit-backdrop-filter: blur(20px) saturate(var(--nc-material-saturate));
-    backdrop-filter: blur(20px) saturate(var(--nc-material-saturate));
-}
-
-/* 面板内容透出玻璃底：导航与主区不再铺实色 */
+/* 面板内容保持清晰对比：遮罩已负责背景模糊，不再对大面板二次叠加模糊（避免双 Pass 全屏合成） */
 .settings-sheet__nav,
 .settings-sheet__main {
     background: transparent;
@@ -1643,7 +1637,7 @@ html[data-lite="true"] .settings-sheet__backdrop {
 html[data-lite="true"] .settings-sheet__backdrop {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    background: rgba(4, 6, 10, 0.72);
+    background: var(--nc-overlay);
     transition: opacity var(--nc-dur-fast) linear;
 }
 
@@ -1795,14 +1789,13 @@ html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
 
 /* ==========================================================================
  * v9.0 移动端设置：可视视口高度 + 键盘 + 左右安全区
- * visualViewport 由 settings-panel.js 写入 --nc-vv-height；无 JS 时回退 dvh/vh。
+ * visualViewport 由 settings-panel.js 写入 --nc-vv-height；Chromium 102 以 100vh 兜底，
+ * 支持 dvh 的浏览器才覆盖（避免 var(..., 100dvh) 在旧内核整行失效）。
  * ========================================================================== */
 @media (max-width: 900px) {
     .settings-sheet__panel {
         height: var(--nc-vv-height, 100vh);
-        height: var(--nc-vv-height, 100dvh);
         max-height: var(--nc-vv-height, 100vh);
-        max-height: var(--nc-vv-height, 100dvh);
     }
 
     .settings-sheet__head {
@@ -1821,5 +1814,14 @@ html[data-lite="true"] .settings-sheet.is-closing .settings-sheet__panel {
         padding-right: calc(18px + var(--nc-safe-right));
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
+    }
+}
+
+@supports (height: 100dvh) {
+    @media (max-width: 900px) {
+        .settings-sheet__panel {
+            height: var(--nc-vv-height, 100dvh);
+            max-height: var(--nc-vv-height, 100dvh);
+        }
     }
 }

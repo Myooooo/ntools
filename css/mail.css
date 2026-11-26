@@ -538,7 +538,13 @@
 
   html[data-lite="true"] .modal-mask {
     -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  html[data-lite="true"] .app-bar {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: var(--panel-bg);
   }
 
   html[data-lite="true"] .boot-logo,
@@ -842,7 +848,13 @@
 
   html[data-lite="true"] .modal-mask {
     -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  html[data-lite="true"] .app-bar {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: var(--panel-bg);
   }
 
   /* ==========================================================================

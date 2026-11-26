@@ -82,22 +82,31 @@
                 var nav = global.navigator || {};
                 var lowCpu = !!(nav.hardwareConcurrency && nav.hardwareConcurrency <= 4);
                 var lowMem = !!(nav.deviceMemory && nav.deviceMemory <= 4);
+                var ua = String(nav.userAgent || '') + ' ' + String(nav.platform || '');
+                var isArmLinux = /linux/i.test(ua) && /(aarch64|arm64|armv[78])/i.test(ua);
+                features.armLinux = isArmLinux;
                 var softGpu = false;
+                var unknownGpu = false;
                 try {
                     var canvas = document.createElement('canvas');
                     var gl = canvas && (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
                     if (!gl) {
                         softGpu = true;
+                        unknownGpu = true;
                     } else {
                         var dbg = gl.getExtension('WEBGL_debug_renderer_info');
                         var renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '') : '';
-                        if (/llvmpipe|swiftshader|softpipe|mesa offscreen|software/i.test(renderer)) {
+                        if (!renderer) unknownGpu = true;
+                        if (/llvmpipe|swiftshader|softpipe|mesa offscreen|software|swrast|virgl|lavapipe|jm7|jm9|mali-4|mali-t|panfrost|lima|v3d/i.test(renderer)) {
                             softGpu = true;
                         }
                     }
-                } catch (err) { /* ignore */ }
+                } catch (err) {
+                    unknownGpu = true;
+                }
                 features.softwareRenderer = softGpu;
-                if (features.reducedMotion || lowCpu || lowMem || softGpu) {
+                var armWeakHost = isArmLinux && (!nav.deviceMemory || nav.deviceMemory <= 8) && (softGpu || unknownGpu);
+                if (features.reducedMotion || lowCpu || lowMem || softGpu || armWeakHost) {
                     root.setAttribute('data-lite', 'true');
                 }
             }
