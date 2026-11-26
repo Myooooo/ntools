@@ -4,7 +4,7 @@
  */
 'use strict';
 
-var CACHE_VERSION = 'ntools-v9.2.0';
+var CACHE_VERSION = 'ntools-v9.3.0';
 var CACHE_NAME = CACHE_VERSION;
 var CORE_ASSETS = [
     './css/base.css',

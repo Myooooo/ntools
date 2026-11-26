@@ -947,27 +947,47 @@
     }
 
     var chatHideTimer = null;
+    var chatAnimToken = 0;
 
     function showChat(show) {
         state.chatOpen = !!show;
         syncHeader();
         if (!els.chat) return;
+        chatAnimToken += 1;
+        var token = chatAnimToken;
+        if (chatHideTimer) { global.clearTimeout(chatHideTimer); chatHideTimer = null; }
         if (show) {
-            if (chatHideTimer) { global.clearTimeout(chatHideTimer); chatHideTimer = null; }
             renderEndpointOptions();
             els.chat.classList.add('is-closed');
             els.chat.removeAttribute('hidden');
+            if (isLite()) {
+                els.chat.classList.remove('is-closed');
+                return;
+            }
             global.requestAnimationFrame(function () {
-                global.requestAnimationFrame(function () { els.chat.classList.remove('is-closed'); });
+                if (token !== chatAnimToken) return;
+                global.requestAnimationFrame(function () {
+                    if (token === chatAnimToken) els.chat.classList.remove('is-closed');
+                });
             });
             return;
         }
         els.chat.classList.add('is-closed');
-        if (chatHideTimer) global.clearTimeout(chatHideTimer);
-        chatHideTimer = global.setTimeout(function () {
+        if (isLite()) {
             els.chat.setAttribute('hidden', '');
-            chatHideTimer = null;
-        }, 280);
+            return;
+        }
+        var done = function () {
+            if (token !== chatAnimToken || !els.chat) return;
+            if (chatHideTimer) { global.clearTimeout(chatHideTimer); chatHideTimer = null; }
+            els.chat.setAttribute('hidden', '');
+        };
+        els.chat.addEventListener('transitionend', function onEnd(event) {
+            if (event.target !== els.chat) return;
+            els.chat.removeEventListener('transitionend', onEnd);
+            done();
+        });
+        chatHideTimer = global.setTimeout(done, 340);
     }
 
     function clearChatLog() {

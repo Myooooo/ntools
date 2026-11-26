@@ -2024,6 +2024,53 @@
             var stepVals = rMixed.steps.map(function (s) { return s.value; });
             assert(stepVals.indexOf('30000') > -1 && stepVals.indexOf('15000') > -1, '应展示两组各自的不含税中间结果');
         }, ['NCCalcEngine']);
+
+        /* ================= 兼容性与 Lite 模式令牌保障 ================= */
+        t('compat', '能力探测与用户手动 Lite 偏好优先级', function () {
+            var c = NC.compat;
+            assert(c && c.features && typeof c.bootstrap === 'function', 'compat API 完整');
+            var prevAttr = document.documentElement.getAttribute('data-lite');
+            var prevPref = localStorage.getItem('nchat-lite-mode');
+            localStorage.setItem('nchat-lite-mode', 'false');
+            document.documentElement.removeAttribute('data-lite');
+            c.bootstrap();
+            var applied = document.documentElement.getAttribute('data-lite');
+            if (prevPref == null) localStorage.removeItem('nchat-lite-mode');
+            else localStorage.setItem('nchat-lite-mode', prevPref);
+            if (prevAttr == null) document.documentElement.removeAttribute('data-lite');
+            else document.documentElement.setAttribute('data-lite', prevAttr);
+            assert(applied !== 'true', '用户显式关闭 Lite 时不得强制覆盖');
+        }, ['NC.compat']);
+        t('lite', 'Lite 模式仅移除高开销模糊/阴影/环境渐变，不改布局几何令牌', function () {
+            var root = document.documentElement;
+            var prev = root.getAttribute('data-lite');
+            root.setAttribute('data-lite', 'false');
+            var stdStyle = getComputedStyle(root);
+            var stdControlH = stdStyle.getPropertyValue('--nc-control-h-md').trim();
+            var stdSpace = stdStyle.getPropertyValue('--nc-space-4').trim();
+            var stdReadW = stdStyle.getPropertyValue('--nc-reading-width').trim();
+
+            root.setAttribute('data-lite', 'true');
+            var liteStyle = getComputedStyle(root);
+            var blur = liteStyle.getPropertyValue('--nc-glass-blur').trim();
+            var blurFloat = liteStyle.getPropertyValue('--nc-blur-float').trim();
+            var shadow2 = liteStyle.getPropertyValue('--nc-shadow-2').trim();
+            var ambient = liteStyle.getPropertyValue('--nc-ambient').trim();
+            var liteControlH = liteStyle.getPropertyValue('--nc-control-h-md').trim();
+            var liteSpace = liteStyle.getPropertyValue('--nc-space-4').trim();
+            var liteReadW = liteStyle.getPropertyValue('--nc-reading-width').trim();
+
+            if (prev == null) root.removeAttribute('data-lite');
+            else root.setAttribute('data-lite', prev);
+
+            eq(blur, 'none', 'Lite 下 --nc-glass-blur 应为 none');
+            eq(blurFloat, '0px', 'Lite 下 --nc-blur-float 应为 0px');
+            eq(shadow2, 'none', 'Lite 下 --nc-shadow-2 应为 none');
+            eq(ambient, 'none', 'Lite 下 --nc-ambient 应为 none');
+            eq(liteControlH, stdControlH, '控件高度不得因 Lite 改变');
+            eq(liteSpace, stdSpace, '栅格间距不得因 Lite 改变');
+            eq(liteReadW, stdReadW, '阅读版心宽度不得因 Lite 改变');
+        });
     }
 
     /* ------------------------------------------------------------------ *

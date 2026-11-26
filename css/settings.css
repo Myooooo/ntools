@@ -220,7 +220,7 @@
     border-radius: var(--nc-radius-lg);
     background: var(--nc-surface);
     overflow: hidden;
-    transition: border-color var(--nc-dur) var(--nc-ease), box-shadow var(--nc-dur) var(--nc-ease);
+    transition: border-color var(--nc-dur) var(--nc-ease);
 }
 @media (hover: hover) and (pointer: fine) {
 

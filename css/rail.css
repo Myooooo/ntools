@@ -71,8 +71,7 @@
 .tools-nav__item {
     transition:
         background-color var(--nc-dur-fast) var(--nc-ease),
-        color var(--nc-dur-fast) var(--nc-ease),
-        padding var(--nc-dur-panel) var(--nc-ease-drawer);
+        color var(--nc-dur-fast) var(--nc-ease);
 }
 
 /* ---------- 收起状态（桌面 >= 901px 才生效；移动端仍是顶部栏） ---------- */
@@ -196,7 +195,7 @@ html[data-lite="true"] .tools-rail__toggle,
 html[data-lite="true"] .tools-brand__name,
 html[data-lite="true"] .tools-nav__label,
 html[data-lite="true"] .tools-nav__item {
-    transition: none;
+    transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

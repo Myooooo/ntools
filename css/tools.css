@@ -1907,6 +1907,7 @@ html[data-lite="true"] .notes-ac {
 /* ---- 8.5 记录行：左时间槽 + 发丝分隔 ---- */
 .todo-item {
     /* 弱机优先：离屏行不参与布局与绘制（Chromium 85+）。实测前先用变量兜住。 */
+    contain: layout style;
     content-visibility: auto;
     contain-intrinsic-size: auto 56px;
     position: relative;

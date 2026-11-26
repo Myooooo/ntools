@@ -182,11 +182,9 @@
     --nc-shadow-float: var(--nc-shadow-2);
     --nc-shadow-sheet: var(--nc-shadow-3);
     --nc-ambient:
-        repeating-linear-gradient(0deg, transparent 0 31px, rgba(255, 255, 255, 0.016) 31px 32px),
-        repeating-linear-gradient(90deg, transparent 0 31px, rgba(255, 255, 255, 0.016) 31px 32px),
-        radial-gradient(980px 560px at 84% -12%, rgba(110, 168, 254, 0.12), transparent 62%),
-        radial-gradient(820px 480px at 2% 108%, rgba(216, 176, 106, 0.06), transparent 60%),
-        linear-gradient(180deg, #0b0e13 0%, #0a0d12 55%, #0b0e13 100%);
+        radial-gradient(960px 540px at 84% -12%, rgba(110, 168, 254, 0.11), transparent 62%),
+        radial-gradient(780px 460px at 2% 108%, rgba(216, 176, 106, 0.06), transparent 60%),
+        linear-gradient(180deg, #0b0e13 0%, #0b0e13 100%);
     --nc-grid: none;
     --nc-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%);
     --nc-brand-bg: var(--nc-gradient-accent);
@@ -287,11 +285,9 @@ html[data-theme="light"] {
     --nc-material-saturate: 175%;
     --nc-elev-border: var(--nc-border);
     --nc-ambient:
-        repeating-linear-gradient(0deg, transparent 0 31px, rgba(20, 24, 32, 0.022) 31px 32px),
-        repeating-linear-gradient(90deg, transparent 0 31px, rgba(20, 24, 32, 0.022) 31px 32px),
-        radial-gradient(980px 560px at 84% -12%, rgba(42, 99, 200, 0.08), transparent 62%),
-        radial-gradient(820px 480px at 2% 108%, rgba(138, 92, 18, 0.05), transparent 60%),
-        linear-gradient(180deg, #f4f5f7 0%, #f2f3f6 55%, #f4f5f7 100%);
+        radial-gradient(960px 540px at 84% -12%, rgba(42, 99, 200, 0.08), transparent 62%),
+        radial-gradient(780px 460px at 2% 108%, rgba(138, 92, 18, 0.05), transparent 60%),
+        linear-gradient(180deg, #f4f5f7 0%, #f4f5f7 100%);
     --nc-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.65), transparent 46%);
     --nc-brand-bg: var(--nc-gradient-accent);
     --nc-brand-fg: #ffffff;

@@ -281,6 +281,7 @@ html[data-theme="light"] #chat-profile-select {
  * 3. 记录式消息：左角色刻度 + 助手全宽 + 用户右侧轻量蓝块
  * -------------------------------------------------------------------------- */
 .chat-msg {
+    contain: layout style;
     position: relative;
     display: grid;
     grid-template-columns: 38px minmax(0, 1fr);

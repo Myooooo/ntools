@@ -1869,7 +1869,7 @@ html[data-lite="true"] .nc-select-pop.is-closing {
     border-radius: 50%;
     background: var(--nc-surface);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28), 0 0 0 3px var(--nc-accent-faint);
-    transition: transform var(--nc-dur-fast) var(--nc-ease), box-shadow var(--nc-dur-fast) var(--nc-ease);
+    transition: transform var(--nc-dur-fast) var(--nc-ease);
 }
 
 .nc-range:focus-visible::-webkit-slider-thumb,
@@ -1966,7 +1966,7 @@ input[type="number"] {
     border-radius: var(--nc-radius-md);
     background: var(--nc-input-bg);
     overflow: hidden;
-    transition: border-color var(--nc-dur-fast) var(--nc-ease), box-shadow var(--nc-dur-fast) var(--nc-ease);
+    transition: border-color var(--nc-dur-fast) var(--nc-ease);
 }
 
 .nc-number:focus-within {
