@@ -213,6 +213,8 @@
     display: inline-flex; align-items: center; gap: 6px; justify-content: center;
     border: 1px solid transparent; border-radius: var(--radius-md); cursor: pointer;
     font-size: 12px; font-weight: 600; padding: 7px 14px; line-height: 1.2; white-space: nowrap;
+  }
+  .btn:active, .icon-btn:active { transition-duration: 0ms; transform: scale(0.97); }
     transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .12s ease-out; text-decoration: none;
   }
   .btn:active { transform: scale(.98); }
@@ -387,8 +389,8 @@
   .modal {
     width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto;
     background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg); padding: 20px 22px;
-    animation: modal-in .15s ease-out;
+    box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, .14); padding: 20px 22px;
+    animation: modal-in .18s cubic-bezier(.22, 1, .36, 1);
   }
   .modal.wide-lg { max-width: 680px; }
   .modal.wide-md { max-width: 580px; }

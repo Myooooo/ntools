@@ -104,6 +104,11 @@ body {
     border: 1px solid var(--ws-line);
     border-radius: var(--ws-radius);
     padding: 16px;
+    box-shadow: inset 0 1px 0 var(--nc-material-edge, rgba(255, 255, 255, .08));
+}
+
+html[data-lite="true"] .card {
+    box-shadow: none;
 }
 
 .stack { display: flex; flex-direction: column; gap: 10px; }
@@ -144,7 +149,7 @@ body {
 .btn--primary {
     background: var(--ws-accent);
     border-color: transparent;
-    color: #fff;
+    color: var(--nc-text-on-accent, #fff);
     font-weight: 600;
 }
 

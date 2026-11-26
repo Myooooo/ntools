@@ -169,7 +169,9 @@
 .chat-suggest__item:active,
 .notes-row:active,
 .notes-link-row:active,
-.notes-outline__item:active {
+.notes-outline__item:active,
+.ws-item:active,
+.ws-group--toggle:active {
     background: var(--nc-surface-3);
 }
 

@@ -804,6 +804,20 @@ html[data-lite="true"] .ws-loading {
     height: 28px;
 }
 
+@media (max-width: 900px) {
+    .ws-main {
+        padding-bottom: var(--nc-mobile-tabbar-inset);
+    }
+
+    .ws-list {
+        padding-bottom: var(--nc-mobile-tabbar-inset);
+    }
+
+    .ws-chat__compose {
+        padding-bottom: calc(12px + var(--nc-mobile-tabbar-inset));
+    }
+}
+
 @media (max-width: 720px) {
     .ws-chat__head { height: 48px; }
 }
