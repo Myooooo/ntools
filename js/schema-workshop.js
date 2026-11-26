@@ -282,7 +282,7 @@
 
     function buildSystemPrompt(options) {
         var opts = options || {};
-        var allowNetwork = opts.allowNetwork !== false;
+        var allowNetwork = opts.allowNetwork === true;
         return [
             '你是 nTools 创意工坊的前端生成器。只输出一个完整可运行的单页 HTML 应用。',
             '硬性要求：',

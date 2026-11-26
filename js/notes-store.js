@@ -754,8 +754,12 @@
         var added = 0;
         var updated = 0;
         if (opts.mode === 'merge') {
+            var addedFolders = [];
             incoming.folders.forEach(function (folder) {
-                if (!state.folders.has(folder.id)) state.folders.set(folder.id, folder);
+                if (!state.folders.has(folder.id)) {
+                    state.folders.set(folder.id, folder);
+                    addedFolders.push(folder);
+                }
             });
             incoming.notes.forEach(function (note) {
                 var exist = state.notes.get(note.id);
@@ -769,22 +773,38 @@
                     updated += 1;
                 }
             });
-        } else {
+            rebuildIndex();
+            notify('vault:import', { added: added, updated: updated });
+            var folderJob = (addedFolders.length && db().putFolders) ? db().putFolders(addedFolders) : Promise.resolve(true);
+            return folderJob.then(function () {
+                return flush();
+            }).then(function (ok) {
+                return { ok: ok, added: added, updated: updated, issues: parsed.issues || [] };
+            }, function () {
+                return { ok: false, added: added, updated: updated, issues: parsed.issues || [] };
+            });
+        }
+        var replaceJob = db().replaceVault
+            ? db().replaceVault(incoming.notes, incoming.folders)
+            : Promise.reject(new Error('replaceVault unavailable'));
+        return replaceJob.then(function () {
             state.notes = new Map();
             state.folders = new Map();
             state.dirty = Object.create(null);
             incoming.notes.forEach(function (note) {
                 state.notes.set(note.id, note);
-                state.dirty[note.id] = 1;
                 added += 1;
             });
             incoming.folders.forEach(function (folder) { state.folders.set(folder.id, folder); });
             state.activeId = null;
-        }
-        rebuildIndex();
-        notify('vault:import', { added: added, updated: updated });
-        return flush().then(function (ok) {
-            return { ok: ok, added: added, updated: updated, issues: parsed.issues || [] };
+            state.saveError = false;
+            state.lastSavedAt = Date.now();
+            db().setMeta('activeNoteId', null).catch(function () { /* ignore */ });
+            rebuildIndex();
+            notify('vault:import', { added: added, updated: updated });
+            return { ok: true, added: added, updated: updated, issues: parsed.issues || [] };
+        }, function () {
+            return { ok: false, added: 0, updated: 0, reason: 'write-failed', issues: parsed.issues || [] };
         });
     }
 

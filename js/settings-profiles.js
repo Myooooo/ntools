@@ -187,8 +187,9 @@ function renderProfiles(container) {
         deps.setEditingId(copy.id);
         renderSection('profiles');
         toast('已复制为「' + copy.name + '」，可直接修改名称', 'success');
-        if (bodyEl && bodyEl.querySelector) {
-            var editor = bodyEl.querySelector('.sp-profile-editor');
+        var body = deps.getBodyEl ? deps.getBodyEl() : deps.bodyEl;
+        if (body && body.querySelector) {
+            var editor = body.querySelector('.sp-profile-editor');
             if (editor && typeof editor.scrollIntoView === 'function') {
                 try { editor.scrollIntoView({ block: 'nearest' }); } catch (err) { /* 老内核忽略参数 */ }
             }
@@ -252,8 +253,8 @@ function renderProfiles(container) {
             function (v) { advanced = !!v; }
         ));
         form.appendChild(advancedRow);
-        form.appendChild(rangeRow('Temperature', temp, '0.1', function (v) { temp = v; }));
-        form.appendChild(rangeRow('Top P', topP, '0.05', function (v) { topP = v; }));
+        form.appendChild(rangeRow('Temperature', temp, '0.1', function (v) { temp = v; }, { min: 0, max: 2 }));
+        form.appendChild(rangeRow('Top P', topP, '0.05', function (v) { topP = v; }, { min: 0, max: 1 }));
         wrap.appendChild(form);
 
         var actions = util.e('div', { class: 'sp-editor-actions' });

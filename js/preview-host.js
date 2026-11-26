@@ -10,7 +10,7 @@
 
     var NC = global.NC = global.NC || {};
 
-    var SANDBOX_TRUSTED = 'allow-scripts allow-forms allow-modals allow-same-origin';
+    var SANDBOX_TRUSTED = 'allow-scripts allow-forms allow-modals allow-same-origin allow-downloads';
     var SANDBOX_UNTRUSTED = 'allow-scripts allow-forms allow-modals';
     var MAX_ERRORS = 20;
 

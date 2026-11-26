@@ -33,7 +33,6 @@
         var exportNotes = deps.exportNotes;
         var importNotes = deps.importNotes;
         var renderNotesSnapshotList = deps.renderNotesSnapshotList;
-        var exportEverything = deps.exportEverything;
         var EMAIL_DOC_KEY = deps.emailDocKey;
         var exportEmailJson = deps.exportEmailJson;
         var importEmailJson = deps.importEmailJson;
@@ -308,12 +307,15 @@
         bar.appendChild(button('打开 nChat', { small: true, icon: 'sparkles', onClick: function () { openModule('nchat'); } }));
         bar.appendChild(button('配置端点', {
             small: true, ghost: true, icon: 'layers',
-            onClick: function () { editingProfileId = null; renderSection('profiles'); }
+            onClick: function () {
+                if (deps.setEditingId) deps.setEditingId(null);
+                renderSection('profiles');
+            }
         }));
         bar.appendChild(button('系统提示词', {
             small: true, ghost: true, icon: 'edit',
             onClick: function () {
-                close();
+                if (deps.close) deps.close();
                 if (NC.view && NC.view.chatPrompt && NC.view.chatPrompt.open) {
                     NC.view.chatPrompt.open(NC.chatEmbed ? NC.chatEmbed.getCurrentProfileId() : null);
                 } else {
@@ -323,38 +325,6 @@
         }));
         actions.appendChild(bar);
         container.appendChild(actions);
-    }
-
-    function appendInfoLine(card, text) {
-        var line = util.e('div', { class: 'sp-row' });
-        line.appendChild(util.e('span', { class: 'sp-row__label', text: '当前' }));
-        line.appendChild(util.e('span', { class: 'sp-row__value', text: text }));
-        card.appendChild(line);
-    }
-
-    function reportNotesUsage(card) {
-        var notesStore = NC.store && NC.store.notes;
-        if (!notesStore || !notesStore.saveState) {
-            appendInfoLine(card, '笔记模块尚未加载（打开一次「笔记」页后再看）');
-            return;
-        }
-        var state = {};
-        try { state = notesStore.saveState() || {}; } catch (err) { state = {}; }
-        var count = 0;
-        try { count = notesStore.quickSwitch('').length; } catch (err) { count = 0; }
-        appendInfoLine(card, count + ' 篇 · 存储 ' + (state.mode === 'idb' ? 'IndexedDB' : 'localStorage 降级') +
-            (state.readOnly ? ' · 只读镜像' : ''));
-    }
-
-    function reportEmailUsage(card) {
-        var raw = null;
-        try { raw = global.localStorage.getItem('ntools.email.v1'); } catch (err) { raw = null; }
-        if (!raw) { appendInfoLine(card, '还没有邮件数据'); return; }
-        var doc = null;
-        try { doc = JSON.parse(raw); } catch (err) { doc = null; }
-        var groups = doc && Array.isArray(doc.groups) ? doc.groups.length : 0;
-        var emails = doc && Array.isArray(doc.emails) ? doc.emails.length : 0;
-        appendInfoLine(card, emails + ' 个邮箱 · ' + groups + ' 个分组 · ' + Math.round(raw.length / 1024) + ' KB');
     }
 
     function renderTodoAi(container) {
@@ -385,8 +355,8 @@
 
         var temp = todoAi.temperature;
         var topP = todoAi.topP;
-        form.appendChild(rangeRow('Temperature', temp, '0.1', function (v) { temp = v; }));
-        form.appendChild(rangeRow('Top P', topP, '0.05', function (v) { topP = v; }));
+        form.appendChild(rangeRow('Temperature', temp, '0.1', function (v) { temp = v; }, { min: 0, max: 2 }));
+        form.appendChild(rangeRow('Top P', topP, '0.05', function (v) { topP = v; }, { min: 0, max: 1 }));
         container.appendChild(form);
 
         var preview = util.e('div', { class: 'sp-prompt-preview' });

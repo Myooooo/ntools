@@ -139,7 +139,7 @@
             profile.enableAdvanced = !(src.enableAdvanced === false || src.enableAdvanced === 'false');
         }
         if ('temperature' in src) profile.temperature = clampNum(src.temperature, profile.temperature, 0, 2);
-        if ('topP' in src) profile.topP = clampNum(src.topP, profile.topP, 0, 2);
+        if ('topP' in src) profile.topP = clampNum(src.topP, profile.topP, 0, 1);
         if (creating && !('name' in src)) profile.name = '新端点';
         profile.updatedAt = Date.now();
         return profile;
@@ -159,7 +159,7 @@
             chatSystemPrompt: trimStr(src.chatSystemPrompt || src.systemPrompt || '', '', 20000),
             enableAdvanced: !(src.enableAdvanced === false || src.enableAdvanced === 'false'),
             temperature: clampNum(src.temperature, 1, 0, 2),
-            topP: clampNum(src.topP != null ? src.topP : src.top_p, 0.95, 0, 2),
+            topP: clampNum(src.topP != null ? src.topP : src.top_p, 0.95, 0, 1),
             createdAt: util.isFiniteNum(src.createdAt) ? src.createdAt : now,
             updatedAt: util.isFiniteNum(src.updatedAt) ? src.updatedAt : now
         };
@@ -173,7 +173,7 @@
             profileId: (typeof src.profileId === 'string' && src.profileId) ? src.profileId : null,
             systemPrompt: trimStr(src.systemPrompt, DEFAULT_TODO_PROMPT, 20000) || DEFAULT_TODO_PROMPT,
             temperature: clampNum(src.temperature, 0.2, 0, 2),
-            topP: clampNum(src.topP != null ? src.topP : src.top_p, 0.9, 0, 2)
+            topP: clampNum(src.topP != null ? src.topP : src.top_p, 0.9, 0, 1)
         };
     }
 
@@ -261,7 +261,7 @@
         }
         if (force) {
             if (util.isFiniteNum(source.temperature)) target.temperature = clampNum(source.temperature, target.temperature, 0, 2);
-            if (util.isFiniteNum(source.topP)) target.topP = clampNum(source.topP, target.topP, 0, 2);
+            if (util.isFiniteNum(source.topP)) target.topP = clampNum(source.topP, target.topP, 0, 1);
         }
         target.updatedAt = Date.now();
     }

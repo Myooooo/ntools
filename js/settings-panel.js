@@ -172,11 +172,14 @@
         return wrap;
     }
 
-    function rangeRow(labelText, value, step, onChange) {
+    function rangeRow(labelText, value, step, onChange, options) {
+        var opts = options || {};
+        var minVal = typeof opts.min === 'number' ? opts.min : 0;
+        var maxVal = typeof opts.max === 'number' ? opts.max : 2;
         var wrap = util.e('div', { class: 'sp-range' });
         var label = util.e('span', { class: 'sp-label sp-range__label', text: labelText });
         var range = util.e('input', {
-            type: 'range', min: '0', max: '2', step: step,
+            type: 'range', min: String(minVal), max: String(maxVal), step: step,
             value: String(value), class: 'sp-range__input'
         });
         var numberBox = util.e('div', { class: 'nc-number sp-range__number' });
@@ -186,7 +189,7 @@
         });
         minus.appendChild(icons.el('minus', 14));
         var number = util.e('input', {
-            type: 'number', min: '0', max: '2', step: step,
+            type: 'number', min: String(minVal), max: String(maxVal), step: step,
             value: String(value), class: 'nc-number__input',
             'aria-label': labelText
         });
@@ -200,13 +203,13 @@
         numberBox.appendChild(plus);
         function paintProgress() {
             var min = Number(range.min) || 0;
-            var max = Number(range.max) || 100;
+            var max = Number(range.max) || maxVal;
             var current = Number(range.value) || 0;
             var pct = max > min ? ((current - min) / (max - min)) * 100 : 0;
             range.style.setProperty('--sp-range-progress', Math.max(0, Math.min(100, pct)) + '%');
         }
         function sync(source) {
-            var v = Math.min(2, Math.max(0, Number(source.value) || 0));
+            var v = Math.min(maxVal, Math.max(minVal, Number(source.value) || 0));
             range.value = v;
             number.value = v;
             paintProgress();
@@ -215,7 +218,7 @@
         range.addEventListener('input', function () { sync(range); });
         number.addEventListener('change', function () { sync(number); });
         function nudge(delta) {
-            var next = Math.min(2, Math.max(0, Math.round((Number(number.value) || 0) + delta) * 100) / 100);
+            var next = Math.min(maxVal, Math.max(minVal, Math.round(((Number(number.value) || 0) + delta) * 100) / 100));
             number.value = String(next);
             sync(number);
         }
@@ -779,235 +782,6 @@
         return null;
     }
 
-    /**
-     * 聊天栈是懒加载的。导出/导入全量备份前必须先把它拉起来，
-     * 否则"全量备份"会静默漏掉聊天记录——这正是数据安全最不该出现的行为。
-     */
-    function withChatStore(fn) {
-        var store = NC.store && NC.store.conversation;
-        if (store && typeof store.exportAllSessions === 'function') return fn();
-        if (typeof NC.loadChatBundle !== 'function') return fn();
-        toast('正在准备聊天数据…', 'info');
-        NC.loadChatBundle().then(function () { fn(); }, function () { fn(); });
-    }
-
-    /** 笔记栈也是懒加载的：导出/导入前必须拉起来，否则会静默漏掉笔记 */
-    function withNotesStore(fn) {
-        var notesStore = NC.store && NC.store.notes;
-        if (notesStore && notesStore.isReady && notesStore.isReady()) return fn();
-        if (typeof NC.loadNotesBundle !== 'function') return fn();
-        NC.loadNotesBundle().then(function () {
-            if (NC.store.notes && NC.store.notes.init) NC.store.notes.init();
-            fn();
-        }, function () { fn(); });
-    }
-
-    function exportEverything() {
-        withChatStore(function () {
-            withNotesStore(doExportEverything);
-        });
-    }
-
-    /** 收集全量备份负载（导出与测试共用一份逻辑，避免两处漂移） */
-    function collectBackup() {
-        var payload = {
-            app: 'nTools',
-            kind: 'full-backup',
-            version: NC.version,
-            exportedAt: new Date().toISOString(),
-            llm: store().exportAll({ includeKeys: false }),
-            todo: null,
-            chats: null,
-            email: null,
-            notes: null
-        };
-        if (NC.store.todo && typeof NC.store.todo.exportData === 'function') {
-            try { payload.todo = NC.store.todo.exportData(); } catch (err) { payload.todo = null; }
-        }
-        if (NC.store.conversation && typeof NC.store.conversation.exportAllSessions === 'function') {
-            try { payload.chats = NC.store.conversation.exportAllSessions(); } catch (err) { payload.chats = null; }
-        }
-        payload.email = readEmailData();
-        if (NC.store.notes && typeof NC.store.notes.exportBundle === 'function') {
-            try { payload.notes = NC.store.notes.exportBundle(); } catch (err) { payload.notes = null; }
-        }
-        return payload;
-    }
-
-    function doExportEverything() {
-        var payload = collectBackup();
-        var json = JSON.stringify(payload, null, 2);
-        var name = 'ntools-backup-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '') + '.json';
-        var ok = util.downloadBlob(name, json, 'application/json');
-        if (!ok) {
-            ui.openModal({
-                title: '导出失败',
-                message: '浏览器阻止了自动下载。下面是备份内容，请手动复制保存。',
-                size: 'lg',
-                content: util.e('textarea', { class: 'nc-input', rows: 12, value: json, readonly: true })
-            });
-            return;
-        }
-        var notesCount = payload.notes && payload.notes.notes ? payload.notes.notes.length : 0;
-        toast('已导出全量备份（不含密钥）' + (notesCount ? '，含笔记 ' + notesCount + ' 篇' : ''), 'success');
-    }
-
-    function importEverything() {
-        var inputEl = document.createElement('input');
-        inputEl.type = 'file';
-        inputEl.accept = '.json,application/json';
-        inputEl.addEventListener('change', function () {
-            var file = inputEl.files && inputEl.files[0];
-            if (!file) return;
-            var reader = new FileReader();
-            reader.onload = function (event) {
-                var data = util.parseJSON(event.target.result, null);
-                if (!util.isPlainObject(data)) {
-                    toast('文件不是有效的 JSON 备份', 'error');
-                    return;
-                }
-                var summary = describeBackup(data);
-                if (!summary.ok) {
-                    toast('备份格式不完整：' + summary.reason, 'error');
-                    return;
-                }
-                ui.confirm(summary.text + '\n\n导入会覆盖现有的待办、聊天与邮件数据（端点配置为合并）。继续？', {
-                    title: '从备份恢复',
-                    confirmText: '导入并覆盖',
-                    danger: true
-                }).then(function (ok) {
-                    if (ok) applyBackup(data);
-                });
-            };
-            reader.onerror = function () { toast('读取文件失败', 'error'); };
-            reader.readAsText(file);
-        });
-        inputEl.click();
-    }
-
-    function describeBackup(data) {
-        var parts = [];
-        var hasAny = false;
-        if (data.todo && Array.isArray(data.todo.tasks)) {
-            parts.push('待办 ' + data.todo.tasks.length + ' 条');
-            hasAny = true;
-        }
-        if (data.chats && Array.isArray(data.chats.sessions)) {
-            var msgCount = 0;
-            data.chats.sessions.forEach(function (s) { msgCount += (s.messages || []).length; });
-            parts.push('会话 ' + data.chats.sessions.length + ' 个 / 消息 ' + msgCount + ' 条');
-            hasAny = true;
-        }
-        if (data.email && (data.email.groups || data.email.emails)) {
-            var g = (data.email.groups || []).length;
-            var e = (data.email.emails || []).length;
-            parts.push('邮件分组 ' + g + ' 个 / 地址 ' + e + ' 条');
-            hasAny = true;
-        }
-        if (data.notes && Array.isArray(data.notes.notes)) {
-            parts.push('笔记 ' + data.notes.notes.length + ' 篇' +
-                (data.notes.folders ? ' / 文件夹 ' + data.notes.folders.length : ''));
-            hasAny = true;
-        }
-        if (data.llm) {
-            var p = data.llm.profiles || (data.llm.state && data.llm.state.profiles) || [];
-            parts.push('端点 ' + p.length + ' 个（合并）');
-            hasAny = true;
-        }
-        if (!hasAny) return { ok: false, reason: '没有可导入的数据段', text: '' };
-        return { ok: true, text: '备份包含：' + parts.join('；') + '。' };
-    }
-
-    function applyBackup(data, chatLoaded) {
-        /* 聊天栈懒加载：先拉起来再恢复聊天记录，失败也只尝试一次，避免死循环 */
-        if (!chatLoaded && data.chats && Array.isArray(data.chats.sessions) &&
-            !(NC.store && NC.store.conversation)) {
-            withChatStore(function () { applyBackup(data, true); });
-            return;
-        }
-        var done = [];
-        var failed = [];
-        var todoStore = NC.store.todo;
-        if (data.todo && Array.isArray(data.todo.tasks) && todoStore && todoStore.importDoc) {
-            try {
-                if (todoStore.isReadOnly && todoStore.isReadOnly()) {
-                    failed.push('待办处于只读状态');
-                } else {
-                    todoStore.importDoc(data.todo, 'replace');
-                    done.push('待办');
-                }
-            } catch (err) { failed.push('待办'); }
-        }
-        if (data.email && (data.email.groups || data.email.emails)) {
-            try {
-                var prevEmail = util.parseJSON(global.localStorage.getItem(EMAIL_DOC_KEY), null);
-                if (prevEmail) {
-                    /* 覆盖前留一份，误导入可回退 */
-                    global.localStorage.setItem(EMAIL_DOC_KEY + '.preimport', JSON.stringify(prevEmail));
-                }
-                var prevRev = prevEmail && util.isFiniteNum(prevEmail.revision) ? prevEmail.revision : 0;
-                global.localStorage.setItem(EMAIL_DOC_KEY, JSON.stringify({
-                    schemaVersion: 1,
-                    revision: prevRev + 1,
-                    updatedAt: Date.now(),
-                    groups: Array.isArray(data.email.groups) ? data.email.groups : [],
-                    emails: Array.isArray(data.email.emails) ? data.email.emails : []
-                }));
-                done.push('邮件');
-                events.emit(NC.eventNames.emailImported);
-            } catch (err) { failed.push('邮件'); }
-        }
-        if (data.llm) {
-            try {
-                var result = store().importAll(data.llm, { merge: true });
-                if (result && result.ok) done.push('端点');
-                else failed.push('端点');
-            } catch (err) { failed.push('端点'); }
-        }
-        var restoreNotesThen = function (next) {
-            if (!data.notes || !Array.isArray(data.notes.notes)) { next(); return; }
-            withNotesStore(function () {
-                var notesStore = NC.store && NC.store.notes;
-                if (!notesStore || !notesStore.importVault) { failed.push('笔记'); next(); return; }
-                notesStore.importVault(data.notes, { mode: 'replace' }).then(function (res) {
-                    if (res && res.ok) done.push('笔记');
-                    else failed.push('笔记');
-                    if (NC.view && NC.view.notes && NC.view.notes.refresh) {
-                        try { NC.view.notes.refresh(); } catch (err) { /* ignore */ }
-                    }
-                    next();
-                }).catch(function () { failed.push('笔记'); next(); });
-            });
-        };
-
-        var finishChats = function () {
-            restoreNotesThen(function () {
-                toast(
-                    '导入完成：' + (done.length ? done.join('、') : '无') +
-                    (failed.length ? '；失败：' + failed.join('、') : ''),
-                    failed.length ? 'warn' : 'success'
-                );
-                renderSection('data');
-            });
-        };
-        if (data.chats && Array.isArray(data.chats.sessions) &&
-            NC.store.conversation && NC.store.conversation.importAllSessions) {
-            NC.store.conversation.importAllSessions(data.chats).then(function (res) {
-                if (res && res.ok) done.push('会话');
-                else failed.push('会话');
-                if (NC.chatEmbed && NC.chatEmbed.renderConversation) {
-                    try { NC.chatEmbed.renderConversation(''); } catch (err) { /* ignore */ }
-                }
-                finishChats();
-            }).catch(function () {
-                failed.push('会话');
-                finishChats();
-            });
-            return;
-        }
-        finishChats();
-    }
-
     /* ------------------------------------------------------------------ *
      * 分区：关于
      * ------------------------------------------------------------------ */
@@ -1054,9 +828,13 @@
     /* ------------------------------------------------------------------ *
      * 渲染与开关
      * ------------------------------------------------------------------ */
+    function withNotesStore(fn) {
+        ensureNotesReady(fn);
+    }
+
     function dataDeps() {
         return {
-            util: util, ui: ui, toast: toast, button: button,
+            util: util, ui: ui, toast: toast, button: button, events: events,
             moduleCard: moduleCard, moduleRows: moduleRows,
             openModule: openModule, renderSection: renderSection,
             global: global,
@@ -1064,14 +842,13 @@
             renderSnapshotCard: renderSnapshotCard,
             renderLegacyCard: renderLegacyCard,
             exportNotes: exportNotes, importNotes: importNotes, withNotesStore: withNotesStore,
-            renderNotesSnapshotList: renderNotesSnapshotList,
-            exportEverything: exportEverything, importEverything: importEverything
+            renderNotesSnapshotList: renderNotesSnapshotList
         };
     }
 
     function moduleDeps() {
         return {
-            util: util, ui: ui, toast: toast, setStatus: setStatus,
+            util: util, ui: ui, toast: toast, setStatus: setStatus, close: close,
             button: button, field: field, input: input,
             switchField: switchField, segmented: segmented, rangeRow: rangeRow,
             moduleCard: moduleCard, moduleRows: moduleRows, modulePrefRow: modulePrefRow,
@@ -1080,9 +857,9 @@
             readEmailData: readEmailData, renderEmailTransferCard: renderEmailTransferCard,
             exportNotes: exportNotes, importNotes: importNotes,
             renderNotesSnapshotList: renderNotesSnapshotList,
-            exportEverything: exportEverything,
             emailDocKey: EMAIL_DOC_KEY,
-            exportEmailJson: exportEmailJson, importEmailJson: importEmailJson
+            exportEmailJson: exportEmailJson, importEmailJson: importEmailJson,
+            setEditingId: function (value) { editingProfileId = value; }
         };
     }
 
@@ -1092,6 +869,8 @@
             field: field, input: input, button: button,
             switchField: switchField, segmented: segmented, rangeRow: rangeRow,
             store: store, ai: ai, renderSection: renderSection,
+            bodyEl: bodyEl,
+            getBodyEl: function () { return bodyEl; },
             getEditingId: function () { return editingProfileId; },
             setEditingId: function (value) { editingProfileId = value; }
         };
@@ -1374,8 +1153,6 @@
         close: close,
         registerSection: registerSection,
         renderSection: renderSection,
-        isOpen: function () { return open; },
-        collectBackup: collectBackup,
-        describeBackup: describeBackup
+        isOpen: function () { return open; }
     };
 })(window);

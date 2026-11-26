@@ -24,8 +24,7 @@
         var importNotes = deps.importNotes;
         var withNotesStore = deps.withNotesStore;
         var renderNotesSnapshotList = deps.renderNotesSnapshotList;
-        var exportEverything = deps.exportEverything;
-        var importEverything = deps.importEverything;
+        var events = deps.events || NC.events;
 
     function backupStatusText(status) {
         var parts = [];
@@ -360,7 +359,7 @@
 
         var chatCard = util.e('div', { class: 'sp-data-card' });
         chatCard.appendChild(util.e('div', { class: 'sp-data-card__title', text: '聊天记录' }));
-        chatCard.appendChild(util.e('div', { class: 'sp-data-card__desc', text: '按端点分别保存，可导出备份。' }));
+        chatCard.appendChild(util.e('div', { class: 'sp-data-card__desc', text: '按端点分别保存，全量备份已包含全部会话。' }));
         var chatActions = util.e('div', { class: 'sp-data-card__actions' });
         chatActions.appendChild(button('清除聊天记录', {
             small: true, danger: true, icon: 'trash',
@@ -368,23 +367,39 @@
                 ui.confirm('清除当前端点的聊天记录？该操作不可撤销。', { danger: true, confirmText: '清除' })
                     .then(function (ok) {
                         if (!ok) return;
-                        if (NC.chatEmbed && typeof NC.chatEmbed.clearConversation === 'function') {
-                            NC.chatEmbed.clearConversation();
-                        } else if (NC.store.conversation) {
-                            NC.store.conversation.clear();
-                            events.emit(NC.eventNames.conversationChanged, { messages: [] });
+                        if (NC.chat && NC.chat.controller && NC.chat.controller.isStreaming && NC.chat.controller.isStreaming()) {
+                            toast('请先停止当前生成', 'warn');
+                            return;
                         }
-                        toast('聊天记录已清除', 'success');
+                        var ready = (NC.store && NC.store.conversation && NC.store.conversation.isReady && NC.store.conversation.isReady())
+                            ? Promise.resolve(true)
+                            : (typeof NC.loadChatBundle === 'function'
+                                ? NC.loadChatBundle().then(function () {
+                                    var pid = NC.store && NC.store.llm && NC.store.llm.getState ? NC.store.llm.getState().currentProfileId : null;
+                                    return NC.store && NC.store.conversation && NC.store.conversation.init
+                                        ? NC.store.conversation.init(pid || 'chat-default').then(function () { return true; })
+                                        : false;
+                                })
+                                : Promise.resolve(false));
+                        ready.then(function (loaded) {
+                            var conv = NC.store && NC.store.conversation;
+                            if (!loaded || !conv || typeof conv.clear !== 'function') {
+                                toast('聊天模块未加载，无法清除', 'error');
+                                return;
+                            }
+                            conv.clear();
+                            if (typeof conv.saveNow === 'function') conv.saveNow();
+                            if (NC.chat && NC.chat.controller && typeof NC.chat.controller.renderConversation === 'function') {
+                                NC.chat.controller.renderConversation('');
+                            } else if (events && NC.eventNames) {
+                                events.emit(NC.eventNames.conversationChanged, { messages: [] });
+                            }
+                            toast('聊天记录已清除', 'success');
+                        }, function () {
+                            toast('聊天模块加载失败，未清除', 'error');
+                        });
                     });
             }
-        }));
-        chatActions.appendChild(button('导出全部本地数据', {
-            small: true, icon: 'download',
-            onClick: exportEverything
-        }));
-        chatActions.appendChild(button('从备份恢复', {
-            small: true, icon: 'upload',
-            onClick: importEverything
         }));
         chatCard.appendChild(chatActions);
         container.appendChild(chatCard);

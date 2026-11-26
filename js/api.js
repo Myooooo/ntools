@@ -195,7 +195,7 @@
             var temperature = Number(config.temperature);
             var topP = Number(config.top_p);
             if (isFinite(temperature) && temperature >= 0 && temperature <= 2) payload.temperature = temperature;
-            if (isFinite(topP) && topP >= 0 && topP <= 2) payload.top_p = topP;
+            if (isFinite(topP) && topP >= 0 && topP <= 1) payload.top_p = topP;
         }
         if (opts.stream !== false && opts.includeUsage) {
             payload.stream_options = { include_usage: true };

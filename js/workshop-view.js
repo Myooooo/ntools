@@ -351,7 +351,7 @@
         var params = store.getParams();
         var html = schema.wrapHtml(item.code || '', {
             theme: currentTheme(),
-            allowNetwork: params.allowNetwork !== false,
+            allowNetwork: params.allowNetwork === true,
             title: item.title
         });
         if (host) host.mountHtml(html, { trusted: false });
@@ -1082,7 +1082,7 @@
         var params = store.getParams();
         var html = schema.wrapHtml(draft.code, {
             theme: currentTheme(),
-            allowNetwork: params.allowNetwork !== false,
+            allowNetwork: params.allowNetwork === true,
             title: draft.title
         });
         if (host) host.mountHtml(html, { trusted: false });
@@ -1090,10 +1090,10 @@
         setHidden(els.empty, true);
     }
 
-    function buildMessages(prompt, code) {
+    function buildMessages(prompt, code, params) {
         var messages = [{
             role: 'system',
-            content: schema.buildSystemPrompt({ allowNetwork: true })
+            content: schema.buildSystemPrompt({ allowNetwork: !!(params && params.allowNetwork === true) })
         }];
         draft.turns.forEach(function (turn) {
             messages.push({ role: turn.role, content: turn.content });
@@ -1133,6 +1133,7 @@
             return;
         }
         var runtime = Object.assign({}, config, {
+            systemPrompt: '',
             temperature: params.temperature,
             top_p: params.topP,
             enableAdvanced: true,
@@ -1156,7 +1157,7 @@
         }, 500);
 
         draft.controller = global.AbortController ? new global.AbortController() : null;
-        var messages = buildMessages(prompt, draft.code);
+        var messages = buildMessages(prompt, draft.code, params);
         renderList();
         NC.api.chat({
             config: runtime,

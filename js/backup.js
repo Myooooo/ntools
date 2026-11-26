@@ -37,7 +37,13 @@
         'ntools.notes.welcomeSeeded',
         'ntools.workshop.active',
         'ntools.workshop.side',
-        'boc_email_system_theme'
+        'boc_email_system_theme',
+        'ws-salary-v2',
+        'ws-worldclock-v2',
+        'ws-countdown',
+        'ws-picker-v2',
+        'ws-unit',
+        'ws-web-requests-v1'
     ];
 
     var running = null;
@@ -75,11 +81,20 @@
      * 数据收集
      * ------------------------------------------------------------------ */
     function ensureChat() {
-        if (NC.store && NC.store.conversation && typeof NC.store.conversation.exportAllSessions === 'function') {
-            return Promise.resolve(true);
+        var conv = NC.store && NC.store.conversation;
+        function initConv() {
+            var store = NC.store && NC.store.conversation;
+            if (!store || typeof store.init !== 'function') return Promise.resolve(false);
+            if (store.isReady && store.isReady()) return Promise.resolve(true);
+            var pid = null;
+            try { pid = NC.store.llm && NC.store.llm.getState ? NC.store.llm.getState().currentProfileId : null; } catch (err) { pid = null; }
+            return Promise.resolve(store.init(pid || 'chat-default')).then(function () { return true; }, function () { return false; });
+        }
+        if (conv && typeof conv.exportAllSessions === 'function') {
+            return initConv();
         }
         if (typeof NC.loadChatBundle !== 'function') return Promise.resolve(false);
-        return NC.loadChatBundle().then(function () { return true; }, function () { return false; });
+        return NC.loadChatBundle().then(initConv, function () { return false; });
     }
 
     function ensureNotes() {
@@ -472,6 +487,7 @@
         if (!prefs || typeof prefs !== 'object') return 0;
         var count = 0;
         Object.keys(prefs).forEach(function (key) {
+            if (PREF_ALLOW.indexOf(key) === -1) return;
             try {
                 global.localStorage.setItem(key, String(prefs[key]));
                 count += 1;
@@ -616,11 +632,11 @@
     function restoreFromJson(raw) {
         var data = typeof raw === 'string' ? util.parseJSON(raw, null) : raw;
         if (!data || typeof data !== 'object') return Promise.reject(new Error('不是有效的 JSON 备份'));
-        if (data.kind === 'backup-all' || data.kind === 'full-backup' || data.todo || data.chats || data.notes) {
+        if (data.kind === 'backup-all' || data.kind === 'full-backup' || data.todo || data.chats || data.notes || data.workshop) {
             var payload = data.kind === 'backup-all' ? data : {
                 app: 'nTools', kind: 'backup-all', exportedAt: data.exportedAt || '',
                 todo: data.todo, chats: data.chats, email: data.email, notes: data.notes || null,
-                llm: data.llm, prefs: data.prefs || {}
+                llm: data.llm, workshop: data.workshop || null, prefs: data.prefs || {}
             };
             return restorePayload(payload, {});
         }

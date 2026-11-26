@@ -248,6 +248,46 @@
         return tx(STORES.folders, true, function (store) { store.put(folder); });
     }
 
+    function putFolders(list) {
+        if (!Array.isArray(list) || !list.length) return Promise.resolve(true);
+        if (mode === 'local') {
+            var doc = readFallback();
+            var map = Object.create(null);
+            doc.folders.forEach(function (folder) { map[folder.id] = folder; });
+            list.forEach(function (folder) { if (folder && folder.id) map[folder.id] = folder; });
+            doc.folders = Object.keys(map).map(function (id) { return map[id]; });
+            return writeFallback(doc);
+        }
+        return tx(STORES.folders, true, function (store) {
+            list.forEach(function (folder) { if (folder && folder.id) store.put(folder); });
+        });
+    }
+
+    function replaceVault(notes, folders) {
+        var noteList = Array.isArray(notes) ? notes : [];
+        var folderList = Array.isArray(folders) ? folders : [];
+        if (mode === 'local') {
+            var doc = readFallback();
+            doc.notes = noteList;
+            doc.folders = folderList;
+            return writeFallback(doc);
+        }
+        return openIdb().then(function (db) {
+            return new Promise(function (resolve, reject) {
+                var transaction = db.transaction([STORES.notes, STORES.folders], 'readwrite');
+                var noteStore = transaction.objectStore(STORES.notes);
+                var folderStore = transaction.objectStore(STORES.folders);
+                noteStore.clear();
+                folderStore.clear();
+                noteList.forEach(function (note) { if (note && note.id) noteStore.put(note); });
+                folderList.forEach(function (folder) { if (folder && folder.id) folderStore.put(folder); });
+                transaction.oncomplete = function () { resolve(true); };
+                transaction.onerror = function () { reject(transaction.error || new Error('replaceVault failed')); };
+                transaction.onabort = function () { reject(transaction.error || new Error('replaceVault aborted')); };
+            });
+        });
+    }
+
     function deleteFolder(id) {
         if (mode === 'local') {
             var doc = readFallback();
@@ -345,6 +385,8 @@
         putNotes: putNotes,
         deleteNote: deleteNote,
         putFolder: putFolder,
+        putFolders: putFolders,
+        replaceVault: replaceVault,
         deleteFolder: deleteFolder,
         getMeta: getMeta,
         setMeta: setMeta,
