@@ -12,6 +12,7 @@
     var view = NC.view = NC.view || {};
 
     var ACTIVE_KEY = 'ntools.workshop.active';
+    var COLLAPSED_KEY = 'ntools.workshop.collapsed';
     var DRAFT_ID = '__ws_draft__';
     var DEFAULT_EMPTY_TITLE = '选择一个工具开始';
     var DEFAULT_EMPTY_HINT = '内置工具开箱即用；也可以新建一个只属于你的小应用。';
@@ -31,6 +32,7 @@
         sideCollapsed: false,
         sideOpen: false,
         chatOpen: false,
+        collapsedGroups: {},
         lastError: '',
         lastAllowNetwork: null
     };
@@ -80,6 +82,16 @@
     }
     function writeActive(id) {
         NC.prefs.set(ACTIVE_KEY, id || '');
+    }
+    function readCollapsedGroups() {
+        var parsed = NC.util.parseJSON(NC.prefs.get(COLLAPSED_KEY, ''), null);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    }
+    function toggleGroup(key) {
+        if (!key) return;
+        state.collapsedGroups[key] = !state.collapsedGroups[key];
+        NC.prefs.set(COLLAPSED_KEY, JSON.stringify(state.collapsedGroups));
+        renderList();
     }
 
     /* ------------------------------------------------------------------ *
@@ -283,11 +295,33 @@
         var rendered = 0;
         groups.forEach(function (group) {
             if (state.filter && !group.list.length) return;
-            var head = document.createElement('div');
-            head.className = 'ws-group';
-            head.setAttribute('role', 'presentation');
-            head.textContent = group.label;
-            els.list.appendChild(head);
+            var count = group.list.filter(function (x) { return !x.isDraft; }).length;
+            var collapsible = group.key === 'builtin' || group.key === 'custom';
+            var collapsed = collapsible && !state.filter && !!state.collapsedGroups[group.key];
+            if (collapsible) {
+                var toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'ws-group ws-group--toggle';
+                toggle.setAttribute('data-ws-group', group.key);
+                toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                var chev = document.createElement('span');
+                chev.className = 'ws-group__chevron';
+                chev.setAttribute('aria-hidden', 'true');
+                chev.appendChild(icon('chevron-down', 12));
+                var label = document.createElement('span');
+                label.textContent = group.label + ' (' + count + ')';
+                toggle.appendChild(chev);
+                toggle.appendChild(label);
+                toggle.addEventListener('click', function () { toggleGroup(group.key); });
+                els.list.appendChild(toggle);
+                if (collapsed) return;
+            } else {
+                var head = document.createElement('div');
+                head.className = 'ws-group';
+                head.setAttribute('role', 'presentation');
+                head.textContent = group.label + ' (' + count + ')';
+                els.list.appendChild(head);
+            }
             if (group.key === 'custom' && !group.list.length && !state.filter) {
                 var empty = document.createElement('div');
                 empty.className = 'ws-empty-list';
@@ -1684,6 +1718,7 @@
             syncFrameTheme(true);
         });
         applySideCollapsed(readSideCollapsed());
+        state.collapsedGroups = readCollapsedGroups();
         state.initialized = true;
         store.init().then(function () {
             renderList();

@@ -4,7 +4,7 @@
  */
 'use strict';
 
-var CACHE_VERSION = 'ntools-v9.1.0';
+var CACHE_VERSION = 'ntools-v9.2.0';
 var CACHE_NAME = CACHE_VERSION;
 var CORE_ASSETS = [
     './css/base.css',
@@ -118,6 +118,8 @@ var CORE_ASSETS = [
     './js/workshop/builtin/_controls.css',
     './js/workshop/builtin/_shared.css',
     './js/workshop/builtin/_shared.js',
+    './js/workshop/builtin/calculator-engine.js',
+    './js/workshop/builtin/calculator.html',
     './js/workshop/builtin/color-contrast.html',
     './js/workshop/builtin/countdown.html',
     './js/workshop/builtin/image.html',

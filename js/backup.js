@@ -36,6 +36,7 @@
         'ntools.notes.side',
         'ntools.notes.welcomeSeeded',
         'ntools.workshop.active',
+        'ntools.workshop.collapsed',
         'ntools.workshop.side',
         'boc_email_system_theme',
         'ws-salary-v2',
@@ -43,7 +44,8 @@
         'ws-countdown',
         'ws-picker-v2',
         'ws-unit',
-        'ws-web-requests-v1'
+        'ws-web-requests-v1',
+        'ws-calc-v1'
     ];
 
     var running = null;

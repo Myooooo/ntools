@@ -70,6 +70,7 @@
 <script defer src="../js/workshop-db.js"></script>
 <script defer src="../js/workshop-store.js"></script>
 <script defer src="../js/preview-host.js"></script>
+<script defer src="../js/workshop/builtin/calculator-engine.js"></script>
 </head>
 <body>
 <div class="tt-wrap">
@@ -786,14 +787,15 @@
             eq(list[1].id, 'b2', 'b2 顺序被覆盖为 5');
             eq(list[2].id, 'b1');
         });
-        t('workshop', '内置工具注册表：12 个、统一内置分类', function () {
+        t('workshop', '内置工具注册表：13 个、统一内置分类', function () {
             var items = NC.workshopBuiltin.ITEMS;
-            eq(items.length, 12);
+            eq(items.length, 13);
             items.forEach(function (item) {
                 eq(item.category, 'builtin');
                 assert(item.file.indexOf('js/workshop/builtin/') === 0, item.id + ' 路径');
                 assert(!!NC.workshopBuiltin.byId(item.id), item.id + ' 可按 id 查');
             });
+            assert(!!NC.workshopBuiltin.byId('builtin-calculator'), '应注册算式计算器');
         });
         t('refs', '引用解析：笔记 / 待办 / 别名 / 锚点', function () {
             var a = NC.refs.parseRef('[[todo:t-1|买菜]]');
@@ -1913,15 +1915,25 @@
         }, ['NC.store.workshop', 'NC.workshopDb']);
         t('backup', '内置工具偏好白名单完整且过滤未知键', function () {
             var prevWc = localStorage.getItem('ws-worldclock-v2');
+            var prevCalc = localStorage.getItem('ws-calc-v1');
+            var prevCol = localStorage.getItem('ntools.workshop.collapsed');
             var prevUnknown = localStorage.getItem('__nctest_unknown_pref');
             localStorage.setItem('ws-worldclock-v2', '["Asia/Tokyo"]');
+            localStorage.setItem('ws-calc-v1', '{"percentMode":"value"}');
+            localStorage.setItem('ntools.workshop.collapsed', '{"custom":true}');
             localStorage.setItem('__nctest_unknown_pref', 'leak');
             return NC.backup.collect({ includeKeys: false }).then(function (bundle) {
                 if (prevWc == null) localStorage.removeItem('ws-worldclock-v2');
                 else localStorage.setItem('ws-worldclock-v2', prevWc);
+                if (prevCalc == null) localStorage.removeItem('ws-calc-v1');
+                else localStorage.setItem('ws-calc-v1', prevCalc);
+                if (prevCol == null) localStorage.removeItem('ntools.workshop.collapsed');
+                else localStorage.setItem('ntools.workshop.collapsed', prevCol);
                 if (prevUnknown == null) localStorage.removeItem('__nctest_unknown_pref');
                 else localStorage.setItem('__nctest_unknown_pref', prevUnknown);
                 eq(bundle.payload.prefs['ws-worldclock-v2'], '["Asia/Tokyo"]', '应包含新内置工具偏好');
+                eq(bundle.payload.prefs['ws-calc-v1'], '{"percentMode":"value"}', '应包含算式计算器记录');
+                eq(bundle.payload.prefs['ntools.workshop.collapsed'], '{"custom":true}', '应包含折叠分类偏好');
                 assert(!('__nctest_unknown_pref' in bundle.payload.prefs), '未知键不得进入 prefs 导出');
             });
         }, ['NC.backup']);
@@ -1949,6 +1961,57 @@
             iframe.remove();
             assert(sb.indexOf('allow-downloads') > -1, 'sandbox 缺少 allow-downloads: ' + sb);
         }, ['NC.previewHost']);
+
+        /* ================= 算式计算器引擎（NCCalcEngine） ================= */
+        t('calcEngine', '四则优先级、括号、右结合乘方与浮点消噪', function () {
+            var ev = window.NCCalcEngine.evaluate;
+            eq(ev('2 + 3 * 4').value, 14);
+            eq(ev('(2 + 3) * 4').value, 20);
+            eq(ev('2^3^2').value, 512, '乘方应右结合');
+            eq(ev('-2^2').value, -4, '一元负号优先级低于乘方');
+            eq(ev('(-2)^2').value, 4);
+            eq(ev('2^-3').value, 0.125);
+            eq(ev('0.1 + 0.2').formatted, '0.3', '0.1 + 0.2 消噪');
+        }, ['NCCalcEngine']);
+        t('calcEngine', '百分号：数值模式与增减模式', function () {
+            var ev = window.NCCalcEngine.evaluate;
+            eq(ev('50%', { percentMode: 'value' }).value, 0.5);
+            eq(ev('200 * 15%', { percentMode: 'value' }).value, 30);
+            eq(ev('100 + 10%', { percentMode: 'value' }).value, 100.1);
+            eq(ev('1000 * (1 + 8%)^2', { percentMode: 'value' }).value, 1166.4);
+            eq(ev('200 - 20%', { percentMode: 'relative' }).value, 160);
+            eq(ev('100 + 10% + 10%', { percentMode: 'relative' }).value, 121);
+            eq(ev('200 * 15%', { percentMode: 'relative' }).value, 30);
+        }, ['NCCalcEngine']);
+        t('calcEngine', '中英文符号/全角数字/括号/货币/千分位/隐式乘法容错', function () {
+            var ev = window.NCCalcEngine.evaluate;
+            var r1 = ev('（¥1,200 ＋ ＄300）× ２０％ ＝');
+            assert(r1.ok && r1.value === 300, '全角货币千分位: ' + (r1.error || r1.formatted));
+            assert(r1.changes.length >= 3, '应记录容错修正');
+            eq(ev('2(3+4)').value, 14);
+            eq(ev('(1+2)(3+4)').value, 21);
+            eq(ev('2（3＋4').value, 14, '应自动补全未闭合右括号');
+            eq(ev('50％（200').value, 100);
+            eq(ev('3x4 + .5').value, 12.5);
+        }, ['NCCalcEngine']);
+        t('calcEngine', '分步求值返回透明中间过程与回代算式', function () {
+            var ev = window.NCCalcEngine.evaluate;
+            var r = ev('2 * (3 + 4) + 10%');
+            eq(r.ok, true);
+            eq(r.formatted, '14.1');
+            assert(r.steps.length >= 3, '应至少有 3 步');
+            eq(r.steps[0].rule, '括号内加法运算');
+            eq(r.steps[0].value, '7');
+            assert(r.steps[0].fullAfter.indexOf('7') > -1, r.steps[0].fullAfter);
+            eq(r.steps[r.steps.length - 1].value, r.formatted, '最后一步应等于最终结果');
+        }, ['NCCalcEngine']);
+        t('calcEngine', '异常输入清晰报错不崩溃', function () {
+            var ev = window.NCCalcEngine.evaluate;
+            ['10 / 0', '2 + 3)', '', '()', '12 34', '1 + abc', '5 +'].forEach(function (bad) {
+                var r = ev(bad);
+                assert(r && r.ok === false && r.error, '应拒绝非法输入: ' + bad);
+            });
+        }, ['NCCalcEngine']);
     }
 
     /* ------------------------------------------------------------------ *

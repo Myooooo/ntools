@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>算式计算器</title>
+<link rel="stylesheet" href="../../../css/tokens.css">
+<link rel="stylesheet" href="_shared.css">
+<link rel="stylesheet" href="_controls.css">
+<style>
+  .head-side { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .seg {
+    display: inline-flex;
+    padding: 2px;
+    border-radius: 10px;
+    border: 1px solid var(--ws-line);
+    background: var(--ws-panel);
+  }
+  .seg > button {
+    border: 0;
+    background: transparent;
+    color: var(--ws-text-2);
+    padding: 5px 10px;
+    border-radius: 7px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background var(--ws-dur-fast), color var(--ws-dur-fast);
+  }
+  .seg > button[aria-pressed="true"] {
+    background: var(--ws-accent-soft);
+    color: var(--ws-text);
+    font-weight: 600;
+  }
+
+  .card {
+    background: var(--ws-panel);
+    border: 1px solid var(--ws-line);
+    border-radius: var(--ws-radius);
+    padding: 16px;
+  }
+
+  .expr-input {
+    width: 100%;
+    min-height: 68px;
+    resize: vertical;
+    background: var(--ws-bg);
+    color: var(--ws-text);
+    border: 1px solid var(--ws-line-strong);
+    border-radius: 10px;
+    padding: 11px 13px;
+    font-family: var(--ws-mono);
+    font-size: 15px;
+    line-height: 1.5;
+    transition: border-color var(--ws-dur-fast), box-shadow var(--ws-dur-fast);
+  }
+  .expr-input:focus {
+    outline: none;
+    border-color: var(--ws-accent);
+    box-shadow: 0 0 0 3px var(--ws-accent-soft);
+  }
+  .expr-input::placeholder { color: var(--ws-text-3); font-size: 13px; }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .toolbar-left, .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+  .note-input {
+    width: 150px;
+    background: var(--ws-bg);
+    color: var(--ws-text);
+    border: 1px solid var(--ws-line);
+    border-radius: 8px;
+    padding: 6px 9px;
+    font: inherit;
+    font-size: 12px;
+  }
+  .note-input:focus { outline: none; border-color: var(--ws-accent); }
+
+  .btn {
+    border: 1px solid var(--ws-line);
+    background: var(--ws-panel-2);
+    color: var(--ws-text);
+    border-radius: 8px;
+    padding: 6px 11px;
+    font: inherit;
+    font-size: 12.5px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: border-color var(--ws-dur-fast), background var(--ws-dur-fast), transform var(--ws-dur-fast);
+  }
+  .btn:hover { border-color: var(--ws-line-strong); }
+  .btn:active { transform: scale(.98); }
+  .btn--primary {
+    background: var(--ws-accent);
+    border-color: transparent;
+    color: #09111d;
+    font-weight: 650;
+  }
+  .btn--ghost { background: transparent; color: var(--ws-text-2); }
+  .btn--ghost:hover { color: var(--ws-text); background: var(--ws-panel-2); }
+  .btn--danger { color: var(--ws-danger); }
+  .btn--sm { padding: 4px 8px; font-size: 11.5px; border-radius: 7px; }
+
+  .samples {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .samples__label { color: var(--ws-text-3); font-size: 11.5px; }
+  .chip {
+    border: 1px solid var(--ws-line);
+    background: transparent;
+    color: var(--ws-text-2);
+    border-radius: 99px;
+    padding: 3px 9px;
+    font: inherit;
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .chip:hover { color: var(--ws-text); border-color: var(--ws-accent); }
+
+  .banner {
+    margin-top: 10px;
+    padding: 8px 11px;
+    border-radius: 9px;
+    font-size: 12px;
+    line-height: 1.55;
+    word-break: break-word;
+  }
+  .banner--norm {
+    background: var(--ws-accent-soft);
+    border: 1px solid rgba(110, 168, 254, .22);
+    color: var(--ws-text);
+  }
+  .banner--err {
+    background: var(--ws-danger-soft);
+    border: 1px solid rgba(255, 122, 114, .28);
+    color: var(--ws-danger);
+  }
+  .banner code {
+    font-family: var(--ws-mono);
+    font-size: 11.5px;
+    background: rgba(128, 128, 128, .15);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(245px, 0.85fr);
+    gap: 14px;
+    margin-top: 14px;
+    align-items: start;
+  }
+
+  .result-box {
+    padding: 14px 16px;
+    border-radius: 11px;
+    background: var(--ws-bg);
+    border: 1px solid var(--ws-line);
+  }
+  .result-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .result-label { color: var(--ws-text-3); font-size: 11.5px; }
+  .result-val {
+    margin-top: 6px;
+    font-family: var(--ws-mono);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.25;
+    word-break: break-all;
+  }
+  .result-sub {
+    margin-top: 4px;
+    color: var(--ws-text-2);
+    font-size: 11.5px;
+    font-family: var(--ws-mono);
+    word-break: break-word;
+  }
+
+  .steps-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 14px 0 8px;
+  }
+  .steps-title { font-size: 12.5px; font-weight: 600; color: var(--ws-text-2); }
+  .steps-count { font-size: 11.5px; color: var(--ws-text-3); }
+
+  .steps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+  .step-item {
+    border: 1px solid var(--ws-line);
+    background: var(--ws-bg);
+    border-radius: 9px;
+    padding: 9px 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .step-item__top {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+  .step-no {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--ws-accent);
+    background: var(--ws-accent-soft);
+    border-radius: 99px;
+    padding: 1px 7px;
+    font-variant-numeric: tabular-nums;
+  }
+  .step-rule {
+    font-size: 11.5px;
+    color: var(--ws-text-2);
+    font-weight: 600;
+  }
+  .step-eval {
+    font-family: var(--ws-mono);
+    font-size: 13px;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+  .step-val {
+    color: var(--ws-ok);
+    font-weight: 700;
+  }
+  .step-after {
+    font-family: var(--ws-mono);
+    font-size: 11.5px;
+    color: var(--ws-text-3);
+    word-break: break-word;
+  }
+  .empty-state {
+    padding: 16px 12px;
+    border-radius: 9px;
+    border: 1px dashed var(--ws-line);
+    color: var(--ws-text-3);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .keypad {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 7px;
+  }
+  .key {
+    height: 40px;
+    border: 1px solid var(--ws-line);
+    background: var(--ws-bg);
+    color: var(--ws-text);
+    border-radius: 9px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color var(--ws-dur-fast), background var(--ws-dur-fast), transform var(--ws-dur-fast);
+    user-select: none;
+  }
+  .key:hover { border-color: var(--ws-line-strong); background: var(--ws-panel-2); }
+  .key:active { transform: scale(.96); }
+  .key--op { color: var(--ws-accent); background: var(--ws-panel-2); }
+  .key--fn { color: var(--ws-text-2); font-size: 12.5px; font-weight: 500; }
+  .key--danger { color: var(--ws-danger); font-size: 13px; }
+  .key--eq {
+    background: var(--ws-accent);
+    border-color: transparent;
+    color: #09111d;
+    font-weight: 750;
+  }
+  .key--eq:hover { background: var(--ws-accent); filter: brightness(1.06); }
+
+  .saved-card { margin-top: 14px; }
+  .saved-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .saved-title { font-size: 13.5px; font-weight: 650; }
+  .saved-list { display: flex; flex-direction: column; gap: 8px; }
+  .saved-item {
+    border: 1px solid var(--ws-line);
+    background: var(--ws-bg);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .saved-item__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .saved-expr {
+    font-family: var(--ws-mono);
+    font-size: 13px;
+    font-weight: 600;
+    word-break: break-word;
+  }
+  .saved-expr .saved-res { color: var(--ws-ok); }
+  .saved-meta {
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--ws-text-3);
+  }
+  .saved-badge {
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: var(--ws-panel-2);
+    color: var(--ws-text-2);
+  }
+  .saved-actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .saved-steps {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--ws-line);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-family: var(--ws-mono);
+    font-size: 11.5px;
+    color: var(--ws-text-2);
+  }
+
+  .status-tip {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translate(-50%, 8px);
+    padding: 7px 14px;
+    border-radius: 9px;
+    background: var(--ws-panel);
+    border: 1px solid var(--ws-line-strong);
+    color: var(--ws-text);
+    font-size: 12px;
+    box-shadow: var(--ws-shadow);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 20;
+    transition: opacity .16s ease, transform .16s var(--ws-ease-out);
+  }
+
+  @media (max-width: 680px) {
+    .grid { grid-template-columns: minmax(0, 1fr); }
+    .note-input { width: 120px; }
+  }
+  html[data-lite="true"] * { transition: none !important; animation: none !important; }
+</style>
+<script src="_shared.js"></script>
+<script src="calculator-engine.js"></script>
+</head>
+<body>
+  <header class="head">
+    <div>
+      <h1 class="title">算式计算器</h1>
+      <p class="sub">输入或粘贴整条算式，自动容错中英文符号与括号，透明展示每一步计算过程并支持保存。</p>
+    </div>
+    <div class="head-side">
+      <div class="seg" id="pctSeg" role="group" aria-label="百分号模式">
+        <button type="button" data-mode="value" aria-pressed="true" title="将 10% 按 0.1 数值参与运算">数值 %（10%=0.1）</button>
+        <button type="button" data-mode="relative" aria-pressed="false" title="100 + 10% 理解为 100 + 100×10% = 110">增减 %（100+10%=110）</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="card">
+    <textarea id="exprInput" class="expr-input" rows="2" placeholder="输入或粘贴算式，如：(1,200 + ¥300) × 15% + 2^3" aria-label="算式输入框" spellcheck="false"></textarea>
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <button type="button" class="btn btn--primary" id="calcBtn">计算 (=)</button>
+        <input type="text" id="saveNote" class="note-input" placeholder="备注（可选，保存用）" maxlength="40" aria-label="计算记录备注">
+        <button type="button" class="btn" id="saveBtn">保存过程</button>
+      </div>
+      <div class="toolbar-right">
+        <button type="button" class="btn btn--ghost" id="copyResultBtn">复制结果</button>
+        <button type="button" class="btn btn--ghost" id="copyStepsBtn">复制步骤</button>
+        <button type="button" class="btn btn--ghost" id="clearInputBtn">清空</button>
+      </div>
+    </div>
+    <div class="samples">
+      <span class="samples__label">示例：</span>
+      <button type="button" class="chip" data-sample="¥1,280 × (1 - 15%) + 28">折扣实付</button>
+      <button type="button" class="chip" data-sample="10000 × （1 ＋ 3.5％）＾3">三年复利</button>
+      <button type="button" class="chip" data-sample="2（3＋4） ÷ 5 - 1.2">中英括号与隐式乘法</button>
+      <button type="button" class="chip" data-sample="200 - 20%" data-mode="relative">增减百分比 200-20%</button>
+    </div>
+    <div class="banner banner--norm" id="normNote" hidden></div>
+    <div class="banner banner--err" id="errBox" hidden role="alert"></div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <div class="result-box">
+        <div class="result-top">
+          <span class="result-label">计算结果</span>
+          <button type="button" class="btn btn--ghost btn--sm" id="useAnsBtn" title="用本次结果作为新算式开头">用结果继续 (Ans)</button>
+        </div>
+        <div class="result-val num" id="resultVal">—</div>
+        <div class="result-sub" id="resultMeta">输入算式后按 Enter 或点击「计算」查看完整步骤</div>
+      </div>
+
+      <div class="steps-head">
+        <span class="steps-title">分步计算过程</span>
+        <span class="steps-count" id="stepsCount"></span>
+      </div>
+      <div class="steps-list" id="stepsList">
+        <div class="empty-state">暂无计算步骤；计算后会按真实优先级逐步显示每步中间结果。</div>
+      </div>
+    </section>
+
+    <section class="card" aria-label="屏幕按键区">
+      <div class="keypad" id="keypad">
+        <button type="button" class="key key--danger" data-act="clear" title="清空输入 (Esc)">C</button>
+        <button type="button" class="key key--fn" data-act="back" title="退格">⌫</button>
+        <button type="button" class="key key--op" data-ins="(">(</button>
+        <button type="button" class="key key--op" data-ins=")">)</button>
+        <button type="button" class="key key--op" data-ins="%">%</button>
+
+        <button type="button" class="key" data-ins="7">7</button>
+        <button type="button" class="key" data-ins="8">8</button>
+        <button type="button" class="key" data-ins="9">9</button>
+        <button type="button" class="key key--op" data-ins="÷">÷</button>
+        <button type="button" class="key key--op" data-ins="^" title="乘方">^</button>
+
+        <button type="button" class="key" data-ins="4">4</button>
+        <button type="button" class="key" data-ins="5">5</button>
+        <button type="button" class="key" data-ins="6">6</button>
+        <button type="button" class="key key--op" data-ins="×">×</button>
+        <button type="button" class="key key--fn" data-act="ans" title="插入上一次计算结果">Ans</button>
+
+        <button type="button" class="key" data-ins="1">1</button>
+        <button type="button" class="key" data-ins="2">2</button>
+        <button type="button" class="key" data-ins="3">3</button>
+        <button type="button" class="key key--op" data-ins="-">-</button>
+        <button type="button" class="key key--fn" data-act="wrap" title="给选中内容或整条算式加括号">(…)</button>
+
+        <button type="button" class="key" data-ins="0">0</button>
+        <button type="button" class="key" data-ins=".">.</button>
+        <button type="button" class="key" data-ins="00">00</button>
+        <button type="button" class="key key--op" data-ins="+">+</button>
+        <button type="button" class="key key--eq" data-act="eval" title="计算 (Enter)">=</button>
+      </div>
+      <p class="hint">支持键盘直接输入或粘贴多符号算式；按 <strong>Enter</strong> 立即计算，<strong>Shift+Enter</strong> 换行。</p>
+    </section>
+  </div>
+
+  <section class="card saved-card">
+    <div class="saved-head">
+      <span class="saved-title" id="savedTitle">已保存的计算记录（0）</span>
+      <div class="toolbar-right">
+        <button type="button" class="btn btn--sm" id="exportSavedBtn">导出记录 TXT</button>
+        <button type="button" class="btn btn--sm btn--ghost btn--danger" id="clearSavedBtn">清空记录</button>
+      </div>
+    </div>
+    <div class="saved-list" id="savedList"></div>
+  </section>
+
+<script>
+(function () {
+  'use strict';
+
+  var STORE_KEY = 'ws-calc-v1';
+  var MAX_SAVED = 100;
+  var engine = window.NCCalcEngine;
+
+  var state = {
+    percentMode: 'value',
+    lastResult: null,
+    ansValue: '',
+    saved: [],
+    expanded: {}
+  };
+
+  var els = {
+    expr: document.getElementById('exprInput'),
+    saveNote: document.getElementById('saveNote'),
+    calcBtn: document.getElementById('calcBtn'),
+    saveBtn: document.getElementById('saveBtn'),
+    copyResultBtn: document.getElementById('copyResultBtn'),
+    copyStepsBtn: document.getElementById('copyStepsBtn'),
+    clearInputBtn: document.getElementById('clearInputBtn'),
+    useAnsBtn: document.getElementById('useAnsBtn'),
+    normNote: document.getElementById('normNote'),
+    errBox: document.getElementById('errBox'),
+    resultVal: document.getElementById('resultVal'),
+    resultMeta: document.getElementById('resultMeta'),
+    stepsCount: document.getElementById('stepsCount'),
+    stepsList: document.getElementById('stepsList'),
+    keypad: document.getElementById('keypad'),
+    pctSeg: document.getElementById('pctSeg'),
+    savedTitle: document.getElementById('savedTitle'),
+    savedList: document.getElementById('savedList'),
+    exportSavedBtn: document.getElementById('exportSavedBtn'),
+    clearSavedBtn: document.getElementById('clearSavedBtn')
+  };
+
+  function toast(text) {
+    var tip = document.getElementById('__calcTip');
+    if (!tip) {
+      tip = document.createElement('div');
+      tip.id = '__calcTip';
+      tip.className = 'status-tip';
+      document.body.appendChild(tip);
+    }
+    tip.textContent = text;
+    tip.style.opacity = '1';
+    tip.style.transform = 'translate(-50%, 0)';
+    clearTimeout(tip.__timer);
+    tip.__timer = setTimeout(function () {
+      tip.style.opacity = '0';
+      tip.style.transform = 'translate(-50%, 8px)';
+    }, 1700);
+  }
+
+  function loadState() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (raw && typeof raw === 'object') {
+        if (raw.percentMode === 'relative' || raw.percentMode === 'value') {
+          state.percentMode = raw.percentMode;
+        }
+        if (Array.isArray(raw.saved)) state.saved = raw.saved.slice(0, MAX_SAVED);
+      }
+    } catch (err) { /* ignore */ }
+  }
+
+  function persistState() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        percentMode: state.percentMode,
+        saved: state.saved.slice(0, MAX_SAVED)
+      }));
+    } catch (err) { /* ignore */ }
+  }
+
+  function syncPercentSeg() {
+    els.pctSeg.querySelectorAll('button[data-mode]').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', btn.getAttribute('data-mode') === state.percentMode ? 'true' : 'false');
+    });
+  }
+
+  function renderResult(res) {
+    els.errBox.hidden = true;
+    els.errBox.textContent = '';
+
+    if (res && res.changes && res.changes.length) {
+      els.normNote.hidden = false;
+      els.normNote.textContent = '';
+      var prefix = document.createElement('span');
+      prefix.textContent = '已自动容错（' + res.changes.join('、') + '）：';
+      var code = document.createElement('code');
+      code.textContent = res.displayExpr || res.normalized;
+      els.normNote.appendChild(prefix);
+      els.normNote.appendChild(code);
+    } else {
+      els.normNote.hidden = true;
+      els.normNote.textContent = '';
+    }
+
+    if (!res || !res.ok) {
+      state.lastResult = null;
+      els.errBox.hidden = false;
+      els.errBox.textContent = res && res.error ? res.error : '无法解析算式';
+      els.resultVal.textContent = '—';
+      els.resultMeta.textContent = '请修正上方算式后重新计算';
+      els.stepsCount.textContent = '';
+      els.stepsList.textContent = '';
+      var emptyErr = document.createElement('div');
+      emptyErr.className = 'empty-state';
+      emptyErr.textContent = '算式存在错误，暂无法生成计算步骤。';
+      els.stepsList.appendChild(emptyErr);
+      return;
+    }
+
+    state.lastResult = res;
+    state.ansValue = res.formatted;
+    els.resultVal.textContent = res.grouped;
+    var metaParts = ['精确值：' + res.formatted];
+    metaParts.push(res.percentMode === 'relative' ? '增减百分比模式' : '数值百分比模式');
+    els.resultMeta.textContent = metaParts.join(' · ');
+
+    els.stepsList.textContent = '';
+    if (!res.steps.length) {
+      els.stepsCount.textContent = '0 步';
+      var trivial = document.createElement('div');
+      trivial.className = 'empty-state';
+      trivial.textContent = '输入已是最终数值（' + res.formatted + '），无需拆分计算步骤。';
+      els.stepsList.appendChild(trivial);
+      return;
+    }
+
+    els.stepsCount.textContent = '共 ' + res.steps.length + ' 步';
+    res.steps.forEach(function (step) {
+      var row = document.createElement('div');
+      row.className = 'step-item';
+
+      var top = document.createElement('div');
+      top.className = 'step-item__top';
+      var no = document.createElement('span');
+      no.className = 'step-no';
+      no.textContent = '步骤 ' + step.index;
+      var rule = document.createElement('span');
+      rule.className = 'step-rule';
+      rule.textContent = step.rule;
+      top.appendChild(no);
+      top.appendChild(rule);
+
+      var evalLine = document.createElement('div');
+      evalLine.className = 'step-eval';
+      evalLine.appendChild(document.createTextNode(step.expr + ' = '));
+      var valSpan = document.createElement('span');
+      valSpan.className = 'step-val';
+      valSpan.textContent = step.value;
+      evalLine.appendChild(valSpan);
+
+      var after = document.createElement('div');
+      after.className = 'step-after';
+      after.textContent = '代回原式 → ' + step.fullAfter;
+
+      row.appendChild(top);
+      row.appendChild(evalLine);
+      row.appendChild(after);
+      els.stepsList.appendChild(row);
+    });
+  }
+
+  function calculate() {
+    if (!engine) {
+      toast('计算引擎未加载');
+      return null;
+    }
+    var raw = els.expr.value;
+    var res = engine.evaluate(raw, { percentMode: state.percentMode });
+    renderResult(res);
+    return res;
+  }
+
+  function formatStepsText(record) {
+    var lines = ['算式：' + (record.displayExpr || record.raw)];
+    lines.push('模式：' + (record.percentMode === 'relative' ? '增减 %' : '数值 %'));
+    if (record.note) lines.push('备注：' + record.note);
+    if (record.steps && record.steps.length) {
+      lines.push('计算过程：');
+      record.steps.forEach(function (s) {
+        lines.push('  ' + s.index + '. [' + s.rule + '] ' + s.expr + ' = ' + s.value + '  →  ' + s.fullAfter);
+      });
+    }
+    lines.push('结果：' + record.result);
+    return lines.join('\n');
+  }
+
+  function saveCurrent() {
+    var raw = String(els.expr.value || '').trim();
+    if (!raw) {
+      toast('请先输入算式');
+      els.expr.focus();
+      return;
+    }
+    var res = state.lastResult;
+    if (!res || !res.ok || res.raw !== els.expr.value || res.percentMode !== state.percentMode) {
+      res = calculate();
+    }
+    if (!res || !res.ok) {
+      toast('算式有误，无法保存');
+      return;
+    }
+    var note = String(els.saveNote.value || '').trim();
+    var entry = {
+      id: 'calc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 5),
+      at: Date.now(),
+      raw: res.raw,
+      displayExpr: res.displayExpr,
+      percentMode: res.percentMode,
+      result: res.formatted,
+      grouped: res.grouped,
+      steps: res.steps.slice(),
+      note: note
+    };
+    state.saved.unshift(entry);
+    state.saved = state.saved.slice(0, MAX_SAVED);
+    state.expanded[entry.id] = true;
+    els.saveNote.value = '';
+    persistState();
+    renderSaved();
+    toast('已保存算式、过程与结果');
+  }
+
+  function formatTime(ts) {
+    try {
+      var d = new Date(ts);
+      var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+      return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    } catch (err) { return ''; }
+  }
+
+  function renderSaved() {
+    els.savedTitle.textContent = '已保存的计算记录（' + state.saved.length + '）';
+    els.savedList.textContent = '';
+    if (!state.saved.length) {
+      var empty = document.createElement('div');
+      empty.className = 'empty-state';
+      empty.textContent = '还没有保存的计算记录。算出结果后点击「保存过程」即可留存完整步骤。';
+      els.savedList.appendChild(empty);
+      return;
+    }
+
+    state.saved.forEach(function (item) {
+      var card = document.createElement('div');
+      card.className = 'saved-item';
+
+      var head = document.createElement('div');
+      head.className = 'saved-item__head';
+
+      var info = document.createElement('div');
+      var expr = document.createElement('div');
+      expr.className = 'saved-expr';
+      expr.appendChild(document.createTextNode((item.displayExpr || item.raw) + ' = '));
+      var resSpan = document.createElement('span');
+      resSpan.className = 'saved-res';
+      resSpan.textContent = item.grouped || item.result;
+      expr.appendChild(resSpan);
+      info.appendChild(expr);
+
+      var meta = document.createElement('div');
+      meta.className = 'saved-meta';
+      var modeBadge = document.createElement('span');
+      modeBadge.className = 'saved-badge';
+      modeBadge.textContent = item.percentMode === 'relative' ? '增减 %' : '数值 %';
+      meta.appendChild(modeBadge);
+      if (item.note) {
+        var noteSpan = document.createElement('span');
+        noteSpan.textContent = item.note;
+        meta.appendChild(noteSpan);
+      }
+      var timeSpan = document.createElement('span');
+      timeSpan.textContent = formatTime(item.at);
+      meta.appendChild(timeSpan);
+      info.appendChild(meta);
+
+      var actions = document.createElement('div');
+      actions.className = 'saved-actions';
+
+      var isExpanded = !!state.expanded[item.id];
+      var stepCount = Array.isArray(item.steps) ? item.steps.length : 0;
+      if (stepCount > 0) {
+        var toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'btn btn--sm btn--ghost';
+        toggleBtn.textContent = isExpanded ? '收起步骤' : '展开步骤 (' + stepCount + ')';
+        toggleBtn.addEventListener('click', function () {
+          state.expanded[item.id] = !state.expanded[item.id];
+          renderSaved();
+        });
+        actions.appendChild(toggleBtn);
+      }
+
+      var loadBtn = document.createElement('button');
+      loadBtn.type = 'button';
+      loadBtn.className = 'btn btn--sm';
+      loadBtn.textContent = '载入';
+      loadBtn.addEventListener('click', function () {
+        state.percentMode = item.percentMode === 'relative' ? 'relative' : 'value';
+        syncPercentSeg();
+        els.expr.value = item.raw || item.displayExpr;
+        calculate();
+        els.expr.focus();
+      });
+      actions.appendChild(loadBtn);
+
+      var copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'btn btn--sm btn--ghost';
+      copyBtn.textContent = '复制';
+      copyBtn.addEventListener('click', function () {
+        var text = formatStepsText(item);
+        if (window.ncBuiltinCopy) {
+          window.ncBuiltinCopy(text).then(function (ok) { toast(ok ? '已复制算式与步骤' : '复制失败'); });
+        }
+      });
+      actions.appendChild(copyBtn);
+
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn btn--sm btn--ghost btn--danger';
+      delBtn.textContent = '删除';
+      delBtn.addEventListener('click', function () {
+        state.saved = state.saved.filter(function (entry) { return entry.id !== item.id; });
+        delete state.expanded[item.id];
+        persistState();
+        renderSaved();
+      });
+      actions.appendChild(delBtn);
+
+      head.appendChild(info);
+      head.appendChild(actions);
+      card.appendChild(head);
+
+      if (isExpanded && stepCount > 0) {
+        var stepBox = document.createElement('div');
+        stepBox.className = 'saved-steps';
+        item.steps.forEach(function (s) {
+          var line = document.createElement('div');
+          line.textContent = s.index + '. [' + s.rule + '] ' + s.expr + ' = ' + s.value + '   →   ' + s.fullAfter;
+          stepBox.appendChild(line);
+        });
+        card.appendChild(stepBox);
+      }
+
+      els.savedList.appendChild(card);
+    });
+  }
+
+  function insertAtCursor(text) {
+    var input = els.expr;
+    var start = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+    var end = typeof input.selectionEnd === 'number' ? input.selectionEnd : input.value.length;
+    var val = input.value;
+    input.value = val.slice(0, start) + text + val.slice(end);
+    var pos = start + text.length;
+    input.focus();
+    try { input.setSelectionRange(pos, pos); } catch (err) { /* ignore */ }
+  }
+
+  function backspaceAtCursor() {
+    var input = els.expr;
+    var start = typeof input.selectionStart === 'number' ? input.selectionStart : input.value.length;
+    var end = typeof input.selectionEnd === 'number' ? input.selectionEnd : input.value.length;
+    var val = input.value;
+    if (start !== end) {
+      input.value = val.slice(0, start) + val.slice(end);
+      input.focus();
+      try { input.setSelectionRange(start, start); } catch (err) { /* ignore */ }
+      return;
+    }
+    if (start <= 0) { input.focus(); return; }
+    input.value = val.slice(0, start - 1) + val.slice(end);
+    var pos = start - 1;
+    input.focus();
+    try { input.setSelectionRange(pos, pos); } catch (err) { /* ignore */ }
+  }
+
+  function wrapParens() {
+    var input = els.expr;
+    var start = typeof input.selectionStart === 'number' ? input.selectionStart : 0;
+    var end = typeof input.selectionEnd === 'number' ? input.selectionEnd : input.value.length;
+    var val = input.value;
+    if (start !== end) {
+      var inner = val.slice(start, end);
+      input.value = val.slice(0, start) + '(' + inner + ')' + val.slice(end);
+      input.focus();
+      try { input.setSelectionRange(start + 1, end + 1); } catch (err) { /* ignore */ }
+    } else if (val.trim()) {
+      input.value = '(' + val.trim() + ')';
+      input.focus();
+    } else {
+      insertAtCursor('(');
+    }
+  }
+
+  function clearInput() {
+    els.expr.value = '';
+    els.normNote.hidden = true;
+    els.normNote.textContent = '';
+    els.errBox.hidden = true;
+    els.errBox.textContent = '';
+    state.lastResult = null;
+    els.resultVal.textContent = '—';
+    els.resultMeta.textContent = '输入算式后按 Enter 或点击「计算」查看完整步骤';
+    els.stepsCount.textContent = '';
+    els.stepsList.textContent = '';
+    var empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.textContent = '暂无计算步骤；计算后会按真实优先级逐步显示每步中间结果。';
+    els.stepsList.appendChild(empty);
+    els.expr.focus();
+  }
+
+  els.calcBtn.addEventListener('click', calculate);
+  els.saveBtn.addEventListener('click', saveCurrent);
+  els.clearInputBtn.addEventListener('click', clearInput);
+
+  els.copyResultBtn.addEventListener('click', function () {
+    if (!state.lastResult || !state.lastResult.ok) { toast('还没有可复制的计算结果'); return; }
+    if (window.ncBuiltinCopy) {
+      window.ncBuiltinCopy(state.lastResult.formatted).then(function (ok) { toast(ok ? '已复制结果' : '复制失败'); });
+    }
+  });
+
+  els.copyStepsBtn.addEventListener('click', function () {
+    if (!state.lastResult || !state.lastResult.ok) { toast('还没有可复制的步骤'); return; }
+    var text = formatStepsText(Object.assign({}, state.lastResult, {
+      result: state.lastResult.formatted,
+      note: String(els.saveNote.value || '').trim()
+    }));
+    if (window.ncBuiltinCopy) {
+      window.ncBuiltinCopy(text).then(function (ok) { toast(ok ? '已复制完整计算步骤' : '复制失败'); });
+    }
+  });
+
+  els.useAnsBtn.addEventListener('click', function () {
+    if (!state.ansValue) { toast('暂无上一次结果'); return; }
+    els.expr.value = state.ansValue;
+    els.expr.focus();
+  });
+
+  els.keypad.addEventListener('click', function (event) {
+    var btn = event.target.closest('button');
+    if (!btn) return;
+    var ins = btn.getAttribute('data-ins');
+    var act = btn.getAttribute('data-act');
+    if (ins != null) { insertAtCursor(ins); return; }
+    if (act === 'clear') clearInput();
+    else if (act === 'back') backspaceAtCursor();
+    else if (act === 'eval') calculate();
+    else if (act === 'wrap') wrapParens();
+    else if (act === 'ans') {
+      if (!state.ansValue) { toast('暂无上一次结果'); els.expr.focus(); return; }
+      insertAtCursor(state.ansValue);
+    }
+  });
+
+  els.expr.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      calculate();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      clearInput();
+    }
+  });
+
+  els.saveNote.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' && !event.isComposing) {
+      event.preventDefault();
+      saveCurrent();
+    }
+  });
+
+  els.pctSeg.addEventListener('click', function (event) {
+    var btn = event.target.closest('button[data-mode]');
+    if (!btn) return;
+    var nextMode = btn.getAttribute('data-mode');
+    if (nextMode !== 'value' && nextMode !== 'relative') return;
+    state.percentMode = nextMode;
+    syncPercentSeg();
+    persistState();
+    if (els.expr.value.trim()) calculate();
+  });
+
+  document.querySelectorAll('.chip[data-sample]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      var mode = chip.getAttribute('data-mode');
+      if (mode === 'value' || mode === 'relative') {
+        state.percentMode = mode;
+        syncPercentSeg();
+        persistState();
+      }
+      els.expr.value = chip.getAttribute('data-sample');
+      calculate();
+      els.expr.focus();
+    });
+  });
+
+  els.exportSavedBtn.addEventListener('click', function () {
+    if (!state.saved.length) { toast('暂无可导出的计算记录'); return; }
+    var out = state.saved.map(function (item, idx) {
+      return '=== 记录 #' + (idx + 1) + ' (' + formatTime(item.at) + ') ===\n' + formatStepsText(item);
+    }).join('\n\n');
+    try {
+      var blob = new Blob([out], { type: 'text/plain;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'calc-history-' + Date.now() + '.txt';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      toast('已导出计算记录');
+    } catch (err) { toast('导出失败'); }
+  });
+
+  els.clearSavedBtn.addEventListener('click', function () {
+    if (!state.saved.length) return;
+    state.saved = [];
+    state.expanded = {};
+    persistState();
+    renderSaved();
+    toast('已清空保存的记录');
+  });
+
+  loadState();
+  syncPercentSeg();
+  renderSaved();
+})();
+</script>
+</body>
+</html>

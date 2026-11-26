@@ -75,6 +75,11 @@
             id: 'builtin-web', category: 'builtin', title: 'Web 助手',
             desc: '构造并发送 HTTP 请求，格式化查看响应', icon: 'send',
             file: 'js/workshop/builtin/web.html', order: 120
+        },
+        {
+            id: 'builtin-calculator', category: 'builtin', title: '算式计算器',
+            desc: '输入或粘贴算式，支持百分号、中英文符号容错、逐步过程与保存记录', icon: 'calculator',
+            file: 'js/workshop/builtin/calculator.html', order: 130
         }
     ];
 

@@ -128,6 +128,47 @@
     letter-spacing: var(--nc-track-meta);
 }
 
+.ws-group--toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    padding: 4px 6px;
+    border-radius: var(--nc-radius-xs);
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .ws-group--toggle:hover {
+        background: var(--nc-surface-2);
+        color: var(--nc-text-2);
+    }
+}
+
+.ws-group--toggle:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--nc-accent-soft);
+}
+
+.ws-group__chevron {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform var(--nc-dur-fast) var(--nc-ease-out);
+}
+
+.ws-group--toggle[aria-expanded="false"] .ws-group__chevron {
+    transform: rotate(-90deg);
+}
+
+html[data-lite="true"] .ws-group__chevron {
+    transition: none;
+}
+
 .ws-item {
     display: flex;
     align-items: center;
@@ -936,7 +977,8 @@ html[data-lite="true"] .ws-skeleton__bar {
     .ws-side,
     .ws-scrim,
     .ws-chat,
-    .ws-chat.is-closed {
+    .ws-chat.is-closed,
+    .ws-group__chevron {
         transition: none;
     }
     .ws-spinner,
