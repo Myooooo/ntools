@@ -173,7 +173,9 @@
     function putVersion(version) {
         if (mode === 'local') {
             var doc = readFallback();
-            doc.versions.push(version);
+            var idx = -1;
+            for (var i = 0; i < doc.versions.length; i += 1) if (doc.versions[i].id === version.id) { idx = i; break; }
+            if (idx > -1) doc.versions[idx] = version; else doc.versions.push(version);
             return writeFallback(doc);
         }
         return tx(STORES.versions, true, function (store) { store.put(version); });
@@ -197,7 +199,9 @@
     function putTurn(turn) {
         if (mode === 'local') {
             var doc = readFallback();
-            doc.turns.push(turn);
+            var idx = -1;
+            for (var i = 0; i < doc.turns.length; i += 1) if (doc.turns[i].id === turn.id) { idx = i; break; }
+            if (idx > -1) doc.turns[idx] = turn; else doc.turns.push(turn);
             return writeFallback(doc);
         }
         return tx(STORES.turns, true, function (store) { store.put(turn); });

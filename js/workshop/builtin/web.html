@@ -191,13 +191,6 @@
 <script>
 (function () {
   'use strict';
-  var params = new URLSearchParams(location.search);
-  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
-  function sendHeight() {
-    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
-  }
-  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
 
   var els = {
     method: document.getElementById('method'), url: document.getElementById('url'),
@@ -276,7 +269,7 @@
     remove.className = 'kv-remove';
     remove.setAttribute('aria-label', '删除这一行');
     remove.textContent = '×';
-    remove.addEventListener('click', function () { row.remove(); sendHeight(); });
+    remove.addEventListener('click', function () { row.remove(); });
     row.appendChild(enabled); row.appendChild(k); row.appendChild(v); row.appendChild(remove);
     container.appendChild(row);
     return row;
@@ -330,6 +323,7 @@
   function applyRequest(req) {
     if (!req) return;
     els.method.value = req.method || 'GET';
+    if (window.ncBuiltinSyncSelect) window.ncBuiltinSyncSelect(els.method);
     els.url.value = req.url || '';
     els.body.value = typeof req.body === 'string' ? req.body : '';
     els.withAuth.checked = req.withAuth !== false;
@@ -338,7 +332,6 @@
     setRows(els.headers, req.headers || {});
     setStatus('已载入：' + (req.name || '请求'));
     if (els.body.value.trim()) activeTab('body');
-    sendHeight();
   }
 
   function renderSaved() {
@@ -477,7 +470,6 @@
     ['params', 'headers', 'body'].forEach(function (name) {
       document.getElementById('pane-' + name).hidden = name !== tab;
     });
-    sendHeight();
   }
 
   var tabButtons = Array.prototype.slice.call(document.querySelectorAll('.tabs button'));
@@ -498,7 +490,6 @@
   document.querySelectorAll('[data-add]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       kvRow(els[btn.getAttribute('data-add')], '', '');
-      sendHeight();
     });
   });
 
@@ -530,6 +521,11 @@
     return (bytes / 1024 / 1024).toFixed(2) + ' MB';
   }
 
+  function hasHeader(headers, name) {
+    var lower = String(name || '').toLowerCase();
+    return Object.keys(headers || {}).some(function (k) { return k.toLowerCase() === lower; });
+  }
+
   function send() {
     if (state.running) { if (state.controller) state.controller.abort(); return; }
     var url = buildUrl();
@@ -538,14 +534,22 @@
     var headers = readRows(els.headers);
     var body = els.body.value;
     if (method !== 'GET' && method !== 'HEAD' && els.body.value.trim()) {
+      var ct = '';
+      Object.keys(headers).forEach(function (k) {
+        if (k.toLowerCase() === 'content-type') ct = headers[k];
+      });
       try {
         JSON.parse(body);
-        if (!/^application\/json/i.test(headers['Content-Type'] || '')) headers['Content-Type'] = 'application/json';
+        if (!/^application\/json/i.test(ct)) {
+          if (!hasHeader(headers, 'content-type')) headers['Content-Type'] = 'application/json';
+        }
       } catch (err) {
-        if (!headers['Content-Type']) headers['Content-Type'] = 'text/plain';
+        if (!hasHeader(headers, 'content-type')) headers['Content-Type'] = 'text/plain';
       }
     }
-    if (els.withAuth.checked && els.token.value.trim()) headers.Authorization = 'Bearer ' + els.token.value.trim();
+    if (els.withAuth.checked && els.token.value.trim() && !hasHeader(headers, 'authorization')) {
+      headers.Authorization = 'Bearer ' + els.token.value.trim();
+    }
 
     state.running = true;
     els.send.textContent = '停止';
@@ -573,7 +577,6 @@
         var ok = response.ok;
         setStatus(response.status + ' ' + (response.statusText || ''), ok ? 'ok' : (response.status < 500 ? 'warn' : 'bad'));
         remember(method, url, response.status);
-        sendHeight();
       });
     }).catch(function (error) {
       var elapsed = Math.round(performance.now() - started);
@@ -584,7 +587,6 @@
         ? '请求已取消。'
         : '请求失败：' + (error && error.message ? error.message : error) + '\n\n常见原因：\n1. 目标接口未允许跨域（CORS），file:// 页面会被浏览器拦截；\n2. 地址写错或网关不可达；\n3. 自签名证书不被信任。';
       els.respHeaders.textContent = '';
-      sendHeight();
     }).then(function () {
       state.running = false;
       state.controller = null;
@@ -615,12 +617,12 @@
       btn.title = item.url;
       btn.addEventListener('click', function () {
         els.method.value = item.method;
+        if (window.ncBuiltinSyncSelect) window.ncBuiltinSyncSelect(els.method);
         els.url.value = item.url;
         setStatus('已填入历史请求');
       });
       els.history.appendChild(btn);
     });
-    sendHeight();
   }
 
   els.saveReq.addEventListener('click', saveRequest);
@@ -651,7 +653,6 @@
     setStatus('等待发送');
     kvRow(els.params, '', '');
     kvRow(els.headers, 'Content-Type', 'application/json');
-    sendHeight();
   });
   els.formatBody.addEventListener('click', function () {
     try {

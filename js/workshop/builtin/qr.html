@@ -71,13 +71,6 @@
 <script>
 (function () {
   'use strict';
-  var params = new URLSearchParams(location.search);
-  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
-  function sendHeight() {
-    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
-  }
-  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
 
   var els = {
     text: document.getElementById('text'), box: document.getElementById('qrbox'),
@@ -158,6 +151,7 @@
       var canvas = els.box.querySelector('canvas');
       var img = els.box.querySelector('img');
       var url = canvas ? canvas.toDataURL('image/png') : (img ? img.src : '');
+      if (!url) { toast('下载失败', 'error'); return; }
       var link = document.createElement('a');
       link.href = url;
       link.download = 'qrcode-' + Date.now() + '.png';

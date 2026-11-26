@@ -136,11 +136,16 @@
         if (generic && generic[1] && /<([a-z!])[^>]*>/i.test(generic[1])) {
             return { code: generic[1].trim(), fenced: true };
         }
+        /* 未闭合围栏兜底（如输出触发 max_tokens 截断） */
+        var unclosedFence = /```(?:html|HTML)?\s*\n([\s\S]+)$/.exec(source);
+        if (unclosedFence && unclosedFence[1] && /<(?:!doctype|html|head|body|div|section|main|style|script)\b/i.test(unclosedFence[1])) {
+            return { code: unclosedFence[1].replace(/```\s*$/, '').trim(), fenced: true };
+        }
         var start = source.search(/<!doctype\s+html|<html[\s>]/i);
         if (start > -1) {
             var body = source.slice(start);
-            var end = body.search(/<\/html\s*>/i);
-            if (end > -1) body = body.slice(0, end + 7);
+            var endMatch = /<\/html\s*>/i.exec(body);
+            if (endMatch) body = body.slice(0, endMatch.index + endMatch[0].length);
             return { code: body.trim(), fenced: false };
         }
         /* 兜底：模型只给了片段（有标签但不是完整文档）也接受，包装时补壳 */
@@ -160,17 +165,30 @@
             .replace(/"/g, '&quot;');
     }
 
+    var THEME_PALETTES = {
+        dark: {
+            bg: '#0b0e13', panel: '#131922', panel2: '#18212c',
+            text: '#edf1f7', text2: '#9aa7b8', text3: '#8b98a8',
+            line: 'rgba(255,255,255,.075)', lineStrong: 'rgba(255,255,255,.14)',
+            accent: '#6ea8fe', accentSoft: 'rgba(110,168,254,.13)'
+        },
+        light: {
+            bg: '#f4f5f7', panel: '#ffffff', panel2: '#f7f8fa',
+            text: '#15181d', text2: '#56616f', text3: '#5c6a7a',
+            line: 'rgba(20,24,32,.09)', lineStrong: 'rgba(20,24,32,.17)',
+            accent: '#2a63c8', accentSoft: 'rgba(47,111,219,.1)'
+        }
+    };
+
     /** 沙箱文档里统一注入的主题变量（跟随主应用深/浅色） */
     function themeCss(theme) {
         var dark = theme !== 'light';
-        var vars = dark
-            ? { bg: '#0b0e13', panel: '#131922', panel2: '#18212c', text: '#edf1f7', text2: '#9aa7b8', text3: '#8b98a8', line: 'rgba(255,255,255,.075)', accent: '#6ea8fe', soft: 'rgba(110,168,254,.13)' }
-            : { bg: '#f4f5f7', panel: '#ffffff', panel2: '#f7f8fa', text: '#15181d', text2: '#56616f', text3: '#5c6a7a', line: 'rgba(20,24,32,.09)', accent: '#2a63c8', soft: 'rgba(47,111,219,.1)' };
+        var vars = dark ? THEME_PALETTES.dark : THEME_PALETTES.light;
         return ':root{color-scheme:' + (dark ? 'dark' : 'light') + ';' +
             '--ws-bg:' + vars.bg + ';--ws-panel:' + vars.panel + ';--ws-panel-2:' + vars.panel2 + ';' +
             '--ws-text:' + vars.text + ';--ws-text-2:' + vars.text2 + ';--ws-text-3:' + vars.text3 + ';' +
-            '--ws-line:' + vars.line + ';--ws-line-strong:' + (dark ? 'rgba(255,255,255,.14)' : 'rgba(20,24,32,.17)') + ';' +
-            '--ws-accent:' + vars.accent + ';--ws-accent-soft:' + vars.soft + ';' +
+            '--ws-line:' + vars.line + ';--ws-line-strong:' + vars.lineStrong + ';' +
+            '--ws-accent:' + vars.accent + ';--ws-accent-soft:' + vars.accentSoft + ';' +
             '--ws-radius:12px;--ws-radius-sm:8px;}' +
             'html,body{margin:0;padding:0;background:var(--ws-bg);color:var(--ws-text);' +
             "font-family:var(--nc-font-sans,-apple-system,'Segoe UI','PingFang SC','Noto Sans CJK SC','Microsoft YaHei',sans-serif);}";
@@ -215,12 +233,13 @@
             '}catch(e){}' +
             "window.addEventListener('error',function(e){try{parent.postMessage({type:'nc-ws-error',message:String(e.message||'脚本错误')},'*');}catch(x){}});" +
             "window.addEventListener('unhandledrejection',function(e){var r=e.reason;try{parent.postMessage({type:'nc-ws-error',message:String((r&&r.message)||r||'Promise 错误')},'*');}catch(x){}});" +
+            "var PALETTES=" + JSON.stringify(THEME_PALETTES) + ";" +
             "window.addEventListener('message',function(e){" +
             "if(e.source!==parent)return;var d=e.data;if(!d||d.type!=='nc-ws-theme')return;" +
             "var root=document.documentElement,light=d.theme==='light';" +
             "root.setAttribute('data-theme',light?'light':'dark');" +
-            "var p=light?{bg:'#f4f5f7',panel:'#ffffff',panel2:'#f8f9fb',text:'#15181d',text2:'#56616f',text3:'#7b8794',line:'rgba(0,0,0,.1)',lineStrong:'rgba(0,0,0,.18)',accent:'#2a63c8',accentSoft:'rgba(47,111,219,.1)'}:" +
-            "{bg:'#0b0e13',panel:'#131922',panel2:'#18212c',text:'#edf1f7',text2:'#9aa7b8',text3:'#8b98a8',line:'rgba(255,255,255,.075)',lineStrong:'rgba(255,255,255,.14)',accent:'#6ea8fe',accentSoft:'rgba(110,168,254,.14)'};" +
+            "root.setAttribute('data-lite',d.lite?'true':'false');" +
+            "var p=light?PALETTES.light:PALETTES.dark;" +
             "Object.keys(p).forEach(function(k){root.style.setProperty('--ws-'+k.replace(/[A-Z]/g,function(m){return '-'+m.toLowerCase();}),p[k]);});" +
             "root.style.colorScheme=light?'light':'dark';" +
             "try{parent.postMessage({type:'nc-ws-theme-ack'},'*');}catch(x){}" +
@@ -239,10 +258,18 @@
             '})();</script>';
     }
 
+    function injectTailBridge(doc, bridge) {
+        var matches = doc.match(/<\/body>/gi);
+        if (!matches || !matches.length) return doc + bridge;
+        var lastIdx = doc.toLowerCase().lastIndexOf('</body>');
+        if (lastIdx === -1) return doc + bridge;
+        return doc.slice(0, lastIdx) + bridge + doc.slice(lastIdx);
+    }
+
     /**
      * 把模型产出的 HTML 包装成沙箱文档。
      * @param {string} code
-     * @param {{theme?:string, allowNetwork?:boolean, title?:string}} [options]
+     * @param {{theme?:string, lite?:boolean, allowNetwork?:boolean, title?:string}} [options]
      */
     function wrapHtml(code, options) {
         var opts = options || {};
@@ -250,6 +277,8 @@
         var net = allowNetwork ? ' http: https:' : '';
         var connect = allowNetwork ? 'http: https:' : "'none'";
         var source = String(code == null ? '' : code).trim();
+        var themeAttr = opts.theme === 'light' ? 'light' : 'dark';
+        var liteAttr = opts.lite ? 'true' : 'false';
 
         var csp = '<meta http-equiv="Content-Security-Policy" content="default-src ' + "'none'" + '; ' +
             'img-src data: blob:' + net + '; media-src data: blob:' + net + '; ' +
@@ -261,21 +290,25 @@
         var early = earlyBridgeScript();
         var bridge = bridgeScript();
 
-        /* 完整文档：保留原有 head/body（样式与脚本都在），只补 CSP、主题与高度桥。
-         * 之前只取 <body> 内层，导致模型写在 <head> 里的 <style>/<script> 被整段丢掉。 */
+        /* 完整文档：保留原有 head/body（样式与脚本都在），只补 CSP、主题与高度桥。 */
         if (/<html[\s>]/i.test(source)) {
             var doc = source.replace(/^\s*<!doctype[^>]*>/i, '');
+            doc = doc.replace(/<html([^>]*)>/i, function (m, attrs) {
+                var a = attrs || '';
+                if (!/data-theme\s*=/i.test(a)) a += ' data-theme="' + themeAttr + '"';
+                if (!/data-lite\s*=/i.test(a)) a += ' data-lite="' + liteAttr + '"';
+                return '<html' + a + '>';
+            });
             if (/<head[^>]*>/i.test(doc)) {
                 doc = doc.replace(/<head([^>]*)>/i, '<head$1>' + csp + viewport + theme + early);
             } else {
                 doc = doc.replace(/<html([^>]*)>/i, '<html$1><head>' + csp + viewport + theme + early + '</head>');
             }
-            if (/<\/body>/i.test(doc)) doc = doc.replace(/<\/body>/i, bridge + '</body>');
-            else doc += bridge;
+            doc = injectTailBridge(doc, bridge);
             return '<!DOCTYPE html>' + doc;
         }
         /* 片段：套壳并保留片段里的 <style>/<script> */
-        return '<!DOCTYPE html><html><head><meta charset="utf-8">' + viewport + csp +
+        return '<!DOCTYPE html><html data-theme="' + themeAttr + '" data-lite="' + liteAttr + '"><head><meta charset="utf-8">' + viewport + csp +
             '<title>' + escapeAttr(opts.title || '创意工坊') + '</title>' + theme + early +
             '</head><body>' + source + bridge + '</body></html>';
     }
@@ -378,7 +411,7 @@
                 icon: 'sparkles',
                 code: app.code,
                 order: isNum(orderMap[app.id]) ? orderMap[app.id] : (app.order != null ? app.order : 1000),
-                pinned: app.pinned === true || pinMap[app.id] === true,
+                pinned: Object.prototype.hasOwnProperty.call(pinMap, app.id) ? pinMap[app.id] === true : app.pinned === true,
                 updatedAt: app.updatedAt
             });
         });

@@ -124,13 +124,29 @@
 <script>
 (function () {
   'use strict';
-  var params = new URLSearchParams(location.search);
-  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
-  function sendHeight() {
-    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
+
+  function randInt(n) {
+    if (n <= 1) return 0;
+    if (window.crypto && window.crypto.getRandomValues) {
+      var arr = new Uint32Array(1);
+      var max = Math.floor(4294967296 / n) * n;
+      var val;
+      do {
+        window.crypto.getRandomValues(arr);
+        val = arr[0];
+      } while (val >= max);
+      return val % n;
+    }
+    return Math.floor(Math.random() * n);
   }
-  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
+
+  function stopRoll() {
+    if (state.rolling) {
+      clearInterval(state.rolling);
+      state.rolling = null;
+    }
+    els.result.classList.remove('is-rolling');
+  }
 
   var KEY = 'ws-picker-v2';
   var state = { mode: 'names', drawn: [], numbers: [], rolling: null };
@@ -184,7 +200,6 @@
       empty.textContent = '还没有抽过';
       els.history.appendChild(empty);
     }
-    sendHeight();
   }
 
   function renderNumbers() {
@@ -199,10 +214,10 @@
       row.appendChild(label); row.appendChild(time);
       els.numberHistory.appendChild(row);
     });
-    sendHeight();
   }
 
   function setMode(mode) {
+    stopRoll();
     state.mode = mode;
     document.querySelectorAll('.seg > button').forEach(function (btn) {
       btn.setAttribute('aria-pressed', btn.getAttribute('data-mode') === mode ? 'true' : 'false');
@@ -213,7 +228,6 @@
     els.result.innerHTML = '准备好了吗<small>点击「开始抽取」</small>';
     renderChips();
     renderNumbers();
-    sendHeight();
   }
 
   function burst() {
@@ -252,10 +266,10 @@
         win('都抽过了', '点「重置已抽」重新开始');
         return;
       }
-      var winner = left[Math.floor(Math.random() * left.length)];
+      var winner = left[randInt(left.length)];
       roll(function () {
         var pool = names.length ? names : ['—'];
-        return pool[Math.floor(Math.random() * pool.length)];
+        return pool[randInt(pool.length)];
       }, function () {
         state.drawn.push(winner);
         save(); renderChips();
@@ -268,8 +282,8 @@
         win('范围不对', '请让最大值不小于最小值');
         return;
       }
-      var pick = min + Math.floor(Math.random() * (max - min + 1));
-      roll(function () { return String(min + Math.floor(Math.random() * (max - min + 1))); }, function () {
+      var pick = min + randInt(max - min + 1);
+      roll(function () { return String(min + randInt(max - min + 1)); }, function () {
         state.numbers.push(pick);
         state.numbers = state.numbers.slice(-20);
         save(); renderNumbers();
@@ -298,6 +312,7 @@
   });
   els.draw.addEventListener('click', draw);
   els.reset.addEventListener('click', function () {
+    stopRoll();
     state.drawn = [];
     state.numbers = [];
     save(); renderChips(); renderNumbers();

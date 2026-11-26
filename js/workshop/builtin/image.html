@@ -94,13 +94,6 @@
 <script>
 (function () {
   'use strict';
-  var params = new URLSearchParams(location.search);
-  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
-  function sendHeight() {
-    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
-  }
-  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
 
   var els = {
     drop: document.getElementById('drop'), file: document.getElementById('file'),
@@ -140,7 +133,6 @@
       els.img.hidden = false;
       els.ph.hidden = true;
       updateTarget();
-      sendHeight();
     };
     reader.readAsDataURL(file);
   }
@@ -169,7 +161,6 @@
       els.outMeta.textContent = canvas.width + ' × ' + canvas.height + ' · ' + human(out.length);
       els.modeTag.textContent = 'Base64 结果';
       toast('已生成 Base64');
-      sendHeight();
     };
     image.onerror = function () { toast('图片读取失败'); };
     image.src = state.dataUrl;
@@ -182,13 +173,13 @@
       if (/^[A-Za-z0-9+/=\s]+$/.test(text)) text = 'data:image/png;base64,' + text.replace(/\s+/g, '');
       else { toast('不是有效的图片 Base64'); return; }
     }
-    els.img.src = text;
+    state.file = null;
     els.img.hidden = false;
     els.ph.hidden = true;
     state.dataUrl = text;
+    els.img.src = text;
     els.modeTag.textContent = 'Base64 → 图片';
     els.outMeta.textContent = '已还原预览，可下载';
-    sendHeight();
   }
 
   els.drop.addEventListener('click', function () { els.file.click(); });
@@ -210,6 +201,13 @@
     loadFile(file);
   });
   els.img.addEventListener('load', updateTarget);
+  els.img.addEventListener('error', function () {
+    els.img.hidden = true;
+    els.ph.hidden = false;
+    state.dataUrl = '';
+    els.dstSize.textContent = '—';
+    toast('无法解析该图片 Base64');
+  });
   els.scale.addEventListener('input', updateTarget);
   els.convert.addEventListener('click', convert);
   els.restore.addEventListener('click', restore);
@@ -220,7 +218,8 @@
     else { els.output.select(); try { document.execCommand('copy'); toast('已复制'); } catch (err) { toast('复制失败'); } }
   });
   els.download.addEventListener('click', function () {
-    var src = els.output.value.trim() || els.img.src;
+    var out = els.output.value.trim();
+    var src = /^data:image\//.test(out) ? out : state.dataUrl;
     if (!src) { toast('没有可下载的图片'); return; }
     var link = document.createElement('a');
     link.href = src;

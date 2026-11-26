@@ -6,6 +6,7 @@
     'use strict';
 
     var NC = global.NC = global.NC || {};
+    var workshopLoading = false;
 
     function render(container, deps) {
         var util = deps.util;
@@ -19,8 +20,6 @@
         var segmented = deps.segmented;
         var openModule = deps.openModule;
         var renderSection = deps.renderSection;
-
-var workshopLoading = false;
 
     function renderWorkshopParams(container) {
         var store = NC.store && NC.store.workshop;
@@ -90,7 +89,7 @@ var workshopLoading = false;
 
         var networkRow = util.e('div', { class: 'sp-row' });
         networkRow.appendChild(util.e('span', { class: 'sp-row__label', text: '允许生成页联网' }));
-        networkRow.appendChild(switchField('关闭后生成页的 fetch / 外链脚本一律被 CSP 拦截', params.allowNetwork !== false, function (checked) {
+        networkRow.appendChild(switchField('关闭后生成页的 fetch / 外链脚本一律被 CSP 拦截', params.allowNetwork === true, function (checked) {
             store.setParams({ allowNetwork: checked });
             setStatus(checked ? '生成页可以访问网络' : '生成页已禁止联网');
         }));
@@ -104,16 +103,21 @@ var workshopLoading = false;
         }));
         card.appendChild(reasonRow);
 
-        var effortRow = util.e('div', { class: 'sp-row' });
+        var effortRow = util.e('div', { class: 'sp-row' + (params.reasoning ? '' : ' is-disabled') });
         effortRow.appendChild(util.e('span', { class: 'sp-row__label', text: '推理强度' }));
-        effortRow.appendChild(segmented([
+        var effortSeg = segmented([
             { value: 'low', label: '低' },
             { value: 'medium', label: '中' },
             { value: 'high', label: '高' }
         ], params.reasoning ? params.effort : '', function (next) {
+            if (!params.reasoning) return;
             store.setParams({ effort: next });
             renderSection('workshop');
-        }));
+        });
+        if (!params.reasoning) {
+            Array.prototype.forEach.call(effortSeg.querySelectorAll('button'), function (btn) { btn.disabled = true; });
+        }
+        effortRow.appendChild(effortSeg);
         card.appendChild(effortRow);
 
         function countRow(label, value, min, max, key, hint) {

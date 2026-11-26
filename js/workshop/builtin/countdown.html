@@ -66,11 +66,6 @@
 <script>
 (function(){
   'use strict';
-  var params=new URLSearchParams(location.search);
-  if(params.get('theme')==='light')document.documentElement.setAttribute('data-theme','light');
-  if(params.get('lite')==='1')document.documentElement.setAttribute('data-lite','true');
-  function sendHeight(){try{parent.postMessage({type:'nc-ws-height',h:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)},'*');}catch(e){}}
-  try{new ResizeObserver(sendHeight).observe(document.documentElement);}catch(e){setInterval(sendHeight,900);}
   var KEY='ws-countdown';
   var list=[];
   try{var raw=JSON.parse(localStorage.getItem(KEY)||'[]');if(Array.isArray(raw))list=raw;}catch(e){}
@@ -82,10 +77,11 @@
     var now=new Date();
     els.today.textContent='今天 '+now.getFullYear()+' 年 '+(now.getMonth()+1)+' 月 '+now.getDate()+' 日';
     els.list.textContent='';
-    var sorted=list.slice().sort(function(a,b){return a.date.localeCompare(b.date);});
-    if(!sorted.length){var e=document.createElement('div');e.className='empty';e.textContent='还没有倒数日，添加一个吧。';els.list.appendChild(e);sendHeight();return;}
+    var sorted=list.slice().sort(function(a,b){return String(a.date||'').localeCompare(String(b.date||''));});
+    if(!sorted.length){var e=document.createElement('div');e.className='empty';e.textContent='还没有倒数日，添加一个吧。';els.list.appendChild(e);return;}
     sorted.forEach(function(item){
       var target=new Date(item.date+'T00:00:00');
+      if(isNaN(target.getTime()))return;
       var diff=Math.round((startOfDay(target)-startOfDay(now))/86400000);
       var card=document.createElement('div');
       card.className='item'+(diff===0?' today':'');
@@ -102,12 +98,12 @@
       card.appendChild(days);card.appendChild(meta);card.appendChild(del);
       els.list.appendChild(card);
     });
-    sendHeight();
   }
   els.add.addEventListener('click',function(){
     var name=els.name.value.trim();
     var date=els.date.value;
-    if(!name||!date)return;
+    if(!name){els.name.focus();return;}
+    if(!date){els.date.focus();return;}
     list.push({id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:name,date:date});
     els.name.value='';
     save();render();

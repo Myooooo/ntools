@@ -164,15 +164,6 @@
 <script>
 (function () {
   'use strict';
-  var params = new URLSearchParams(location.search);
-  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
-
-  function sendHeight() {
-    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) { /* ignore */ }
-  }
-  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
-  window.addEventListener('load', sendHeight);
 
   var els = {
     stage: document.getElementById('stage'), clock: document.getElementById('clock'),
@@ -195,8 +186,7 @@
     startedAt: 0,
     laps: [],
     lastLapAt: 0,
-    tick: null,
-    startedAt: 0
+    tick: null
   };
 
   function pad(n) { return n < 10 ? '0' + n : String(n); }
@@ -218,24 +208,7 @@
   }
 
   function beep() {
-    try {
-      var Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      var ctx = new Ctx();
-      [0, 0.22].forEach(function (offset) {
-        var osc = ctx.createOscillator();
-        var gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = offset ? 1046 : 880;
-        var start = ctx.currentTime + offset;
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.2, start + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + 0.55);
-      });
-    } catch (err) { /* ignore */ }
+    if (window.ncBuiltinPlayBeep) window.ncBuiltinPlayBeep('timer');
   }
 
   function setMode(mode) {
@@ -250,10 +223,11 @@
     state.laps = [];
     state.lastLapAt = 0;
     state.elapsed = 0;
+    state.baseElapsed = 0;
+    state.startedAt = 0;
     if (mode === 'timer') readInputs();
     els.laps.textContent = '';
     render();
-    sendHeight();
   }
 
   function readInputs() {
@@ -283,7 +257,8 @@
       var ratio = state.total ? state.remain / state.total : 0;
       els.bar.style.strokeDasharray = String(CIRC);
       els.bar.style.strokeDashoffset = String(CIRC * (1 - ratio));
-      els.phase.textContent = state.running ? '倒计时中' : (state.remain >= state.total ? '准备开始' : '已暂停');
+      els.bar.style.stroke = '';
+      els.phase.textContent = state.running ? '倒计时中' : (state.remain <= 0 ? '时间到' : (state.remain >= state.total ? '准备开始' : '已暂停'));
     } else {
       els.clock.textContent = formatStopwatch(state.elapsed);
       els.bar.style.strokeDasharray = String(CIRC);
@@ -293,7 +268,6 @@
     }
     els.start.textContent = state.running ? '暂停' : (state.elapsed || state.remain < state.total ? '继续' : '开始');
     els.stage.classList.toggle('is-running', state.running);
-    sendHeight();
   }
 
   function tick() {
@@ -365,7 +339,6 @@
     split.textContent = '+' + formatStopwatch(delta);
     row.appendChild(index); row.appendChild(total); row.appendChild(split);
     els.laps.insertBefore(row, els.laps.firstChild);
-    sendHeight();
   }
 
   document.querySelectorAll('.seg > button').forEach(function (btn) {

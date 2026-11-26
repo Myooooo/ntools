@@ -136,8 +136,31 @@
     /* ------------------------------------------------------------------ *
      * 应用 CRUD
      * ------------------------------------------------------------------ */
+    function handlePersistError(op, err) {
+        state.error = err || new Error(op || 'persist failed');
+        var msg = (err && err.message) ? err.message : '数据保存失败';
+        try {
+            if (NC.events && NC.events.emit && NC.eventNames && NC.eventNames.workshopError) {
+                NC.events.emit(NC.eventNames.workshopError, { op: op, error: err, message: msg });
+            }
+        } catch (e) { /* ignore */ }
+    }
+
     function persistView() {
-        return db().setMeta('view', { order: state.meta.order, pinned: state.meta.pinned }).catch(function () { /* ignore */ });
+        return db().setMeta('view', { order: state.meta.order, pinned: state.meta.pinned })
+            .catch(function (err) { handlePersistError('view', err); });
+    }
+
+    function nextAppOrder() {
+        var max = 990;
+        state.apps.forEach(function (app) {
+            if (typeof app.order === 'number' && isFinite(app.order) && app.order > max) max = app.order;
+        });
+        Object.keys(state.meta.order || {}).forEach(function (id) {
+            var val = state.meta.order[id];
+            if (typeof val === 'number' && isFinite(val) && val > max) max = val;
+        });
+        return max + 10;
     }
 
     function createApp(input) {
@@ -155,10 +178,10 @@
             title: data.title || '未命名应用',
             code: code,
             model: data.model || '',
-            order: Date.now() % 1000000
+            order: nextAppOrder()
         });
         state.apps.set(app.id, app);
-        db().putApp(app).catch(function () { /* ignore */ });
+        db().putApp(app).catch(function (err) { handlePersistError('createApp', err); });
         if (code) pushVersion(app.id, code, '初始版本');
         emit('app:create', { id: app.id });
         return { ok: true, app: app };
@@ -170,7 +193,7 @@
         var s = schema();
         app.title = s.normalizeTitle(title, app.title);
         app.updatedAt = Date.now();
-        db().putApp(app).catch(function () { /* ignore */ });
+        db().putApp(app).catch(function (err) { handlePersistError('renameApp', err); });
         emit('app:rename', { id: id });
         return true;
     }
@@ -184,7 +207,7 @@
         if (next.length > s.LIMITS.appBytes) return { ok: false, reason: 'too-big' };
         app.code = next;
         app.updatedAt = Date.now();
-        db().putApp(app).catch(function () { /* ignore */ });
+        db().putApp(app).catch(function (err) { handlePersistError('updateCode', err); });
         return pushVersion(id, next, label || '调整');
     }
 
@@ -196,7 +219,7 @@
         delete state.meta.order[id];
         delete state.meta.pinned[id];
         persistView();
-        db().deleteApp(id).catch(function () { /* ignore */ });
+        db().deleteApp(id).catch(function (err) { handlePersistError('deleteApp', err); });
         emit('app:delete', { id: id });
         return true;
     }
@@ -206,9 +229,15 @@
      * ------------------------------------------------------------------ */
     function setPinned(id, pinned) {
         if (!id) return false;
-        state.meta.pinned[id] = pinned === true;
+        var next = pinned === true;
+        state.meta.pinned[id] = next;
+        var app = state.apps.get(id);
+        if (app && app.pinned !== next) {
+            app.pinned = next;
+            db().putApp(app).catch(function (err) { handlePersistError('setPinned', err); });
+        }
         persistView();
-        emit('view:pin', { id: id, pinned: state.meta.pinned[id] });
+        emit('view:pin', { id: id, pinned: next });
         return true;
     }
 
@@ -246,9 +275,9 @@
         list.unshift(version);
         while (list.length > s.LIMITS.versions) {
             var dropped = list.pop();
-            db().deleteVersions([dropped.id]).catch(function () { /* ignore */ });
+            db().deleteVersions([dropped.id]).catch(function (err) { handlePersistError('pruneVersions', err); });
         }
-        db().putVersion(version).catch(function () { /* ignore */ });
+        db().putVersion(version).catch(function (err) { handlePersistError('pushVersion', err); });
         emit('version:push', { appId: appId, id: version.id });
         return { ok: true, version: version };
     }
@@ -268,7 +297,7 @@
     /* ------------------------------------------------------------------ *
      * 对话（多轮）
      * ------------------------------------------------------------------ */
-    function addTurn(appId, role, text, code) {
+    function addTurn(appId, role, text) {
         var s = schema();
         if (!appId || (role !== 'user' && role !== 'assistant')) return null;
         var turn = {
@@ -276,7 +305,6 @@
             appId: appId,
             role: role,
             text: String(text == null ? '' : text).slice(0, 20000),
-            code: typeof code === 'string' ? code.slice(0, s.LIMITS.appBytes) : '',
             at: Date.now()
         };
         var list = state.turns.get(appId);
@@ -284,9 +312,9 @@
         list.push(turn);
         while (list.length > s.LIMITS.turns) {
             var dropped = list.shift();
-            db().deleteTurns([dropped.id]).catch(function () { /* ignore */ });
+            db().deleteTurns([dropped.id]).catch(function (err) { handlePersistError('pruneTurns', err); });
         }
-        db().putTurn(turn).catch(function () { /* ignore */ });
+        db().putTurn(turn).catch(function (err) { handlePersistError('addTurn', err); });
         return turn;
     }
 
@@ -297,7 +325,7 @@
     function clearTurns(appId) {
         var list = state.turns.get(appId) || [];
         state.turns.delete(appId);
-        db().deleteTurns(list.map(function (item) { return item.id; })).catch(function () { /* ignore */ });
+        db().deleteTurns(list.map(function (item) { return item.id; })).catch(function (err) { handlePersistError('clearTurns', err); });
     }
 
     /* ------------------------------------------------------------------ *
@@ -310,27 +338,40 @@
     function setParams(patch) {
         var next = schema().normalizeParams(Object.assign({}, getParams(), patch || {}));
         state.params = next;
-        db().setMeta('params', next).catch(function () { /* ignore */ });
+        db().setMeta('params', next).catch(function (err) { handlePersistError('setParams', err); });
         emit('params');
         return next;
     }
 
     function resetParams() {
-        return setParams(schema().defaultParams());
+        var keepEndpoint = getParams().endpointId || '';
+        var next = schema().defaultParams();
+        next.endpointId = keepEndpoint;
+        return setParams(next);
     }
 
     /* ------------------------------------------------------------------ *
      * 统计 / 导出
      * ------------------------------------------------------------------ */
     function stats() {
-        var bytes = 0;
-        state.apps.forEach(function (app) { bytes += (app.code || '').length; });
+        var appBytes = 0;
+        state.apps.forEach(function (app) { appBytes += (app.code || '').length; });
         var versions = 0;
-        state.versions.forEach(function (list) { versions += list.length; });
-        return { apps: state.apps.size, bytes: bytes, versions: versions };
+        var versionBytes = 0;
+        state.versions.forEach(function (list) {
+            versions += list.length;
+            list.forEach(function (v) { versionBytes += (v.code || '').length; });
+        });
+        return {
+            apps: state.apps.size,
+            bytes: appBytes + versionBytes,
+            appBytes: appBytes,
+            versionBytes: versionBytes,
+            versions: versions
+        };
     }
 
-    /** 从备份恢复：整体替换（apps / versions / turns / 参数 / 排序） */
+    /** 从备份恢复：先写持久层再替换内存态（apps / versions / turns / 参数 / 排序） */
     function importData(data) {
         var s = schema();
         var incoming = data && typeof data === 'object' ? data : {};
@@ -344,25 +385,27 @@
             return turn && typeof turn === 'object' && turn.appId;
         });
         var view = incoming.view && typeof incoming.view === 'object' ? incoming.view : {};
-        var params = s.normalizeParams(incoming.params || {});
-
-        state.apps = new Map();
-        apps.forEach(function (app) { state.apps.set(app.id, app); });
-        state.versions = groupBy(versions, 'appId');
-        state.versions.forEach(function (list) { list.sort(function (a, b) { return b.at - a.at; }); });
-        state.turns = groupBy(turns, 'appId');
-        state.turns.forEach(function (list) { list.sort(function (a, b) { return a.at - b.at; }); });
-        state.meta = {
+        var meta = {
             order: view.order && typeof view.order === 'object' ? view.order : {},
             pinned: view.pinned && typeof view.pinned === 'object' ? view.pinned : {}
         };
-        state.params = params;
+        var params = s.normalizeParams(incoming.params || {});
+
         return db().replaceAll({
-            apps: apps, versions: versions, turns: turns, view: state.meta, params: params
+            apps: apps, versions: versions, turns: turns, view: meta, params: params
         }).then(function () {
+            state.apps = new Map();
+            apps.forEach(function (app) { state.apps.set(app.id, app); });
+            state.versions = groupBy(versions, 'appId');
+            state.versions.forEach(function (list) { list.sort(function (a, b) { return b.at - a.at; }); });
+            state.turns = groupBy(turns, 'appId');
+            state.turns.forEach(function (list) { list.sort(function (a, b) { return a.at - b.at; }); });
+            state.meta = meta;
+            state.params = params;
             emit('import');
             return { ok: true, apps: apps.length };
         }, function (err) {
+            handlePersistError('importData', err);
             return { ok: false, error: err };
         });
     }

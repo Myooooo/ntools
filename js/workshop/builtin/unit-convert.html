@@ -71,11 +71,6 @@
 <script>
 (function(){
   'use strict';
-  var params=new URLSearchParams(location.search);
-  if(params.get('theme')==='light')document.documentElement.setAttribute('data-theme','light');
-  if(params.get('lite')==='1')document.documentElement.setAttribute('data-lite','true');
-  function sendHeight(){try{parent.postMessage({type:'nc-ws-height',h:Math.max(document.documentElement.scrollHeight,document.body.scrollHeight)},'*');}catch(e){}}
-  try{new ResizeObserver(sendHeight).observe(document.documentElement);}catch(e){setInterval(sendHeight,900);}
 
   var DATA=[
     {id:'length',label:'长度',base:'米',units:[
@@ -126,7 +121,7 @@
       var b=document.createElement('button');b.type='button';b.textContent=c.label;
       if(c.id===state.cat)b.classList.add('on');
       b.addEventListener('click',function(){
-        state.cat=c.id;state.from=c.units[0].k;state.to=(c.units[1]||c.units[0]).k;render();save();
+        state.cat=c.id;state.from=c.units[0].k;state.to=(c.units[1]||c.units[0]).k;renderStructure();compute();save();
       });
       els.cats.appendChild(b);
     });
@@ -145,30 +140,33 @@
     els.quick.textContent='';
     [0.5,1,2,5,10,100].forEach(function(v){
       var b=document.createElement('button');b.type='button';b.className='chip';b.textContent=String(v);
-      b.addEventListener('click',function(){els.from.value=String(v);render();});
+      b.addEventListener('click',function(){els.from.value=String(v);compute();});
       els.quick.appendChild(b);
     });
   }
   function save(){try{localStorage.setItem('ws-unit',JSON.stringify(state));}catch(e){}}
   function load(){try{var s=JSON.parse(localStorage.getItem('ws-unit')||'null');if(s&&s.cat&&s.from&&s.to)state=s;}catch(e){}}
-  function render(){
+  function renderStructure(){
     renderCats();fillUnits();
+  }
+  function compute(){
     var value=Number(els.from.value);
     if(!isFinite(value))value=0;
     var out=convert(value);
     els.to.value=fmt(out);
     els.result.textContent=fmt(out)+' '+unitOf(state.to).n;
     els.formula.textContent=fmt(value)+' '+unitOf(state.from).n+' = '+fmt(out)+' '+unitOf(state.to).n;
-    sendHeight();
   }
-  els.from.addEventListener('input',function(){render();});
-  els.fromUnit.addEventListener('change',function(){state.from=els.fromUnit.value;render();save();});
-  els.toUnit.addEventListener('change',function(){state.to=els.toUnit.value;render();save();});
+  els.from.addEventListener('input',function(){compute();});
+  els.fromUnit.addEventListener('change',function(){state.from=els.fromUnit.value;compute();save();});
+  els.toUnit.addEventListener('change',function(){state.to=els.toUnit.value;compute();save();});
   document.getElementById('swap').addEventListener('click',function(){
     var a=state.from;state.from=state.to;state.to=a;
-    var v=els.to.value;els.from.value=v||els.from.value;render();save();
+    var v=els.to.value;
+    if(v&&v!=='—'&&isFinite(Number(v)))els.from.value=v;
+    renderStructure();compute();save();
   });
-  load();renderQuick();render();
+  load();renderQuick();renderStructure();compute();
 })();
 </script>
 </body>

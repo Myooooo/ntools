@@ -41,6 +41,7 @@
         todoSnapshot: 'todo:snapshot',
         todoAiFilled: 'todo:ai-filled',
         todoAiReady: 'todo-ai:ready',
-        workshopChanged: 'workshop:changed'
+        workshopChanged: 'workshop:changed',
+        workshopError: 'workshop:error'
     };
 })(window);

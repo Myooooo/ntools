@@ -98,13 +98,6 @@
 <script>
 (function () {
   'use strict';
-  var params = new URLSearchParams(location.search);
-  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
-  function sendHeight() {
-    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
-  }
-  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
 
   var KEY = 'ws-worldclock-v2';
   var CITIES = [
@@ -253,12 +246,15 @@
 
     var time = document.createElement('div');
     time.className = 'time num';
-    time.textContent = p.hour + ':' + p.minute;
+    var hm = document.createElement('span');
+    hm.className = 'hm';
+    hm.textContent = p.hour + ':' + p.minute;
     var seconds = document.createElement('small');
     seconds.textContent = ':' + p.second;
+    time.appendChild(hm);
     time.appendChild(seconds);
     card.appendChild(time);
-    refs.push({ city: city, card: card, time: time, seconds: seconds, hour: hour });
+    refs.push({ city: city, card: card, hm: hm, seconds: seconds, hour: hour });
 
     var date = document.createElement('div');
     date.className = 'date';
@@ -360,7 +356,6 @@
       empty.appendChild(emptyTitle);
       empty.appendChild(emptyHint);
       els.grid.appendChild(empty);
-      sendHeight();
       return;
     }
     selected.forEach(function (id) {
@@ -370,22 +365,25 @@
       if (card) els.grid.appendChild(card);
     });
     tick();
-    sendHeight();
   }
 
   function tick() {
     var now = new Date();
+    var localParts = partsOf(now, Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai');
+    if (localParts) {
+      els.local.textContent = '本地时间 ' + localParts.year + '/' + localParts.month + '/' + localParts.day + ' ' +
+        localParts.hour + ':' + localParts.minute + ':' + localParts.second;
+    }
     refs.forEach(function (ref) {
       var p = partsOf(now, ref.city.id);
       if (!p) return;
       var hour = Number(p.hour) % 24;
-      ref.time.textContent = p.hour + ':' + p.minute;
+      ref.hm.textContent = p.hour + ':' + p.minute;
       ref.seconds.textContent = ':' + p.second;
       ref.date.textContent = p.year + '/' + p.month + '/' + p.day + ' · ' + weekday(now, ref.city.id) + ' · ' + dayText(hour);
       var night = hour < 6 || hour >= 18;
       ref.card.classList.toggle('is-night', night);
     });
-    sendHeight();
   }
 
   document.getElementById('add').addEventListener('click', function () {

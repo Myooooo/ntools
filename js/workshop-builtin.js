@@ -11,8 +11,7 @@
     var NC = global.NC = global.NC || {};
 
     var CATEGORIES = [
-        { id: 'office', label: '办公实用' },
-        { id: 'fun', label: '效率趣味' },
+        { id: 'builtin', label: '内置' },
         { id: 'custom', label: '自定义' }
     ];
 

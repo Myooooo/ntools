@@ -78,6 +78,39 @@
     pointer-events: none;
 }
 
+#ws-filter {
+    padding-right: 30px;
+}
+
+.ws-search__clear {
+    position: absolute;
+    top: 6px;
+    right: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--nc-radius-xs);
+    color: var(--nc-text-3);
+}
+
+.ws-search__clear[hidden] {
+    display: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .ws-search__clear:hover {
+        color: var(--nc-text);
+        background: var(--nc-surface-2);
+    }
+}
+
+#ws-edit-btn[aria-pressed="true"] {
+    background: var(--nc-accent-soft);
+    color: var(--nc-accent);
+}
+
 .ws-list {
     flex: 1;
     min-height: 0;
@@ -626,7 +659,7 @@ html[data-lite="true"] .ws-loading {
 @media (max-width: 1100px) {
     .ws-chat {
         position: absolute;
-        z-index: 7;
+        z-index: 8;
         top: 0;
         right: 0;
         bottom: 0;
@@ -812,10 +845,45 @@ html[data-lite="true"] .ws-loading {
     word-break: break-word;
 }
 
+.ws-error-row__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 2px;
+}
+
 .ws-error-row time {
     color: var(--nc-text-3);
     font-size: var(--nc-fs-2xs);
     font-variant-numeric: tabular-nums;
+}
+
+.ws-error-fix {
+    font-size: var(--nc-fs-2xs);
+    color: var(--nc-accent);
+    padding: 1px 6px;
+    border-radius: var(--nc-radius-xs);
+}
+
+.ws-error-fix:hover {
+    background: var(--nc-accent-soft);
+}
+
+.ws-source-pre {
+    margin: 0;
+    padding: 12px 14px;
+    max-height: 60vh;
+    overflow: auto;
+    border-radius: var(--nc-radius-md);
+    border: 1px solid var(--nc-border-faint);
+    background: var(--nc-bg-2, var(--nc-surface-2));
+    color: var(--nc-text);
+    font-family: var(--nc-font-mono);
+    font-size: 12px;
+    line-height: 1.55;
+    white-space: pre;
+    tab-size: 2;
 }
 
 /* ---------- 内置工具加载骨架 ---------- */

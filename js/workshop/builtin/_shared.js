@@ -251,12 +251,63 @@
                 childList: true, subtree: true, characterData: true
             });
         } catch (err) { /* ignore */ }
+        try {
+            var valDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+            if (valDesc && valDesc.get && valDesc.set) {
+                Object.defineProperty(select, 'value', {
+                    configurable: true,
+                    get: function () { return valDesc.get.call(this); },
+                    set: function (v) { valDesc.set.call(this, v); sync(this); }
+                });
+            }
+            var idxDesc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');
+            if (idxDesc && idxDesc.get && idxDesc.set) {
+                Object.defineProperty(select, 'selectedIndex', {
+                    configurable: true,
+                    get: function () { return idxDesc.get.call(this); },
+                    set: function (v) { idxDesc.set.call(this, v); sync(this); }
+                });
+            }
+        } catch (err) { /* ignore */ }
     }
 
     function enhanceAll(root) {
         var scope = root || document;
         Array.prototype.forEach.call(scope.querySelectorAll('select'), enhance);
     }
+
+    window.ncBuiltinSyncSelect = sync;
+    window.ncBuiltinEnhanceSelects = enhanceAll;
+
+    var sharedAudioCtx = null;
+    window.ncBuiltinPlayBeep = function (kind) {
+        try {
+            var Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+            if (sharedAudioCtx.state === 'suspended' && sharedAudioCtx.resume) {
+                sharedAudioCtx.resume().catch(function () {});
+            }
+            var seq = kind === 'focus'
+                ? [[523, 0, 0.2], [659, 0.2, 0.35]]
+                : (kind === 'break'
+                    ? [[659, 0, 0.16], [784, 0.16, 0.16], [1046, 0.32, 0.35]]
+                    : [[880, 0, 0.24], [880, 0.26, 0.24], [1046, 0.52, 0.4]]);
+            var base = sharedAudioCtx.currentTime;
+            seq.forEach(function (note) {
+                var osc = sharedAudioCtx.createOscillator();
+                var gain = sharedAudioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = note[0];
+                gain.gain.setValueAtTime(0.08, base + note[1]);
+                gain.gain.exponentialRampToValueAtTime(0.001, base + note[1] + note[2]);
+                osc.connect(gain);
+                gain.connect(sharedAudioCtx.destination);
+                osc.start(base + note[1]);
+                osc.stop(base + note[1] + note[2]);
+            });
+        } catch (err) { /* ignore */ }
+    };
 
     window.ncBuiltinCopy = function (text) {
         var value = String(text == null ? '' : text);

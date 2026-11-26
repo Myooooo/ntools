@@ -13,12 +13,14 @@
 
     var ACTIVE_KEY = 'ntools.workshop.active';
     var DRAFT_ID = '__ws_draft__';
+    var DEFAULT_EMPTY_TITLE = '选择一个工具开始';
+    var DEFAULT_EMPTY_HINT = '内置工具开箱即用；也可以新建一个只属于你的小应用。';
 
     var els = {};
     var store = null;
     var schema = null;
     var unsubscribe = null;
-    var drag = { id: null, category: null };
+    var drag = { id: null, group: null };
     var host = null;
     var lastFailedPrompt = '';
     var sideRelease = null;
@@ -28,12 +30,14 @@
         filter: '',
         sideCollapsed: false,
         sideOpen: false,
-        lastError: ''
+        chatOpen: false,
+        lastError: '',
+        lastAllowNetwork: null
     };
 
     /* 草稿：未保存前只在内存里，点「保存」才落库 */
     var draft = {
-        active: false,
+        unsaved: false,
         appId: null,
         title: '',
         code: '',
@@ -41,15 +45,21 @@
         streaming: false,
         controller: null,
         startedAt: 0,
-        timer: null
+        timer: null,
+        genId: 0,
+        dirty: false
     };
 
+    function isDraftSelected() {
+        return !!(draft.unsaved && !state.activeId);
+    }
+
     function hasDraftItem() {
-        return !!(draft.active && !draft.appId && (draft.code || draft.turns.length || draft.streaming));
+        return !!(draft.unsaved && (draft.code || draft.turns.length || draft.streaming));
     }
 
     function hasUnsavedDraft() {
-        return !!(draft.active && !draft.appId && draft.code);
+        return !!(draft.unsaved && draft.dirty && draft.code);
     }
 
     function $(id) { return document.getElementById(id); }
@@ -100,11 +110,15 @@
         });
     }
 
+    function visualGroupOf(item) {
+        return (item && item.pinned ? 'pinned:' : 'free:') + ((item && item.kind) || 'custom');
+    }
+
     function bindDrag(row, item) {
         row.draggable = true;
         row.addEventListener('dragstart', function (event) {
             drag.id = item.id;
-            drag.category = item.category;
+            drag.group = visualGroupOf(item);
             row.classList.add('is-dragging');
             try {
                 event.dataTransfer.effectAllowed = 'move';
@@ -115,10 +129,10 @@
             row.classList.remove('is-dragging');
             clearDropMarks();
             drag.id = null;
-            drag.category = null;
+            drag.group = null;
         });
         row.addEventListener('dragover', function (event) {
-            if (!drag.id || drag.category !== item.category || drag.id === item.id) return;
+            if (!drag.id || drag.group !== visualGroupOf(item) || drag.id === item.id) return;
             event.preventDefault();
             var rect = row.getBoundingClientRect();
             var before = event.clientY < rect.top + rect.height / 2;
@@ -132,10 +146,10 @@
             event.preventDefault();
             var before = row.classList.contains('is-drop-before');
             clearDropMarks();
-            if (!drag.id || drag.category !== item.category || drag.id === item.id) return;
-            reorderWithin(item.category, drag.id, item.id, before);
+            if (!drag.id || drag.group !== visualGroupOf(item) || drag.id === item.id) return;
+            reorderWithin(item.kind || 'custom', drag.id, item.id, before);
             drag.id = null;
-            drag.category = null;
+            drag.group = null;
         });
     }
 
@@ -153,7 +167,7 @@
                     if (entry.id === fromId) fromIndex = index;
                     if (entry.id === toId) toIndex = index;
                 });
-                if (fromIndex > -1 && toIndex > -1) {
+                if (fromIndex > -1 && toIndex > -1 && !!list[fromIndex].pinned === !!list[toIndex].pinned) {
                     var moved = list.splice(fromIndex, 1)[0];
                     toIndex = list.map(function (entry) { return entry.id; }).indexOf(toId);
                     if (toIndex < 0) toIndex = list.length;
@@ -170,8 +184,8 @@
 
     function itemRow(item) {
         var isActive = item.isDraft
-            ? (draft.active && !draft.appId)
-            : (item.id === state.activeId && !(draft.active && !draft.appId));
+            ? isDraftSelected()
+            : (!isDraftSelected() && item.id === state.activeId);
         var row = document.createElement('div');
         row.className = 'ws-item' + (isActive ? ' is-active' : '') + (item.isDraft ? ' is-draft' : '');
         row.setAttribute('role', 'listitem');
@@ -311,6 +325,7 @@
      * ------------------------------------------------------------------ */
     function clearFrame() {
         showSkeleton(false);
+        state.lastAllowNetwork = null;
         if (host) host.clear();
     }
 
@@ -322,7 +337,7 @@
             if (!host || !host.postTheme(currentTheme(), isLite())) reloadFrame();
             return;
         }
-        if (!draft.active && !item) return;
+        if (!isDraftSelected() && !item) return;
         if (!host || !host.postTheme(currentTheme(), isLite())) {
             if (!fromLoad) reloadFrame();
         }
@@ -334,8 +349,17 @@
         else els.skeleton.setAttribute('hidden', '');
     }
 
+    function setEmptyText(titleText, hintText) {
+        if (!els.empty) return;
+        var title = els.empty.querySelector('.ws-empty__title');
+        var hint = els.empty.querySelector('.ws-empty__hint');
+        if (title) title.textContent = titleText || DEFAULT_EMPTY_TITLE;
+        if (hint) hint.textContent = hintText || DEFAULT_EMPTY_HINT;
+    }
+
     function openBuiltin(item) {
         resetErrors();
+        state.lastAllowNetwork = null;
         var src = item.file + '?theme=' + currentTheme() + '&lite=' + (isLite() ? '1' : '0');
         showSkeleton(true);
         if (host) host.mountUrl(src, { trusted: true });
@@ -349,9 +373,12 @@
         showSkeleton(false);
         resetErrors();
         var params = store.getParams();
+        var allowNet = params.allowNetwork === true;
+        state.lastAllowNetwork = allowNet;
         var html = schema.wrapHtml(item.code || '', {
             theme: currentTheme(),
-            allowNetwork: params.allowNetwork === true,
+            lite: isLite(),
+            allowNetwork: allowNet,
             title: item.title
         });
         if (host) host.mountHtml(html, { trusted: false });
@@ -359,6 +386,22 @@
         els.frame.style.height = '';
         els.frame.style.width = '';
         setHidden(els.empty, true);
+    }
+
+    function openChatForError(message) {
+        toggleErrors(false);
+        var item = currentItem();
+        if (isDraftSelected()) {
+            showChat(true);
+        } else if (item && item.kind === 'custom') {
+            if (!state.chatOpen || draft.appId !== item.id) openChatForApp(item.id);
+        } else {
+            return;
+        }
+        if (els.prompt) {
+            els.prompt.value = '请修复页面运行报错：\n' + String(message || '').slice(0, 300);
+            els.prompt.focus();
+        }
     }
 
     function renderErrors() {
@@ -374,15 +417,30 @@
         }
         if (!els.errorsList) return;
         els.errorsList.textContent = '';
+        var activeItem = currentItem();
+        var canAiFix = isDraftSelected() || (activeItem && activeItem.kind === 'custom');
         errors.forEach(function (entry) {
             var row = document.createElement('div');
             row.className = 'ws-error-row';
             var text = document.createElement('span');
             text.textContent = entry.message;
+            var foot = document.createElement('div');
+            foot.className = 'ws-error-row__foot';
             var time = document.createElement('time');
             time.textContent = new Date(entry.at).toLocaleTimeString('zh-CN', { hour12: false });
+            foot.appendChild(time);
+            if (canAiFix) {
+                var fixBtn = document.createElement('button');
+                fixBtn.type = 'button';
+                fixBtn.className = 'ws-error-fix';
+                fixBtn.textContent = '让 AI 修复';
+                fixBtn.addEventListener('click', function () {
+                    openChatForError(entry.message);
+                });
+                foot.appendChild(fixBtn);
+            }
             row.appendChild(text);
-            row.appendChild(time);
+            row.appendChild(foot);
             els.errorsList.appendChild(row);
         });
     }
@@ -408,22 +466,66 @@
         return null;
     }
 
-    function renderActive() {
-        if (draft.active) return;
-        var item = currentItem();
-        if (els.title) els.title.textContent = item ? item.title : '选择一个工具';
-        if (els.kind) {
-            if (item) {
-                els.kind.hidden = false;
-                els.kind.textContent = item.kind === 'builtin' ? '内置' : '自定义';
-            } else {
-                els.kind.hidden = true;
+    function syncHeader() {
+        if (isDraftSelected()) {
+            if (els.title) els.title.textContent = draft.title || '新应用';
+            if (els.kind) { els.kind.hidden = false; els.kind.textContent = '草稿'; }
+            if (els.pin) { els.pin.disabled = true; els.pin.setAttribute('aria-pressed', 'false'); }
+            if (els.reloadBtn) els.reloadBtn.hidden = !draft.code;
+            if (els.versions) els.versions.hidden = true;
+            if (els.editBtn) {
+                els.editBtn.hidden = false;
+                els.editBtn.setAttribute('aria-pressed', state.chatOpen ? 'true' : 'false');
             }
+            if (els.sourceBtn) els.sourceBtn.hidden = !draft.code;
+            if (els.exportBtn) els.exportBtn.hidden = !draft.code;
+            if (els.save) els.save.hidden = draft.streaming || !draft.code;
+            return;
         }
-        if (els.pin) els.pin.setAttribute('aria-pressed', item && item.pinned ? 'true' : 'false');
-        if (els.exportBtn) els.exportBtn.hidden = !(item && item.kind === 'custom' && item.code);
-        if (els.editBtn) els.editBtn.hidden = !(item && item.kind === 'custom');
+        var item = currentItem();
         if (!item) {
+            if (els.title) els.title.textContent = '选择一个工具';
+            if (els.kind) els.kind.hidden = true;
+            if (els.pin) { els.pin.disabled = true; els.pin.setAttribute('aria-pressed', 'false'); }
+            if (els.reloadBtn) els.reloadBtn.hidden = true;
+            if (els.versions) els.versions.hidden = true;
+            if (els.editBtn) { els.editBtn.hidden = true; els.editBtn.setAttribute('aria-pressed', 'false'); }
+            if (els.sourceBtn) els.sourceBtn.hidden = true;
+            if (els.exportBtn) els.exportBtn.hidden = true;
+            if (els.save) els.save.hidden = true;
+            return;
+        }
+        var isCustom = item.kind === 'custom';
+        if (els.title) els.title.textContent = item.title;
+        if (els.kind) { els.kind.hidden = false; els.kind.textContent = isCustom ? '自定义' : '内置'; }
+        if (els.pin) { els.pin.disabled = false; els.pin.setAttribute('aria-pressed', item.pinned ? 'true' : 'false'); }
+        if (els.reloadBtn) els.reloadBtn.hidden = false;
+        /* 内置工具禁止展示版本历史按钮 */
+        if (els.versions) els.versions.hidden = !(isCustom && store.listVersions(item.id).length > 0);
+        if (els.editBtn) {
+            els.editBtn.hidden = !isCustom;
+            els.editBtn.setAttribute('aria-pressed', (isCustom && state.chatOpen) ? 'true' : 'false');
+        }
+        if (els.sourceBtn) els.sourceBtn.hidden = !(isCustom && item.code);
+        if (els.exportBtn) els.exportBtn.hidden = !(isCustom && item.code);
+        if (els.save) els.save.hidden = true;
+    }
+
+    function renderActive() {
+        syncHeader();
+        if (isDraftSelected()) {
+            if (draft.code) {
+                renderDraft();
+            } else {
+                clearFrame();
+                setEmptyText('描述你想要的工具', '用一句话描述，例如「做一个番茄钟，25 分钟专注、结束提示音」。');
+                setHidden(els.empty, false);
+            }
+            return;
+        }
+        var item = currentItem();
+        if (!item) {
+            setEmptyText(DEFAULT_EMPTY_TITLE, DEFAULT_EMPTY_HINT);
             clearFrame();
             setHidden(els.empty, false);
             return;
@@ -433,9 +535,11 @@
     }
 
     function resetDraftState() {
+        draft.genId += 1;
         if (draft.streaming) stopGeneration();
         stopTimer();
-        draft.active = false;
+        draft.unsaved = false;
+        draft.dirty = false;
         draft.appId = null;
         draft.title = '';
         draft.code = '';
@@ -491,37 +595,26 @@
     function performSelectItem(id) {
         if (!id) return;
         if (id === DRAFT_ID) {
-            if (draft.active && !draft.appId) {
+            if (draft.unsaved) {
+                state.activeId = null;
                 showChat(true);
-                renderDraft();
                 renderList();
+                renderActive();
                 if (state.sideOpen) toggleSide(false);
             }
             return;
         }
-        if (state.activeId === id && draft.active && draft.appId === id) {
-            showChat(true);
-            renderList();
+        if (state.activeId === id && !isDraftSelected()) {
             if (state.sideOpen) toggleSide(false);
             return;
         }
         if (draft.streaming) stopGeneration();
-        draft.active = false;
-        draft.appId = null;
+        resetDraftState();
         showChat(false);
-        if (els.save) els.save.hidden = true;
-        if (els.exportBtn) els.exportBtn.hidden = true;
-        if (els.editBtn) els.editBtn.hidden = true;
-        if (els.pin) els.pin.disabled = false;
         state.activeId = id;
         writeActive(id);
         renderList();
-        var item = currentItem();
-        if (item && item.kind === 'custom') {
-            enterEdit(id);
-        } else {
-            renderActive();
-        }
+        renderActive();
         if (state.sideOpen) toggleSide(false);
     }
 
@@ -541,6 +634,12 @@
     }
 
     function reloadFrame() {
+        if (isDraftSelected()) {
+            if (!draft.code) return;
+            state.lastError = '';
+            renderDraft();
+            return;
+        }
         var item = currentItem();
         if (!item) return;
         state.lastError = '';
@@ -548,13 +647,14 @@
     }
 
     function togglePin() {
-        if (draft.active) return;
+        if (isDraftSelected()) return;
         var item = currentItem();
         if (!item) return;
+        var nextPinned = !item.pinned;
         store.togglePinned(item.id);
         renderList();
-        if (els.pin) els.pin.setAttribute('aria-pressed', store.list().filter(function (x) { return x.id === item.id; })[0].pinned ? 'true' : 'false');
-        toast(item.pinned ? '已取消置顶' : '已置顶', 'success');
+        syncHeader();
+        toast(nextPinned ? '已置顶' : '已取消置顶', 'success');
     }
 
     function applySideCollapsed(collapsed) {
@@ -596,10 +696,12 @@
 
     function moveInList(item, delta) {
         var all = store.list();
-        var sameKind = all.filter(function (entry) { return entry.kind === item.kind; });
+        var sameGroup = all.filter(function (entry) {
+            return entry.kind === item.kind && !!entry.pinned === !!item.pinned;
+        });
         var index = -1;
-        sameKind.forEach(function (entry, i) { if (entry.id === item.id) index = i; });
-        var target = sameKind[index + delta];
+        sameGroup.forEach(function (entry, i) { if (entry.id === item.id) index = i; });
+        var target = sameGroup[index + delta];
         if (index < 0 || !target) return false;
         var ordered = [];
         ['builtin', 'custom'].forEach(function (kind) {
@@ -613,6 +715,22 @@
             list.forEach(function (entry) { ordered.push(entry.id); });
         });
         return store.applyOrder(ordered);
+    }
+
+    function editCustomItem(id) {
+        var open = function () {
+            if (state.activeId !== id || isDraftSelected()) {
+                performSelectItem(id);
+            }
+            openChatForApp(id);
+        };
+        if (hasUnsavedDraft()) {
+            confirmLeaveDraft('编辑').then(function (ok) {
+                if (ok) open();
+            });
+            return;
+        }
+        open();
     }
 
     function openItemMenu(item, anchor) {
@@ -650,7 +768,7 @@
             {
                 label: item.pinned ? '取消置顶' : '置顶',
                 icon: 'pin',
-                onSelect: function () { store.togglePinned(item.id); renderList(); }
+                onSelect: function () { store.togglePinned(item.id); renderList(); syncHeader(); }
             }
         ];
         items.push({
@@ -667,7 +785,7 @@
             items.push({
                 label: '编辑（对话调整）',
                 icon: 'edit',
-                onSelect: function () { selectItem(item.id); }
+                onSelect: function () { editCustomItem(item.id); }
             });
             items.push({
                 label: '重命名',
@@ -677,11 +795,12 @@
                         .then(function (next) {
                             if (!next) return;
                             if (store.renameApp(item.id, next)) {
-                                if (state.activeId === item.id) {
-                                    draft.title = store.getApp(item.id).title;
-                                    if (els.title) els.title.textContent = draft.title;
+                                var renamed = store.getApp(item.id);
+                                if (draft.appId === item.id && renamed) {
+                                    draft.title = renamed.title;
                                 }
                                 renderList();
+                                syncHeader();
                                 toast('已重命名', 'success');
                             }
                         });
@@ -697,8 +816,11 @@
                             if (!ok) return;
                             store.deleteApp(item.id);
                             if (state.activeId === item.id) {
-                                state.activeId = null;
-                                writeActive('');
+                                var nextList = store.list();
+                                resetDraftState();
+                                showChat(false);
+                                state.activeId = nextList.length ? nextList[0].id : null;
+                                writeActive(state.activeId || '');
                                 renderActive();
                             }
                             renderList();
@@ -793,6 +915,8 @@
     var chatHideTimer = null;
 
     function showChat(show) {
+        state.chatOpen = !!show;
+        syncHeader();
         if (!els.chat) return;
         if (show) {
             if (chatHideTimer) { global.clearTimeout(chatHideTimer); chatHideTimer = null; }
@@ -859,41 +983,27 @@
     }
 
     function performEnterDraft() {
-        if (draft.streaming) stopGeneration();
-        draft.active = true;
+        resetDraftState();
+        draft.unsaved = true;
+        draft.dirty = false;
         draft.appId = null;
         draft.title = '新应用';
         draft.code = '';
         draft.turns = [];
         state.activeId = null;
-        writeActive('');
-        renderList();
-        showChat(true);
-        clearFrame();
-        setHidden(els.empty, false);
-        if (els.empty) {
-            var title = els.empty.querySelector('.ws-empty__title');
-            var hint = els.empty.querySelector('.ws-empty__hint');
-            if (title) title.textContent = '描述你想要的工具';
-            if (hint) hint.textContent = '用一句话描述，例如「做一个番茄钟，25 分钟专注、结束提示音」。';
-        }
-        if (els.title) els.title.textContent = '新应用';
-        if (els.kind) { els.kind.hidden = false; els.kind.textContent = '草稿'; }
-        if (els.pin) { els.pin.disabled = true; els.pin.setAttribute('aria-pressed', 'false'); }
-        if (els.save) els.save.hidden = true;
-        if (els.exportBtn) els.exportBtn.hidden = true;
-        if (els.editBtn) els.editBtn.hidden = true;
-        if (els.versions) els.versions.hidden = true;
         if (els.loading) els.loading.hidden = true;
         if (els.prompt) {
             els.prompt.value = '';
             els.prompt.readOnly = false;
-            els.prompt.focus();
         }
         clearChatLog();
         setChatHint('Enter 发送 · Shift+Enter 换行');
         if (els.generateBtn) { els.generateBtn.disabled = false; els.generateBtn.textContent = '生成'; }
         appendChat('bot', '说说你想要的小工具：用来做什么、大概长什么样。我会直接生成一个可运行的单页应用。');
+        renderList();
+        renderActive();
+        showChat(true);
+        if (els.prompt) els.prompt.focus();
     }
 
     function enterDraft() {
@@ -906,21 +1016,20 @@
         performEnterDraft();
     }
 
-    /** 打开已保存的自定义应用：进入可对话调整的编辑态（改动自动落库） */
-    function enterEdit(appId) {
+    /** 打开已保存的自定义应用的对话调整抽屉（不重载已在运行的预览，改动自动落库） */
+    function openChatForApp(appId) {
         var app = store.getApp(appId);
-        if (!app) return false;
+        if (!app || app.kind !== 'custom') return false;
         if (draft.streaming) stopGeneration();
-        draft.active = true;
+        draft.genId += 1;
+        draft.unsaved = false;
+        draft.dirty = false;
         draft.appId = appId;
         draft.title = app.title;
         draft.code = app.code || '';
         draft.turns = store.listTurns(appId).map(function (turn) {
             return { role: turn.role, content: turn.text };
         });
-        state.activeId = appId;
-        writeActive(appId);
-        showChat(true);
         clearChatLog();
         draft.turns.forEach(function (turn) {
             appendChat(turn.role === 'user' ? 'user' : 'bot', turn.content);
@@ -928,23 +1037,19 @@
         if (!draft.turns.length) {
             appendChat('bot', '这是你保存的应用。想改哪里直接说，比如「把主色换成蓝色」「加一个导出按钮」。');
         }
-        if (els.title) els.title.textContent = app.title;
-        if (els.kind) { els.kind.hidden = false; els.kind.textContent = '自定义'; }
-        if (els.pin) els.pin.disabled = false;
-        if (els.save) els.save.hidden = true;
-        if (els.versions) els.versions.hidden = store.listVersions(appId).length === 0;
-        if (els.exportBtn) els.exportBtn.hidden = !app.code;
-        if (els.editBtn) els.editBtn.hidden = false;
         if (els.prompt) { els.prompt.value = ''; els.prompt.readOnly = false; }
         setChatHint('Enter 发送 · Shift+Enter 换行');
-        renderDraft();
-        renderList();
+        if (els.generateBtn) { els.generateBtn.disabled = false; els.generateBtn.textContent = '生成'; }
+        showChat(true);
+        if (els.prompt) els.prompt.focus();
         return true;
     }
 
     function openVersions(anchor) {
-        if (!draft.appId) return;
-        var versions = store.listVersions(draft.appId);
+        var item = currentItem();
+        if (!item || item.kind !== 'custom') return;
+        var appId = item.id;
+        var versions = store.listVersions(appId);
         if (!versions.length) { toast('还没有历史版本', 'info'); return; }
         var items = versions.map(function (version, index) {
             var time = new Date(version.at);
@@ -955,12 +1060,12 @@
                 icon: index === 0 ? 'check' : 'repeat',
                 onSelect: function () {
                     if (index === 0) return;
-                    if (store.restoreVersion(draft.appId, version.id)) {
-                        var app = store.getApp(draft.appId);
-                        draft.code = app ? app.code : draft.code;
-                        renderDraft();
+                    if (store.restoreVersion(appId, version.id)) {
+                        var app = store.getApp(appId);
+                        if (draft.appId === appId && app) draft.code = app.code;
+                        if (app) openCustom(app);
+                        syncHeader();
                         toast('已恢复到该版本', 'success');
-                        if (els.versions) els.versions.hidden = false;
                         renderList();
                     } else {
                         toast('恢复失败', 'error');
@@ -998,7 +1103,7 @@
             els.generateBtn.disabled = on;
             els.generateBtn.textContent = on ? '生成中…' : '生成';
         }
-        if (els.save) els.save.hidden = on || !draft.code || !!draft.appId;
+        syncHeader();
         setChatHint(on ? '正在生成，可随时停止' : 'Enter 发送 · Shift+Enter 换行');
     }
 
@@ -1038,6 +1143,7 @@
         }
         draft.code = parsed.code;
         if (!draft.appId) {
+            draft.dirty = true;
             draft.title = deriveTitle(prompt || draft.title);
             /* 标题优先用页面 <title> */
             var titleMatch = /<title[^>]*>([^<]{1,40})<\/title>/i.exec(parsed.code);
@@ -1054,23 +1160,18 @@
             store.addTurn(draft.appId, 'assistant', '已更新页面');
             draft.turns.push({ role: 'user', content: prompt });
             draft.turns.push({ role: 'assistant', content: '已更新页面' });
-            if (els.title) els.title.textContent = draft.title;
-            if (els.save) els.save.hidden = true;
-            if (els.versions) els.versions.hidden = false;
             renderDraft();
             renderList();
+            syncHeader();
             appendChat('bot', '已改好，看看预览；不满意继续说。', '耗时 ' + seconds + 's');
             toast('已更新「' + draft.title + '」', 'success');
             return;
         }
         draft.turns.push({ role: 'user', content: prompt });
         draft.turns.push({ role: 'assistant', content: '已生成页面「' + draft.title + '」' });
-        if (els.title) els.title.textContent = draft.title;
-        if (els.kind) { els.kind.hidden = false; els.kind.textContent = '草稿'; }
-        if (els.save) els.save.hidden = false;
-        if (els.exportBtn) els.exportBtn.hidden = false;
         renderList();
         renderDraft();
+        syncHeader();
         appendChat('bot', '已生成「' + draft.title + '」，可以直接在左侧使用；想改哪里，继续告诉我。', '耗时 ' + seconds + 's');
         toast('已生成「' + draft.title + '」，可继续调整或保存', 'success');
     }
@@ -1080,9 +1181,12 @@
         showSkeleton(false);
         resetErrors();
         var params = store.getParams();
+        var allowNet = params.allowNetwork === true;
+        state.lastAllowNetwork = allowNet;
         var html = schema.wrapHtml(draft.code, {
             theme: currentTheme(),
-            allowNetwork: params.allowNetwork === true,
+            lite: isLite(),
+            allowNetwork: allowNet,
             title: draft.title
         });
         if (host) host.mountHtml(html, { trusted: false });
@@ -1091,26 +1195,45 @@
     }
 
     function buildMessages(prompt, code, params) {
-        var messages = [{
+        var sysMsg = {
             role: 'system',
             content: schema.buildSystemPrompt({ allowNetwork: !!(params && params.allowNetwork === true) })
-        }];
+        };
+        var tail = [];
         draft.turns.forEach(function (turn) {
-            messages.push({ role: turn.role, content: turn.content });
+            tail.push({ role: turn.role, content: turn.content });
         });
         if (code) {
-            messages.push({
+            tail.push({
                 role: 'user',
                 content: '当前页面完整 HTML：\n' + code + '\n\n请基于这个页面修改，并输出修改后的完整单页 HTML。'
             });
         }
-        messages.push({ role: 'user', content: prompt });
-        return messages;
+        tail.push({ role: 'user', content: prompt });
+        if (NC.api && typeof NC.api.trimMessagesForBudget === 'function') {
+            var fitted = NC.api.trimMessagesForBudget(tail, { budget: 24000 });
+            tail = fitted.messages;
+        }
+        return [sysMsg].concat(tail);
     }
 
     function generate() {
         if (draft.streaming) return;
-        if (!draft.active) enterDraft();
+        if (!isDraftSelected() && !draft.appId) {
+            var active = currentItem();
+            if (active && active.kind === 'custom') {
+                draft.unsaved = false;
+                draft.dirty = false;
+                draft.appId = active.id;
+                draft.title = active.title;
+                draft.code = active.code || '';
+                draft.turns = store.listTurns(active.id).map(function (turn) {
+                    return { role: turn.role, content: turn.text };
+                });
+            } else {
+                performEnterDraft();
+            }
+        }
         var prompt = els.prompt ? String(els.prompt.value || '').trim() : '';
         if (!prompt) {
             toast('先写一句你想要什么', 'warn');
@@ -1141,6 +1264,7 @@
             reasoningEffort: params.reasoning !== false ? params.effort : ''
         });
 
+        var genId = ++draft.genId;
         lastFailedPrompt = prompt;
         appendChat('user', prompt);
         if (els.prompt) els.prompt.value = '';
@@ -1164,8 +1288,12 @@
             messages: messages,
             maxTokens: params.outputLimit,
             signal: draft.controller ? draft.controller.signal : undefined,
-            onDelta: function (text) { buffer += text; },
+            onDelta: function (text) {
+                if (genId !== draft.genId) return;
+                buffer += text;
+            },
             onDone: function (result) {
+                if (genId !== draft.genId) return;
                 draft.controller = null;
                 var seconds = Math.max(1, Math.round((Date.now() - draft.startedAt) / 1000));
                 if (result && result.aborted) {
@@ -1177,12 +1305,13 @@
                         if (partial && partial.code) {
                             draft.code = partial.code;
                             if (!draft.appId) {
+                                draft.dirty = true;
                                 draft.turns.push({ role: 'user', content: prompt });
                                 draft.turns.push({ role: 'assistant', content: '已停止，保留了已生成的部分' });
                             }
                             renderList();
                             renderDraft();
-                            if (els.save) els.save.hidden = !!draft.appId;
+                            syncHeader();
                             appendChat('bot', '已停止，保留了已生成的部分，可以继续调整。', '耗时 ' + seconds + 's');
                             toast('已停止，保留已生成的部分', 'info');
                             return;
@@ -1196,6 +1325,7 @@
                 finishWithCode(buffer, seconds, prompt);
             },
             onError: function (error) {
+                if (genId !== draft.genId) return;
                 draft.controller = null;
                 renderList();
                 var message = error && error.message ? error.message : '生成失败，请检查网络或端点配置';
@@ -1210,10 +1340,42 @@
     }
 
     function currentCode() {
-        if (draft.active && draft.code) return { code: draft.code, title: draft.title };
+        if ((isDraftSelected() || draft.appId) && draft.code) return { code: draft.code, title: draft.title };
         var item = currentItem();
         if (item && item.kind === 'custom' && item.code) return { code: item.code, title: item.title };
         return null;
+    }
+
+    function openSourceModal() {
+        var target = currentCode();
+        if (!target || !NC.ui || typeof NC.ui.openModal !== 'function') {
+            toast('当前没有可查看的源码', 'warn');
+            return;
+        }
+        var pre = document.createElement('pre');
+        pre.className = 'ws-source-pre';
+        pre.textContent = target.code;
+        NC.ui.openModal({
+            title: (target.title || '应用') + ' · HTML 源码',
+            content: pre,
+            size: 'lg',
+            actions: [
+                {
+                    label: '复制源码',
+                    kind: 'ghost',
+                    onClick: function () {
+                        if (global.navigator && global.navigator.clipboard && global.navigator.clipboard.writeText) {
+                            global.navigator.clipboard.writeText(target.code)
+                                .then(function () { toast('源码已复制', 'success'); })
+                                .catch(function () { toast('复制失败', 'error'); });
+                        } else {
+                            toast('当前环境不支持剪贴板写入，请手动选择复制', 'info');
+                        }
+                    }
+                },
+                { label: '关闭', kind: 'primary' }
+            ]
+        });
     }
 
     function exportHtml() {
@@ -1260,9 +1422,8 @@
                 toast('保存修改失败' + (updated && updated.reason === 'too-big' ? '：超过体积上限' : ''), 'error');
                 return false;
             }
-            if (els.save) els.save.hidden = true;
-            if (els.kind) { els.kind.hidden = false; els.kind.textContent = '自定义'; }
-            if (els.versions) els.versions.hidden = false;
+            draft.dirty = false;
+            syncHeader();
             renderList();
             toast('已保存修改', 'success');
             return true;
@@ -1276,19 +1437,16 @@
         draft.turns.forEach(function (turn) {
             if (turn.role === 'user' || turn.role === 'assistant') store.addTurn(appId, turn.role, turn.content);
         });
+        draft.unsaved = false;
+        draft.dirty = false;
         draft.appId = appId;
         state.activeId = appId;
         writeActive(appId);
-        if (els.save) els.save.hidden = true;
-        if (els.kind) { els.kind.hidden = false; els.kind.textContent = '自定义'; }
-        if (els.pin) els.pin.disabled = false;
-        if (els.versions) els.versions.hidden = false;
-        if (els.editBtn) els.editBtn.hidden = false;
         renderList();
         if (!opts.keepView) {
-            draft.active = false;
             showChat(false);
-            performSelectItem(appId);
+        } else {
+            syncHeader();
         }
         toast('已保存到创意工坊', 'success');
         return true;
@@ -1339,22 +1497,46 @@
         }
         if (els.filter) {
             var timer = null;
+            var syncFilterClear = function () {
+                if (els.filterClear) els.filterClear.hidden = !state.filter;
+            };
             els.filter.addEventListener('input', function () {
                 state.filter = String(els.filter.value || '').trim();
+                syncFilterClear();
                 if (timer) global.clearTimeout(timer);
                 timer = global.setTimeout(function () { timer = null; renderList(); }, 120);
             });
+            if (els.filterClear) {
+                els.filterClear.addEventListener('click', function () {
+                    if (timer) { global.clearTimeout(timer); timer = null; }
+                    els.filter.value = '';
+                    state.filter = '';
+                    syncFilterClear();
+                    renderList();
+                    els.filter.focus();
+                });
+            }
         }
         if (els.pin) els.pin.addEventListener('click', togglePin);
         if (els.reloadBtn) els.reloadBtn.addEventListener('click', reloadFrame);
         if (els.emptyNew) els.emptyNew.addEventListener('click', function () { if (els.newBtn) els.newBtn.click(); });
         if (els.emptyImport) els.emptyImport.addEventListener('click', function () { if (els.importFile) els.importFile.click(); });
         if (els.sideOpen) els.sideOpen.addEventListener('click', onSideToggle);
+        if (els.sourceBtn) els.sourceBtn.addEventListener('click', openSourceModal);
         if (els.exportBtn) els.exportBtn.addEventListener('click', exportHtml);
         if (els.editBtn) {
             els.editBtn.addEventListener('click', function () {
-                if (state.activeId) enterEdit(state.activeId);
-                else showChat(true);
+                if (state.chatOpen) {
+                    if (draft.streaming) stopGeneration();
+                    showChat(false);
+                    return;
+                }
+                if (isDraftSelected()) {
+                    showChat(true);
+                    return;
+                }
+                var item = currentItem();
+                if (item && item.kind === 'custom') openChatForApp(item.id);
             });
         }
         if (els.importFile) els.importFile.addEventListener('change', importHtml);
@@ -1381,10 +1563,21 @@
                 ]);
             });
         }
+        document.addEventListener('click', function (event) {
+            if (!els.errorsPanel || els.errorsPanel.hidden) return;
+            if (els.errorsPanel.contains(event.target)) return;
+            if (els.errorsBtn && els.errorsBtn.contains(event.target)) return;
+            toggleErrors(false);
+        });
         document.addEventListener('keydown', function (event) {
             var page = document.getElementById('page-workshop');
             if (!page || page.hasAttribute('hidden')) return;
             if (event.key !== 'Escape') return;
+            if (els.errorsPanel && !els.errorsPanel.hidden) {
+                event.preventDefault();
+                toggleErrors(false);
+                return;
+            }
             if (state.sideOpen) {
                 event.preventDefault();
                 toggleSide(false);
@@ -1393,6 +1586,13 @@
         if (NC.events && NC.events.on) {
             NC.events.on(NC.eventNames.themeChanged, function () { syncFrameTheme(); });
             NC.events.on(NC.eventNames.liteChanged, function () { syncFrameTheme(); });
+            NC.events.on(NC.eventNames.llmChanged, function () { renderEndpointOptions(); });
+            NC.events.on(NC.eventNames.llmProfileSelected, function () { renderEndpointOptions(); });
+            if (NC.eventNames.workshopError) {
+                NC.events.on(NC.eventNames.workshopError, function (payload) {
+                    toast(payload && payload.message ? payload.message : '创意工坊存储写入失败', 'error');
+                });
+            }
         }
         global.addEventListener('beforeunload', function (event) {
             if (!hasUnsavedDraft()) return;
@@ -1408,7 +1608,8 @@
     function init() {
         if (state.initialized) return view.workshop;
         els = {
-            shell: $('ws-shell'), side: document.querySelector('.ws-side'), list: $('ws-list'), filter: $('ws-filter'),
+            shell: $('ws-shell'), side: document.querySelector('.ws-side'), list: $('ws-list'),
+            filter: $('ws-filter'), filterClear: $('ws-filter-clear'),
             newBtn: $('ws-new-btn'), moreBtn: $('ws-more-btn'),
             sideOpen: $('ws-side-open'), sideClose: $('ws-side-close'),
             title: $('ws-title'), kind: $('ws-kind'),
@@ -1416,7 +1617,8 @@
             emptyNew: $('ws-empty-new'), emptyImport: $('ws-empty-import'),
             frame: $('ws-frame'), empty: $('ws-empty'), moduleNote: $('ws-module-note'),
             stage: $('ws-stage'), scrim: $('ws-scrim'),
-            save: $('ws-save-btn'), exportBtn: $('ws-export-btn'), importFile: $('ws-import-file'),
+            save: $('ws-save-btn'), sourceBtn: $('ws-source-btn'), exportBtn: $('ws-export-btn'),
+            importFile: $('ws-import-file'),
             loading: $('ws-loading'), loadingText: $('ws-loading-text'), skeleton: $('ws-skeleton'),
             stopBtn: $('ws-stop-btn'), chat: $('ws-chat'), chatLog: $('ws-chat-log'),
             prompt: $('ws-prompt'), generateBtn: $('ws-generate-btn'), chatHint: $('ws-chat-hint'),
@@ -1438,13 +1640,28 @@
         if (unsubscribe) unsubscribe();
         unsubscribe = store.subscribe(function (payload) {
             if (!state.initialized) return;
-            if (payload && (payload.reason === 'view:order' || payload.reason === 'app:create' ||
-                payload.reason === 'app:delete' || payload.reason === 'app:rename' || payload.reason === 'view:pin')) {
+            var reason = payload && payload.reason;
+            if (reason === 'view:order' || reason === 'app:create' || reason === 'app:delete' ||
+                reason === 'app:rename' || reason === 'view:pin' || reason === 'import') {
+                if ((reason === 'app:delete' || reason === 'import') && !isDraftSelected() && state.activeId && !currentItem()) {
+                    var nextList = store.list();
+                    resetDraftState();
+                    showChat(false);
+                    state.activeId = nextList.length ? nextList[0].id : null;
+                    writeActive(state.activeId || '');
+                    renderList();
+                    renderActive();
+                    return;
+                }
                 renderList();
+                syncHeader();
             }
-            if (payload && payload.reason === 'params') {
-                if (draft.active && draft.code) renderDraft();
-                else renderActive();
+            if (reason === 'params') {
+                var allowNet = store.getParams().allowNetwork === true;
+                if (state.lastAllowNetwork !== null && state.lastAllowNetwork !== allowNet) {
+                    if (isDraftSelected() && draft.code) renderDraft();
+                    else renderActive();
+                }
             }
         });
         host = (NC.previewHost && typeof NC.previewHost.create === 'function')

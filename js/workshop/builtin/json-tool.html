@@ -76,15 +76,6 @@
 <script>
 (function () {
   'use strict';
-  var params = new URLSearchParams(location.search);
-  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
-  function sendHeight() {
-    try {
-      parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*');
-    } catch (err) { /* ignore */ }
-  }
-  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
 
   var els = {
     input: document.getElementById('input'), status: document.getElementById('status'),
@@ -103,7 +94,6 @@
   function showError(message) {
     els.errbox.textContent = message;
     els.errbox.classList.add('show');
-    sendHeight();
   }
   function byteSize(text) {
     try { return new Blob([text]).size; } catch (err) { return text.length; }
@@ -142,7 +132,6 @@
   function refreshMeta() {
     var text = els.input.value;
     els.size.textContent = human(byteSize(text));
-    sendHeight();
   }
   function formatJson() {
     var text = els.input.value.trim();
@@ -150,7 +139,7 @@
     var result = parse(text);
     if (!result.ok) {
       setStatus('JSON 无效', 'bad');
-      showError('解析失败：' + result.message + (result.where ? '\\n位置：' + result.where : ''));
+      showError('解析失败：' + result.message + (result.where ? '\n位置：' + result.where : ''));
       return;
     }
     els.input.value = JSON.stringify(result.value, null, 2);
@@ -165,7 +154,7 @@
     var result = parse(text);
     if (!result.ok) {
       setStatus('JSON 无效', 'bad');
-      showError('解析失败：' + result.message + (result.where ? '\\n位置：' + result.where : ''));
+      showError('解析失败：' + result.message + (result.where ? '\n位置：' + result.where : ''));
       return;
     }
     els.input.value = JSON.stringify(result.value);
@@ -179,7 +168,7 @@
     var result = parse(text);
     if (!result.ok) {
       setStatus('JSON 无效', 'bad');
-      showError('解析失败：' + result.message + (result.where ? '\\n位置：' + result.where : ''));
+      showError('解析失败：' + result.message + (result.where ? '\n位置：' + result.where : ''));
       return;
     }
     clearError();

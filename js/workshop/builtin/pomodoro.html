@@ -82,13 +82,6 @@
 <script>
 (function () {
   'use strict';
-  var params = new URLSearchParams(location.search);
-  if (params.get('theme') === 'light') document.documentElement.setAttribute('data-theme', 'light');
-  if (params.get('lite') === '1') document.documentElement.setAttribute('data-lite', 'true');
-  function sendHeight() {
-    try { parent.postMessage({ type: 'nc-ws-height', h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight) }, '*'); } catch (err) {}
-  }
-  try { new ResizeObserver(sendHeight).observe(document.documentElement); } catch (err) { setInterval(sendHeight, 800); }
 
   var els = {
     ring: document.getElementById('ring'), clock: document.getElementById('clock'),
@@ -100,7 +93,7 @@
     auto: document.getElementById('auto')
   };
   var CIRC = 2 * Math.PI * 92;
-  var state = { mode: 'focus', running: false, remain: 1500, total: 1500, done: 0, focused: 0, tick: null, endAt: 0 };
+  var state = { mode: 'focus', running: false, remain: 1500, total: 1500, done: 0, focused: 0, tick: null, endAt: 0, lastTickAt: 0, autoTimer: null };
 
   function pad(n) { return n < 10 ? '0' + n : String(n); }
 
@@ -112,24 +105,7 @@
 
   function beep() {
     if (!els.sound.checked) return;
-    try {
-      var Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      var ctx = new Ctx();
-      [0, 0.24].forEach(function (offset, index) {
-        var osc = ctx.createOscillator();
-        var gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.value = index ? 1046 : 880;
-        var start = ctx.currentTime + offset;
-        gain.gain.setValueAtTime(0.0001, start);
-        gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.5);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + 0.55);
-      });
-    } catch (err) {}
+    if (window.ncBuiltinPlayBeep) window.ncBuiltinPlayBeep(state.mode);
   }
 
   function render() {
@@ -143,7 +119,6 @@
     els.ring.classList.toggle('is-break', state.mode === 'break');
     els.done.textContent = String(state.done);
     els.total.textContent = String(Math.round(state.focused / 60));
-    sendHeight();
   }
 
   function resetRound() {
@@ -153,13 +128,19 @@
   }
 
   function start() {
+    if (state.autoTimer) { clearTimeout(state.autoTimer); state.autoTimer = null; }
     if (state.running) { pause(); return; }
     if (state.remain <= 0) resetRound();
-    state.endAt = Date.now() + state.remain * 1000;
+    var startNow = Date.now();
+    state.endAt = startNow + state.remain * 1000;
+    state.lastTickAt = startNow;
     state.running = true;
     state.tick = setInterval(function () {
-      state.remain = (state.endAt - Date.now()) / 1000;
-      if (state.mode === 'focus') state.focused += 0.25;
+      var now = Date.now();
+      var deltaSec = Math.max(0, Math.min(5, (now - state.lastTickAt) / 1000));
+      state.lastTickAt = now;
+      state.remain = (state.endAt - now) / 1000;
+      if (state.mode === 'focus') state.focused += deltaSec;
       if (state.remain <= 0) { finish(); return; }
       render();
     }, 250);
@@ -167,6 +148,7 @@
   }
 
   function pause() {
+    if (state.autoTimer) { clearTimeout(state.autoTimer); state.autoTimer = null; }
     state.running = false;
     clearInterval(state.tick);
     state.tick = null;
@@ -182,7 +164,7 @@
       btn.setAttribute('aria-pressed', btn.getAttribute('data-mode') === state.mode ? 'true' : 'false');
     });
     resetRound();
-    if (els.auto.checked) setTimeout(start, 700);
+    if (els.auto.checked) state.autoTimer = setTimeout(start, 700);
   }
 
   els.start.addEventListener('click', start);
